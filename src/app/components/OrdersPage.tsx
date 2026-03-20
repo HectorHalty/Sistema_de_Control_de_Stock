@@ -1,0 +1,965 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useAppContext } from './AppContext';
+import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter } from 'lucide-react';
+import type { Order } from './store';
+import { getUnitLabel } from './store';
+import { useSearchParams } from 'react-router';
+import { downloadBlobFile } from './download';
+import { buildOrderXlsx } from './xlsxExport';
+import { openOrderEmailDraft } from './emailSend';
+
+type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival';
+type StatusFilter = 'all' | 'Pendiente' | 'Confirmado';
+
+export function OrdersPage() {
+  const ctx = useAppContext();
+  const { orders, setOrders, products, setProducts, addAudit, getTotalStock, users, warehouses, suppliers } = ctx;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [view, setView] = useState<OrderView>('list');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  const [dateType, setDateType] = useState<'regular' | 'after'>('regular');
+  const [orderItems, setOrderItems] = useState<{ productId: string; avgUsage: number; currentStock: number; quantity: number; included: boolean }[]>([]);
+  const [provider, setProvider] = useState('');
+  const [supplierId, setSupplierId] = useState('');
+  const [operatorId, setOperatorId] = useState<string>('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [lastCreatedOrder, setLastCreatedOrder] = useState<Order | null>(null);
+
+  const [arrivalItems, setArrivalItems] = useState<{
+    productId: string;
+    ordered: number;
+    received: number;
+    allocations: { warehouseId: string; quantity: number }[];
+  }[]>([]);
+  const [arrivalDefaultWarehouseId, setArrivalDefaultWarehouseId] = useState<string>('');
+
+  const filteredOrders = statusFilter === 'all'
+    ? orders
+    : orders.filter(o => o.status === statusFilter);
+
+  const pendienteCount = orders.filter(o => o.status === 'Pendiente').length;
+  const confirmadoCount = orders.filter(o => o.status === 'Confirmado').length;
+
+  const startCreateOrder = () => {
+    setDateType('regular');
+    setProvider('');
+    setSupplierId('');
+    setOperatorId('');
+    setView('create-step1');
+  };
+
+  const operators = useMemo(() => users.filter(u => u.role === 'Operador'), [users]);
+
+  // Sync status filter with URL (supports dashboard deep-links)
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'Pendiente' || status === 'Confirmado') {
+      setStatusFilter(status);
+    } else if (status === 'all' || status === null) {
+      setStatusFilter('all');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setStatusFilterAndUrl = (next: StatusFilter) => {
+    setStatusFilter(next);
+    const sp = new URLSearchParams(searchParams);
+    if (next === 'all') sp.delete('status');
+    else sp.set('status', next);
+    setSearchParams(sp, { replace: true });
+  };
+
+  const selectedSupplier = suppliers.find(s => s.id === supplierId);
+
+  const calculateSuggestions = () => {
+    const multiplier = dateType === 'after' ? 1.5 : 1;
+    // Filter products by selected supplier
+    const supplierProductIds = selectedSupplier?.productIds || [];
+    const filteredProducts = supplierId
+      ? products.filter(p => supplierProductIds.includes(p.id))
+      : products;
+    const items = filteredProducts.map(p => {
+      const currentStock = getTotalStock(p);
+      const avgUsage = Math.round((Math.random() * 30 + 20) * multiplier);
+      const suggested = Math.max(0, avgUsage - currentStock);
+      return { productId: p.id, avgUsage, currentStock, quantity: suggested, included: true };
+    });
+    setOrderItems(items);
+    setView('create-step2');
+  };
+
+  const confirmOrder = () => {
+    const newOrder: Order = {
+      id: 'PED-' + String(orders.length + 1).padStart(3, '0'),
+      date: new Date().toISOString().split('T')[0],
+      provider: selectedSupplier?.name || provider || 'Proveedor General',
+      status: 'Pendiente',
+      items: orderItems.filter(i => i.included && i.quantity > 0).map(i => ({ productId: i.productId, quantityOrdered: i.quantity })),
+    };
+    setOrders(prev => [...prev, newOrder]);
+    addAudit({ user: 'Admin', action: 'Creación Pedido ' + newOrder.id, element: newOrder.id, newValue: 'Pendiente' });
+    setSuccessMsg('Pedido ' + newOrder.id + ' creado exitosamente');
+    setLastCreatedOrder(newOrder);
+    setView('create-step3');
+
+    // Build xlsx for the operator and trigger share flow
+    const operator = operators.find(o => o.id === operatorId);
+    const blob = buildOrderXlsx({
+      day: newOrder.date,
+      orderId: newOrder.id,
+      provider: newOrder.provider,
+      rows: newOrder.items.map(it => ({
+        product: getProductName(it.productId),
+        quantity: it.quantityOrdered,
+      })),
+    });
+
+    // Always download a local copy
+    downloadBlobFile({ filename: `pedido-${newOrder.id}.xlsx`, blob });
+
+    // If operator has email (ideally Gmail), open email draft with attachment (Android).
+    if (operator?.email) {
+      void openOrderEmailDraft({
+        toEmail: operator.email,
+        subject: `Pedido ${newOrder.id} - ${newOrder.date}`,
+        body: `Hola ${operator.name},\n\nAdjunto el pedido ${newOrder.id} (${newOrder.date}).\n\nSaludos.`,
+        filename: `pedido-${newOrder.id}.xlsx`,
+        blob,
+      });
+    }
+  };
+
+  const startArrival = (order: Order) => {
+    setSelectedOrder(order);
+    const fallbackWarehouseId = warehouses[0]?.id || '';
+    setArrivalDefaultWarehouseId(fallbackWarehouseId);
+    setArrivalItems(order.items.map(i => ({
+      productId: i.productId,
+      ordered: i.quantityOrdered,
+      received: i.quantityOrdered,
+      allocations: [{ warehouseId: fallbackWarehouseId, quantity: i.quantityOrdered }],
+    })));
+    setView('confirm-arrival');
+  };
+
+  const updateArrivalReceived = (idx: number, received: number) => {
+    setArrivalItems(prev => {
+      const next = [...prev];
+      const item = next[idx];
+      if (!item) return prev;
+
+      const safeReceived = Math.max(0, received);
+      const allocations = item.allocations.length ? [...item.allocations] : [{ warehouseId: arrivalDefaultWarehouseId, quantity: 0 }];
+      const restSum = allocations.slice(1).reduce((s, a) => s + (a.quantity || 0), 0);
+      allocations[0] = { ...allocations[0], quantity: Math.max(0, safeReceived - restSum) };
+
+      next[idx] = { ...item, received: safeReceived, allocations };
+      return next;
+    });
+  };
+
+  const setAllocationWarehouse = (itemIdx: number, allocIdx: number, warehouseId: string) => {
+    setArrivalItems(prev => {
+      const next = [...prev];
+      const item = next[itemIdx];
+      if (!item) return prev;
+      const allocations = item.allocations.map((a, i) => i === allocIdx ? { ...a, warehouseId } : a);
+      next[itemIdx] = { ...item, allocations };
+      return next;
+    });
+  };
+
+  const setAllocationQuantity = (itemIdx: number, allocIdx: number, quantity: number) => {
+    setArrivalItems(prev => {
+      const next = [...prev];
+      const item = next[itemIdx];
+      if (!item) return prev;
+      const allocations = item.allocations.map((a, i) => i === allocIdx ? { ...a, quantity: Math.max(0, quantity) } : a);
+
+      // Keep invariant by rebalancing first allocation
+      const safeAllocations = allocations.length ? allocations : [{ warehouseId: arrivalDefaultWarehouseId, quantity: 0 }];
+      const restSum = safeAllocations.slice(1).reduce((s, a) => s + (a.quantity || 0), 0);
+      safeAllocations[0] = { ...safeAllocations[0], quantity: Math.max(0, item.received - restSum) };
+
+      next[itemIdx] = { ...item, allocations: safeAllocations };
+      return next;
+    });
+  };
+
+  const addAllocationRow = (itemIdx: number) => {
+    setArrivalItems(prev => {
+      const next = [...prev];
+      const item = next[itemIdx];
+      if (!item) return prev;
+      const used = new Set(item.allocations.map(a => a.warehouseId));
+      const candidate = warehouses.find(w => !used.has(w.id))?.id || warehouses[0]?.id || arrivalDefaultWarehouseId;
+      const allocations = [...item.allocations, { warehouseId: candidate || '', quantity: 0 }];
+      next[itemIdx] = { ...item, allocations };
+      return next;
+    });
+  };
+
+  const removeAllocationRow = (itemIdx: number, allocIdx: number) => {
+    setArrivalItems(prev => {
+      const next = [...prev];
+      const item = next[itemIdx];
+      if (!item) return prev;
+      if (item.allocations.length <= 1) return prev;
+      const allocations = item.allocations.filter((_, i) => i !== allocIdx);
+
+      const restSum = allocations.slice(1).reduce((s, a) => s + (a.quantity || 0), 0);
+      allocations[0] = { ...allocations[0], quantity: Math.max(0, item.received - restSum) };
+
+      next[itemIdx] = { ...item, allocations };
+      return next;
+    });
+  };
+
+  const arrivalItemError = (item: (typeof arrivalItems)[number]): string | null => {
+    const sum = item.allocations.reduce((s, a) => s + (a.quantity || 0), 0);
+    if (sum !== item.received) return `La suma por almacén (${sum}) debe ser igual a recibido (${item.received}).`;
+    if (item.allocations.some(a => !a.warehouseId)) return 'Seleccioná un almacén en todas las filas.';
+    return null;
+  };
+
+  const arrivalHasErrors = arrivalItems.some(it => arrivalItemError(it) !== null);
+
+  const confirmArrival = () => {
+    if (!selectedOrder) return;
+    if (arrivalHasErrors) return;
+
+    setOrders(prev => prev.map(o => o.id === selectedOrder.id ? {
+      ...o,
+      status: 'Confirmado' as const,
+      items: o.items.map((item, idx) => ({ ...item, quantityReceived: arrivalItems[idx]?.received || 0 }))
+    } : o));
+
+    // Sum received quantities into selected warehouse(s)
+    const addMap = new Map<string, number>(); // key: productId__warehouseId => qty
+    for (const it of arrivalItems) {
+      for (const a of it.allocations) {
+        const key = `${it.productId}__${a.warehouseId}`;
+        addMap.set(key, (addMap.get(key) || 0) + (a.quantity || 0));
+      }
+    }
+
+    setProducts(prev => prev.map(p => {
+      const additions = Array.from(addMap.entries())
+        .filter(([key]) => key.startsWith(p.id + '__'))
+        .map(([key, qty]) => ({
+          warehouseId: key.split('__')[1],
+          qty,
+        }))
+        .filter(a => a.warehouseId && a.qty !== 0);
+
+      if (additions.length === 0) return p;
+
+      const next = [...p.stockByWarehouse];
+      for (const a of additions) {
+        const idx = next.findIndex(s => s.warehouseId === a.warehouseId);
+        if (idx >= 0) next[idx] = { ...next[idx], quantity: next[idx].quantity + a.qty };
+        else next.push({ warehouseId: a.warehouseId, quantity: a.qty });
+      }
+      return { ...p, stockByWarehouse: next };
+    }));
+
+    const whName = (id: string) => warehouses.find(w => w.id === id)?.name || id;
+    const uniqueWh = Array.from(new Set(arrivalItems.flatMap(i => i.allocations.map(a => a.warehouseId)).filter(Boolean)));
+    const auditWhere =
+      uniqueWh.length === 1
+        ? `Almacén: ${whName(uniqueWh[0])}`
+        : `Almacenes: múltiples`;
+
+    addAudit({
+      user: 'Admin',
+      action: 'Confirmación Arribo ' + selectedOrder.id,
+      element: selectedOrder.id,
+      previousValue: '-',
+      newValue: `Confirmado · ${auditWhere}`,
+    });
+    setView('list');
+    setSelectedOrder(null);
+  };
+
+  const getProductName = (id: string) => products.find(p => p.id === id)?.name || id;
+  const getProduct = (id: string) => products.find(p => p.id === id);
+
+  const generatePDF = (order: Order) => {
+    const now = new Date();
+    const hrs = String(now.getHours()).padStart(2, '0');
+    const mins = String(now.getMinutes()).padStart(2, '0');
+    const secs = String(now.getSeconds()).padStart(2, '0');
+    const remito = 'REM-' + order.date.replace(/-/g, '') + '-' + hrs + mins + secs;
+
+    const totalUnits = order.items.reduce((s, i) => s + i.quantityOrdered, 0);
+
+    let rows = '';
+    for (const item of order.items) {
+      const prod = getProduct(item.productId);
+      const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+      rows += '<tr>';
+      rows += '<td style="padding: 10px 16px; border-bottom: 1px solid #e5e5e5; font-size: 13px; color: #333; text-transform: uppercase;">';
+      rows += getProductName(item.productId);
+      rows += '</td>';
+      rows += '<td style="padding: 10px 16px; border-bottom: 1px solid #e5e5e5; text-align: center; font-size: 13px; color: #333; font-weight: 500;">';
+      rows += String(item.quantityOrdered) + ' ' + unitLabel;
+      rows += '</td>';
+      rows += '</tr>';
+    }
+
+    const parts = [
+      '<!DOCTYPE html><html><head><meta charset="utf-8">',
+      '<title>Detalle del Pedido - ' + order.id + '</title>',
+      '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">',
+      '<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: Poppins, sans-serif; background: #fff; color: #333; } @media print { body { margin: 0; } .no-print { display: none !important; } }</style>',
+      '</head><body>',
+      '<div style="max-width: 700px; margin: 0 auto; padding: 40px 32px;">',
+      '<div style="display: flex; align-items: flex-start; margin-bottom: 32px;">',
+      '<div style="width: 80px; height: 80px; background: #2D5016; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">',
+      '<span style="color: white; font-weight: 700; font-size: 22px; letter-spacing: 1px;">LCH</span>',
+      '</div>',
+      '<div style="margin-left: 20px; padding-top: 8px;">',
+      '<h2 style="font-size: 11px; color: #717182; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;">La Chacra Futbol</h2>',
+      '<p style="font-size: 10px; color: #999; margin-top: 2px;">Control de Stock</p>',
+      '</div></div>',
+      '<h1 style="text-align: center; font-size: 22px; font-weight: 600; color: #2D5016; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #2D5016;">Detalle del Pedido</h1>',
+      '<div style="margin-bottom: 28px; background: #f9f9f7; padding: 20px 24px; border-radius: 10px; border-left: 4px solid #2D5016;">',
+      '<div style="margin-bottom: 8px;">',
+      '<span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Remito</span>',
+      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + remito + '</p>',
+      '</div>',
+      '<div style="display: flex; gap: 40px; margin-top: 12px;">',
+      '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Fecha</span>',
+      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.date + '</p></div>',
+      '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Proveedor</span>',
+      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.provider + '</p></div>',
+      '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Estado</span>',
+      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.status + '</p></div>',
+      '</div></div>',
+      '<table style="width: 100%; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">',
+      '<thead><tr>',
+      '<th style="background: #2D5016; color: white; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">Producto</th>',
+      '<th style="background: #2D5016; color: white; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 500; width: 160px; letter-spacing: 0.5px;">Cantidad Pedida</th>',
+      '</tr></thead>',
+      '<tbody>' + rows + '</tbody></table>',
+      '<div style="display: flex; justify-content: flex-end; margin-top: 16px; padding: 12px 16px; background: #f0ece6; border-radius: 8px;">',
+      '<span style="font-size: 13px; color: #717182; margin-right: 40px;">Total productos:</span>',
+      '<span style="font-size: 14px; font-weight: 600; color: #2D5016;">' + totalUnits + '</span>',
+      '</div>',
+      '<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center;">',
+      '<p style="font-size: 10px; color: #999;">Documento generado automaticamente por Control de Stock - La Chacra Futbol</p>',
+      '<p style="font-size: 10px; color: #ccc; margin-top: 4px;">Generado el ' + now.toLocaleDateString('es-AR') + ' a las ' + now.toLocaleTimeString('es-AR') + '</p>',
+      '</div>',
+      '<div class="no-print" style="text-align: center; margin-top: 24px;">',
+      '<button onclick="window.print()" style="background: #2D5016; color: white; border: none; padding: 12px 32px; border-radius: 8px; font-family: Poppins, sans-serif; font-size: 14px; cursor: pointer; font-weight: 500;">Imprimir / Guardar PDF</button>',
+      '</div>',
+      '</div></body></html>',
+    ];
+
+    const html = parts.join('\n');
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    }
+  };
+
+  if (view === 'create-step1') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-sm text-[#717182]">
+          <button onClick={() => setView('list')} className="hover:text-[#3d7a3d]">Pedidos</button>
+          <ChevronRight size={14} />
+          <span className="text-[#3a3a3a]">Nuevo Pedido - Paso 1</span>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-6 shadow-sm max-w-xl mx-auto">
+          <h2 className="mb-6 text-[#3a3a3a]">Configurar Pedido</h2>
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm mb-2">Proveedor</label>
+              <select
+                value={supplierId}
+                onChange={e => {
+                  setSupplierId(e.target.value);
+                  const sup = suppliers.find(s => s.id === e.target.value);
+                  setProvider(sup?.name || '');
+                }}
+                className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
+              >
+                <option value="">Seleccionar proveedor…</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.productIds.length} productos)
+                  </option>
+                ))}
+              </select>
+              {supplierId && selectedSupplier && (
+                <p className="text-xs text-[#3d7a3d] mt-1">
+                  {selectedSupplier.productIds.length} productos asignados a este proveedor
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm mb-2">Tipo de Fecha</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setDateType('regular')}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'regular' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-[rgba(0,0,0,0.08)]'}`}
+                >
+                  <p className="text-sm" style={{ fontWeight: 500 }}>Regular</p>
+                  <p className="text-xs text-[#717182] mt-1">Semana normal de operacion</p>
+                </button>
+                <button
+                  onClick={() => setDateType('after')}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'after' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-[rgba(0,0,0,0.08)]'}`}
+                >
+                  <p className="text-sm" style={{ fontWeight: 500 }}>After / Especial</p>
+                  <p className="text-xs text-[#717182] mt-1">Evento especial (mayor demanda)</p>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm mb-2">Operador (Email)</label>
+              <select
+                value={operatorId}
+                onChange={e => setOperatorId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border outline-none text-sm"
+              >
+                <option value="">(Opcional) Seleccionar operador…</option>
+                {operators.map(o => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}{o.email ? ` (${o.email})` : ' (sin email)'}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[#717182] mt-1">
+                Si el operador tiene email cargado, se abrirá el mail con el pedido adjunto (en Android).
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm mb-2">Periodo de calculo</label>
+              <select className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border outline-none text-sm">
+                <option>Ultimos 3 meses</option>
+                <option>Ultimos 6 meses</option>
+                <option>Ultimo mes</option>
+              </select>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setView('list')} className="px-4 py-2.5 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Cancelar</button>
+              <button onClick={calculateSuggestions} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
+                Calcular Sugerencias
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'create-step2') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-sm text-[#717182]">
+          <button onClick={() => setView('list')} className="hover:text-[#3d7a3d]">Pedidos</button>
+          <ChevronRight size={14} />
+          <span className="text-[#3a3a3a]">Nuevo Pedido - Paso 2</span>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border shadow-sm">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 className="text-[#3a3a3a]">Productos Sugeridos</h2>
+              <p className="text-sm text-[#717182] mt-1">
+                Modo: {dateType === 'after' ? 'After / Especial' : 'Regular'} | Proveedor: {selectedSupplier?.name || provider || 'General'}
+              </p>
+            </div>
+            <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-3 py-1 rounded-full" style={{ fontWeight: 500 }}>
+              {orderItems.filter(i => i.included).length} / {orderItems.length} productos
+            </span>
+          </div>
+          {/* Mobile cards */}
+          <div className="block sm:hidden divide-y divide-[rgba(0,0,0,0.04)]">
+            {orderItems.map((item, idx) => {
+              const prod = getProduct(item.productId);
+              const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+              return (
+                <div key={item.productId} className={`px-4 py-3 flex items-center justify-between gap-3 ${!item.included ? 'opacity-40' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={item.included}
+                    onChange={() => {
+                      const newItems = [...orderItems];
+                      newItems[idx] = { ...newItems[idx], included: !newItems[idx].included };
+                      setOrderItems(newItems);
+                    }}
+                    className="w-4 h-4 rounded accent-[#3d7a3d] flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
+                    <p className="text-xs text-[#717182]">Stock: {item.currentStock} {unitLabel}</p>
+                  </div>
+                  <input
+                    type="number"
+                    value={item.quantity}
+                    onChange={e => {
+                      const newItems = [...orderItems];
+                      newItems[idx] = { ...newItems[idx], quantity: parseInt(e.target.value) || 0 };
+                      setOrderItems(newItems);
+                    }}
+                    className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
+                    min={0}
+                    disabled={!item.included}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="bg-[#f5f3ef]">
+                  <th className="text-center px-4 py-3 text-xs text-[#717182] uppercase w-12">Incluir</th>
+                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Producto</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Uso Promedio</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Stock Actual</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Pedida</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderItems.map((item, idx) => {
+                  const prod = getProduct(item.productId);
+                  const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+                  return (
+                    <tr key={item.productId} className={`border-b border-border/40 ${!item.included ? 'opacity-40' : ''}`}>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={item.included}
+                          onChange={() => {
+                            const newItems = [...orderItems];
+                            newItems[idx] = { ...newItems[idx], included: !newItems[idx].included };
+                            setOrderItems(newItems);
+                          }}
+                          className="w-4 h-4 rounded accent-[#3d7a3d]"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm">{getProductName(item.productId)}</td>
+                      <td className="px-4 py-3 text-sm text-right text-[#717182]">{item.avgUsage} {unitLabel}</td>
+                      <td className="px-4 py-3 text-sm text-right">{item.currentStock} {unitLabel}</td>
+                      <td className="px-4 py-3 text-right">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={e => {
+                            const newItems = [...orderItems];
+                            newItems[idx] = { ...newItems[idx], quantity: parseInt(e.target.value) || 0 };
+                            setOrderItems(newItems);
+                          }}
+                          className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
+                          min={0}
+                          disabled={!item.included}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-4 flex flex-col sm:flex-row gap-3 justify-between border-t border-border">
+            <button onClick={() => setView('create-step1')} className="px-4 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Volver</button>
+            <button onClick={confirmOrder} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f] flex items-center gap-2">
+              <Check size={16} />
+              Confirmar Pedido
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'create-step3') {
+    return (
+      <div className="space-y-6 flex items-center justify-center min-h-[60vh]">
+        <div className="bg-card rounded-xl border border-border p-8 shadow-sm text-center max-w-md">
+          <div className="w-16 h-16 bg-[#3d7a3d]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check size={32} className="text-[#3d7a3d]" />
+          </div>
+          <h2 className="text-[#3a3a3a] mb-2">Pedido Creado</h2>
+          <p className="text-sm text-[#717182] mb-6">{successMsg}</p>
+          <div className="flex gap-3 justify-center flex-wrap">
+            <button onClick={() => setView('list')} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
+              Ver Pedidos
+            </button>
+            <button
+              onClick={() => lastCreatedOrder && generatePDF(lastCreatedOrder)}
+              className="px-6 py-2.5 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm flex items-center gap-2 hover:bg-muted transition-colors"
+            >
+              <Download size={16} />
+              Descargar PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'confirm-arrival' && selectedOrder) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-sm text-[#717182]">
+          <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="hover:text-[#3d7a3d]">Pedidos</button>
+          <ChevronRight size={14} />
+          <span className="text-[#3a3a3a]">Confirmar Arribo - {selectedOrder.id}</span>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border shadow-sm">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-[#3a3a3a]">Confirmar Llegada</h2>
+            <p className="text-sm text-[#717182] mt-1">
+              Pedido {selectedOrder.id} | Proveedor: {selectedOrder.provider} | Fecha: {selectedOrder.date}
+            </p>
+          </div>
+
+          {/* Warehouse storage mode */}
+          <div className="px-6 py-4 border-b border-border space-y-3">
+            <div>
+              <p className="text-sm mb-2" style={{ fontWeight: 600 }}>Guardar stock recibido en</p>
+            </div>
+
+            <div className="max-w-md">
+              <select
+                value={arrivalDefaultWarehouseId}
+                onChange={e => {
+                  const v = e.target.value;
+                  setArrivalDefaultWarehouseId(v);
+                  // Apply to all products; user can override some below.
+                  setArrivalItems(prev => prev.map(it => ({
+                    ...it,
+                    allocations: it.allocations.length
+                      ? [{ ...it.allocations[0], warehouseId: v }, ...it.allocations.slice(1)]
+                      : [{ warehouseId: v, quantity: it.received }],
+                  })));
+                }}
+                className="w-full px-2.5 py-2 rounded-lg bg-input-background border border-border outline-none text-xs"
+              >
+                {warehouses.map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="block sm:hidden divide-y divide-[rgba(0,0,0,0.04)]">
+            {arrivalItems.map((item, idx) => {
+              const diff = item.received - item.ordered;
+              const prod = getProduct(item.productId);
+              const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+              const err = arrivalItemError(item);
+              return (
+                <div key={item.productId} className="px-4 py-3">
+                  <p className="text-sm mb-2" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[#717182] flex-1">Pedido: {item.ordered} {unitLabel}</span>
+                    <input
+                      type="number"
+                      value={item.received}
+                      onChange={e => {
+                        updateArrivalReceived(idx, parseInt(e.target.value) || 0);
+                      }}
+                      className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
+                      min={0}
+                    />
+                    <span className={`text-xs w-10 text-right ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-[#3d7a3d]' : 'text-[#717182]'}`}>
+                      {diff > 0 ? '+' : ''}{diff}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {item.allocations.map((a, aIdx) => (
+                      <div key={aIdx} className="flex items-center gap-2">
+                        <select
+                          value={a.warehouseId}
+                          onChange={e => setAllocationWarehouse(idx, aIdx, e.target.value)}
+                          className="flex-1 px-2.5 py-2 rounded-lg bg-input-background border border-border outline-none text-xs"
+                        >
+                          {warehouses.map(w => (
+                            <option key={w.id} value={w.id}>{w.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={a.quantity}
+                          onChange={e => setAllocationQuantity(idx, aIdx, parseInt(e.target.value) || 0)}
+                          className="w-20 px-2 py-2 rounded-lg bg-input-background border border-border outline-none text-xs text-right"
+                          min={0}
+                        />
+                        {item.allocations.length > 1 && (
+                          <button
+                            onClick={() => removeAllocationRow(idx, aIdx)}
+                            className="px-2 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-xs text-[#717182] hover:bg-muted"
+                            title="Quitar"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addAllocationRow(idx)}
+                      className="text-xs text-[#3d7a3d] hover:underline"
+                    >
+                      + Agregar almacén
+                    </button>
+                    {err && <p className="text-xs text-red-600">{err}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full min-w-[550px]">
+              <thead>
+                <tr className="bg-[#f5f3ef]">
+                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Producto</th>
+                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Almacén</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Pedida</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Recibida</th>
+                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arrivalItems.map((item, idx) => {
+                  const diff = item.received - item.ordered;
+                  const prod = getProduct(item.productId);
+                  const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+                  const err = arrivalItemError(item);
+                  return (
+                    <tr key={item.productId} className="border-b border-border/40">
+                      <td className="px-4 py-3 text-sm">{getProductName(item.productId)}</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-2">
+                          {item.allocations.map((a, aIdx) => (
+                            <div key={aIdx} className="flex items-center gap-2">
+                              <select
+                                value={a.warehouseId}
+                                onChange={e => setAllocationWarehouse(idx, aIdx, e.target.value)}
+                                className="w-48 px-2.5 py-2 rounded-lg bg-input-background border border-border outline-none text-xs"
+                              >
+                                {warehouses.map(w => (
+                                  <option key={w.id} value={w.id}>{w.name}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                value={a.quantity}
+                                onChange={e => setAllocationQuantity(idx, aIdx, parseInt(e.target.value) || 0)}
+                                className="w-20 px-2.5 py-2 rounded-lg bg-input-background border border-border outline-none text-xs text-right"
+                                min={0}
+                              />
+                              {item.allocations.length > 1 && (
+                                <button
+                                  onClick={() => removeAllocationRow(idx, aIdx)}
+                                  className="px-2.5 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-xs text-[#717182] hover:bg-muted"
+                                  title="Quitar"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => addAllocationRow(idx)}
+                            className="text-xs text-[#3d7a3d] hover:underline"
+                          >
+                            + Agregar almacén
+                          </button>
+                          {err && <p className="text-xs text-red-600">{err}</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-[#717182]">{item.ordered} {unitLabel}</td>
+                      <td className="px-4 py-3 text-right">
+                        <input
+                          type="number"
+                          value={item.received}
+                          onChange={e => {
+                            updateArrivalReceived(idx, parseInt(e.target.value) || 0);
+                          }}
+                          className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
+                          min={0}
+                        />
+                      </td>
+                      <td className={'px-4 py-3 text-sm text-right ' + (diff < 0 ? 'text-red-600' : diff > 0 ? 'text-[#3d7a3d]' : 'text-[#717182]')}>
+                        {diff > 0 ? '+' : ''}{diff}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-4 flex gap-3 justify-end border-t border-border">
+            <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="px-4 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Cancelar</button>
+            <button
+              onClick={confirmArrival}
+              disabled={arrivalHasErrors}
+              className={`px-6 py-2.5 rounded-lg text-white text-sm flex items-center gap-2 ${
+                arrivalHasErrors ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#3d7a3d] hover:bg-[#2f5f2f]'
+              }`}
+              title={arrivalHasErrors ? 'Revisá la distribución por almacén (la suma debe coincidir con recibido).' : 'Confirmar llegada'}
+            >
+              <Truck size={16} />
+              Confirmar Llegada
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: List View
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-foreground">Pedidos</h1>
+          <p className="text-sm text-muted-foreground mt-1">{orders.length} pedidos registrados</p>
+        </div>
+        <button
+          onClick={startCreateOrder}
+          className="flex items-center gap-2 bg-[#3d7a3d] hover:bg-[#2f5f2f] text-white px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+        >
+          <Plus size={18} />
+          Nuevo Pedido
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setStatusFilterAndUrl('all')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'all' ? 'bg-[#3d7a3d] text-white border-[#3d7a3d]' : 'bg-card text-muted-foreground border-border hover:bg-muted'}`}
+        >
+          <Filter size={14} />
+          Todos ({orders.length})
+        </button>
+        <button
+          onClick={() => setStatusFilterAndUrl('Pendiente')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-white border-amber-500' : 'bg-card text-amber-700 border-amber-200 hover:bg-amber-50'}`}
+        >
+          <Clock size={14} />
+          Pendientes ({pendienteCount})
+        </button>
+        <button
+          onClick={() => setStatusFilterAndUrl('Confirmado')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Confirmado' ? 'bg-green-600 text-white border-green-600' : 'bg-card text-green-700 border-green-200 hover:bg-green-50'}`}
+        >
+          <Check size={14} />
+          Confirmados ({confirmadoCount})
+        </button>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="block sm:hidden space-y-3">
+        {filteredOrders.map(order => (
+          <div key={order.id} className="bg-card rounded-xl border border-border shadow-sm p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-sm" style={{ fontWeight: 600 }}>{order.id}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{order.provider}</p>
+                <p className="text-xs text-muted-foreground">{order.date} · {order.items.length} productos</p>
+              </div>
+              <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${order.status === 'Confirmado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                }`} style={{ fontWeight: 500 }}>
+                {order.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-[rgba(0,0,0,0.05)]">
+              <button
+                onClick={() => generatePDF(order)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors border border-border/60"
+              >
+                <FileText size={13} />
+                PDF
+              </button>
+              {order.status === 'Pendiente' && (
+                <button
+                  onClick={() => startArrival(order)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#3d7a3d] text-white hover:bg-[#2f5f2f] transition-colors flex-1 justify-center"
+                >
+                  <Truck size={13} />
+                  Confirmar Llegada
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {filteredOrders.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground bg-card rounded-xl border border-border">No hay pedidos</div>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[650px]">
+            <thead>
+              <tr className="bg-muted">
+                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">ID</th>
+                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Fecha</th>
+                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Proveedor</th>
+                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Estado</th>
+                <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Productos</th>
+                <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.map(order => (
+                <tr key={order.id} className="border-b border-border/40 hover:bg-muted/50">
+                  <td className="px-4 py-3 text-sm" style={{ fontWeight: 500 }}>{order.id}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{order.date}</td>
+                  <td className="px-4 py-3 text-sm">{order.provider}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full ${order.status === 'Confirmado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                      }`} style={{ fontWeight: 500 }}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right text-muted-foreground">{order.items.length}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => generatePDF(order)}
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#3d7a3d] transition-colors"
+                        title="Descargar PDF"
+                      >
+                        <FileText size={16} />
+                      </button>
+                      {order.status === 'Pendiente' && (
+                        <button
+                          onClick={() => startArrival(order)}
+                          className="text-xs text-[#3d7a3d] hover:underline"
+                        >
+                          Confirmar Llegada
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {filteredOrders.length === 0 && (
+          <div className="text-center py-12 text-[#717182]">No hay pedidos</div>
+        )}
+      </div>
+    </div>
+  );
+}
