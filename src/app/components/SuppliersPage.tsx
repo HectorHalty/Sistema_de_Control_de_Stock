@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { Plus, X, Pencil, Trash2, Phone, Mail, Package, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Phone, Package, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import type { Supplier } from './store';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -17,7 +17,6 @@ export function SuppliersPage() {
   // Form state
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
-  const [formEmail, setFormEmail] = useState('');
   const [formProductIds, setFormProductIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
@@ -29,7 +28,6 @@ export function SuppliersPage() {
   const resetForm = () => {
     setFormName('');
     setFormPhone('');
-    setFormEmail('');
     setFormProductIds([]);
     setProductSearch('');
   };
@@ -43,7 +41,6 @@ export function SuppliersPage() {
     setEditingId(supplier.id);
     setFormName(supplier.name);
     setFormPhone(supplier.phone || '');
-    setFormEmail(supplier.email || '');
     setFormProductIds([...supplier.productIds]);
     setProductSearch('');
     setView('edit');
@@ -70,7 +67,6 @@ export function SuppliersPage() {
         id: 'sup' + Date.now(),
         name: formName.trim(),
         phone: formPhone.trim() || undefined,
-        email: formEmail.trim() || undefined,
         productIds: formProductIds,
       };
       setSuppliers(prev => [...prev, newSupplier]);
@@ -85,7 +81,6 @@ export function SuppliersPage() {
         ...s,
         name: formName.trim(),
         phone: formPhone.trim() || undefined,
-        email: formEmail.trim() || undefined,
         productIds: formProductIds,
       } : s));
       addAudit({
@@ -141,33 +136,18 @@ export function SuppliersPage() {
               />
             </div>
 
-            {/* Phone & Email row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-2 text-foreground">
-                  <Phone size={14} className="inline mr-1.5 opacity-60" />
-                  Teléfono
-                </label>
-                <input
-                  value={formPhone}
-                  onChange={e => setFormPhone(e.target.value)}
-                  placeholder="Ej: 11-2345-6789"
-                  className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-2 text-foreground">
-                  <Mail size={14} className="inline mr-1.5 opacity-60" />
-                  Email
-                </label>
-                <input
-                  value={formEmail}
-                  onChange={e => setFormEmail(e.target.value)}
-                  placeholder="Ej: ventas@ejemplo.com"
-                  type="email"
-                  className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
-                />
-              </div>
+            {/* Phone */}
+            <div>
+              <label className="block text-sm mb-2 text-foreground">
+                <Phone size={14} className="inline mr-1.5 opacity-60" />
+                Teléfono
+              </label>
+              <input
+                value={formPhone}
+                onChange={e => setFormPhone(e.target.value)}
+                placeholder="Ej: 11-2345-6789"
+                className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
+              />
             </div>
 
             {/* Product assignment */}
@@ -278,11 +258,6 @@ export function SuppliersPage() {
                       <Phone size={12} /> {supplier.phone}
                     </p>
                   )}
-                  {supplier.email && (
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <Mail size={12} /> {supplier.email}
-                    </p>
-                  )}
                 </div>
                 <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-2.5 py-1 rounded-full flex-shrink-0" style={{ fontWeight: 500 }}>
                   {supplier.productIds.length} productos
@@ -351,7 +326,6 @@ export function SuppliersPage() {
               <tr className="bg-muted">
                 <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Proveedor</th>
                 <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Teléfono</th>
-                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Email</th>
                 <th className="text-center px-4 py-3 text-xs text-muted-foreground uppercase">Productos</th>
                 <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Acciones</th>
               </tr>
@@ -363,7 +337,6 @@ export function SuppliersPage() {
                     <p className="text-sm" style={{ fontWeight: 500 }}>{supplier.name}</p>
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{supplier.phone || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{supplier.email || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}

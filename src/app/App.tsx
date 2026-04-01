@@ -1,5 +1,7 @@
-import { useState, useCallback, createContext, useContext } from 'react';
+import { useState, useCallback, createContext, useContext, useEffect } from 'react';
 import { createHashRouter, RouterProvider } from 'react-router';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { LoginPage } from './components/LoginPage';
 import { AppLayout } from './components/AppLayout';
 import { DashboardPage } from './components/DashboardPage';
@@ -49,6 +51,18 @@ export default function App() {
   const appState = useAppState();
 
   const handleLogout = useCallback(() => setIsLoggedIn(false), []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      } else {
+        void CapApp.exitApp();
+      }
+    });
+    return () => { void listener.then(l => l.remove()); };
+  }, []);
 
   if (!isLoggedIn) {
     return (

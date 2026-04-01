@@ -1,1 +1,5 @@
 node_modules
+release/
+*.log
+*-errors.txt
+*_targets.txt

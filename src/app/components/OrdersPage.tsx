@@ -1,19 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppContext } from './AppContext';
-import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter } from 'lucide-react';
+import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter, Share2 } from 'lucide-react';
 import type { Order } from './store';
 import { getUnitLabel } from './store';
 import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from './download';
-import { buildOrderXlsx } from './xlsxExport';
-import { openOrderEmailDraft } from './emailSend';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import jsPDF from 'jspdf';
 
 type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival';
 type StatusFilter = 'all' | 'Pendiente' | 'Confirmado';
 
 export function OrdersPage() {
   const ctx = useAppContext();
-  const { orders, setOrders, products, setProducts, addAudit, getTotalStock, users, warehouses, suppliers } = ctx;
+  const { orders, setOrders, products, setProducts, addAudit, getTotalStock, warehouses, suppliers } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<OrderView>('list');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -23,7 +25,6 @@ export function OrdersPage() {
   const [orderItems, setOrderItems] = useState<{ productId: string; avgUsage: number; currentStock: number; quantity: number; included: boolean }[]>([]);
   const [provider, setProvider] = useState('');
   const [supplierId, setSupplierId] = useState('');
-  const [operatorId, setOperatorId] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState('');
   const [lastCreatedOrder, setLastCreatedOrder] = useState<Order | null>(null);
 
@@ -46,11 +47,8 @@ export function OrdersPage() {
     setDateType('regular');
     setProvider('');
     setSupplierId('');
-    setOperatorId('');
     setView('create-step1');
   };
-
-  const operators = useMemo(() => users.filter(u => u.role === 'Operador'), [users]);
 
   // Sync status filter with URL (supports dashboard deep-links)
   useEffect(() => {
@@ -103,31 +101,147 @@ export function OrdersPage() {
     setSuccessMsg('Pedido ' + newOrder.id + ' creado exitosamente');
     setLastCreatedOrder(newOrder);
     setView('create-step3');
+  };
 
-    // Build xlsx for the operator and trigger share flow
-    const operator = operators.find(o => o.id === operatorId);
-    const blob = buildOrderXlsx({
-      day: newOrder.date,
-      orderId: newOrder.id,
-      provider: newOrder.provider,
-      rows: newOrder.items.map(it => ({
-        product: getProductName(it.productId),
-        quantity: it.quantityOrdered,
-      })),
+  const buildOrderPDFBlob = (order: Order): Blob => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    let y = 50;
+
+    // Header circle
+    doc.setFillColor(45, 80, 22);
+    doc.circle(60, y, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LCH', 60, y + 5, { align: 'center' });
+
+    doc.setTextColor(113, 113, 130);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('La Chacra Futbol', 100, y - 6);
+    doc.setTextColor(180, 180, 180);
+    doc.setFontSize(8);
+    doc.text('Control de Stock', 100, y + 8);
+
+    y += 50;
+    doc.setDrawColor(45, 80, 22);
+    doc.setLineWidth(1.5);
+    doc.line(40, y, W - 40, y);
+    y += 18;
+    doc.setTextColor(45, 80, 22);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detalle del Pedido', W / 2, y, { align: 'center' });
+
+    y += 30;
+    doc.setFillColor(249, 249, 247);
+    doc.roundedRect(40, y, W - 80, 75, 4, 4, 'F');
+    doc.setDrawColor(45, 80, 22);
+    doc.setLineWidth(3);
+    doc.line(40, y, 40, y + 75);
+
+    y += 18;
+    const now = new Date();
+    const hrs = String(now.getHours()).padStart(2, '0');
+    const mins = String(now.getMinutes()).padStart(2, '0');
+    const secs = String(now.getSeconds()).padStart(2, '0');
+    const remito = 'REM-' + order.date.replace(/-/g, '') + '-' + hrs + mins + secs;
+
+    const fields = [
+      { label: 'Remito', value: remito },
+      { label: 'Fecha', value: order.date },
+      { label: 'Proveedor', value: order.provider },
+      { label: 'Estado', value: order.status },
+    ];
+    const colW = (W - 80) / fields.length;
+    fields.forEach(({ label, value }, i) => {
+      const x = 50 + i * colW;
+      doc.setTextColor(180, 180, 180);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(label.toUpperCase(), x, y);
+      doc.setTextColor(51, 51, 51);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(value, x, y + 14);
     });
 
-    // Always download a local copy
-    downloadBlobFile({ filename: `pedido-${newOrder.id}.xlsx`, blob });
+    y += 55;
+    // Table header
+    doc.setFillColor(45, 80, 22);
+    doc.rect(40, y, W - 80, 24, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Producto', 52, y + 15);
+    doc.text('Cantidad Pedida', W - 48, y + 15, { align: 'right' });
 
-    // If operator has email (ideally Gmail), open email draft with attachment (Android).
-    if (operator?.email) {
-      void openOrderEmailDraft({
-        toEmail: operator.email,
-        subject: `Pedido ${newOrder.id} - ${newOrder.date}`,
-        body: `Hola ${operator.name},\n\nAdjunto el pedido ${newOrder.id} (${newOrder.date}).\n\nSaludos.`,
-        filename: `pedido-${newOrder.id}.xlsx`,
-        blob,
+    y += 24;
+    let totalUnits = 0;
+    order.items.forEach((item, idx) => {
+      if (y > 760) { doc.addPage(); y = 40; }
+      const bg = idx % 2 === 0 ? [255, 255, 255] : [249, 249, 247];
+      doc.setFillColor(bg[0], bg[1], bg[2]);
+      doc.rect(40, y, W - 80, 22, 'F');
+      doc.setTextColor(51, 51, 51);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const prod = getProduct(item.productId);
+      const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
+      doc.text(getProductName(item.productId).toUpperCase(), 52, y + 14);
+      doc.text(item.quantityOrdered + ' ' + unitLabel, W - 48, y + 14, { align: 'right' });
+      totalUnits += item.quantityOrdered;
+      y += 22;
+    });
+
+    // Total row
+    doc.setFillColor(240, 236, 230);
+    doc.rect(40, y, W - 80, 26, 'F');
+    doc.setTextColor(113, 113, 130);
+    doc.setFontSize(10);
+    doc.text('Total productos:', 52, y + 16);
+    doc.setTextColor(45, 80, 22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(totalUnits), W - 48, y + 16, { align: 'right' });
+
+    y += 50;
+    doc.setDrawColor(229, 229, 229);
+    doc.setLineWidth(0.5);
+    doc.line(40, y, W - 40, y);
+    y += 14;
+    doc.setTextColor(180, 180, 180);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Documento generado automaticamente por Control de Stock - La Chacra Futbol', W / 2, y, { align: 'center' });
+    doc.text('Generado el ' + now.toLocaleDateString('es-AR') + ' a las ' + now.toLocaleTimeString('es-AR'), W / 2, y + 12, { align: 'center' });
+
+    return doc.output('blob');
+  };
+
+  const sharePDF = async (order: Order) => {
+    const blob = buildOrderPDFBlob(order);
+    const filename = `pedido-${order.id}.pdf`;
+
+    if (Capacitor.isNativePlatform()) {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>(resolve => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(blob);
       });
+      const written = await Filesystem.writeFile({
+        path: filename,
+        data: base64,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+      await Share.share({
+        title: `Pedido ${order.id}`,
+        files: [written.uri],
+        dialogTitle: 'Compartir pedido',
+      });
+    } else {
+      downloadBlobFile({ filename, blob });
     }
   };
 
@@ -422,24 +536,6 @@ export function OrdersPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm mb-2">Operador (Email)</label>
-              <select
-                value={operatorId}
-                onChange={e => setOperatorId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border outline-none text-sm"
-              >
-                <option value="">(Opcional) Seleccionar operador…</option>
-                {operators.map(o => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}{o.email ? ` (${o.email})` : ' (sin email)'}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-[#717182] mt-1">
-                Si el operador tiene email cargado, se abrirá el mail con el pedido adjunto (en Android).
-              </p>
-            </div>
-            <div>
               <label className="block text-sm mb-2">Periodo de calculo</label>
               <select className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border outline-none text-sm">
                 <option>Ultimos 3 meses</option>
@@ -601,6 +697,13 @@ export function OrdersPage() {
             >
               <Download size={16} />
               Descargar PDF
+            </button>
+            <button
+              onClick={() => lastCreatedOrder && void sharePDF(lastCreatedOrder)}
+              className="px-6 py-2.5 rounded-lg bg-[#25D366] text-white text-sm flex items-center gap-2 hover:bg-[#1ebe5d] transition-colors"
+            >
+              <Share2 size={16} />
+              Compartir
             </button>
           </div>
         </div>

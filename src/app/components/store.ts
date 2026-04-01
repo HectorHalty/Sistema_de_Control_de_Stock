@@ -102,7 +102,6 @@ export interface Supplier {
   id: string;
   name: string;
   phone?: string;
-  email?: string;
   productIds: string[]; // IDs de los productos que provee
 }
 export const initialCategories: Category[] = [
@@ -174,9 +173,9 @@ export const initialProducts: Product[] = [
 ];
 
 export const initialSuppliers: Supplier[] = [
-  { id: 'sup1', name: 'Distribuidora Norte', phone: '11-2345-6789', email: 'ventas@distnorte.com', productIds: ['p1', 'p2', 'p3', 'p8', 'p9'] },
-  { id: 'sup2', name: 'Mayorista del Sur', phone: '11-9876-5432', email: 'pedidos@mayosur.com', productIds: ['p4', 'p5', 'p6', 'p10'] },
-  { id: 'sup3', name: 'Insumos La Pampa', phone: '11-5555-1234', email: 'contacto@insumoslapampa.com', productIds: ['p7'] },
+  { id: 'sup1', name: 'Distribuidora Norte', phone: '11-2345-6789', productIds: ['p1', 'p2', 'p3', 'p8', 'p9'] },
+  { id: 'sup2', name: 'Mayorista del Sur', phone: '11-9876-5432', productIds: ['p4', 'p5', 'p6', 'p10'] },
+  { id: 'sup3', name: 'Insumos La Pampa', phone: '11-5555-1234', productIds: ['p7'] },
 ];
 
 export const initialOrders: Order[] = [
