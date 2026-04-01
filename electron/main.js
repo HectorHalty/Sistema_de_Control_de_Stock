@@ -8,7 +8,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     icon: path.join(__dirname, '../build/icon.png'),
-    title: 'Stock La Chacra Fútbol',
+    title: 'Stock',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
