@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { Plus, X, Pencil, Trash2, Phone, Package, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Package, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import type { Supplier } from './store';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -16,7 +16,6 @@ export function SuppliersPage() {
 
   // Form state
   const [formName, setFormName] = useState('');
-  const [formPhone, setFormPhone] = useState('');
   const [formProductIds, setFormProductIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
@@ -27,7 +26,6 @@ export function SuppliersPage() {
 
   const resetForm = () => {
     setFormName('');
-    setFormPhone('');
     setFormProductIds([]);
     setProductSearch('');
   };
@@ -40,7 +38,6 @@ export function SuppliersPage() {
   const openEdit = (supplier: Supplier) => {
     setEditingId(supplier.id);
     setFormName(supplier.name);
-    setFormPhone(supplier.phone || '');
     setFormProductIds([...supplier.productIds]);
     setProductSearch('');
     setView('edit');
@@ -66,7 +63,6 @@ export function SuppliersPage() {
       const newSupplier: Supplier = {
         id: 'sup' + Date.now(),
         name: formName.trim(),
-        phone: formPhone.trim() || undefined,
         productIds: formProductIds,
       };
       setSuppliers(prev => [...prev, newSupplier]);
@@ -80,7 +76,6 @@ export function SuppliersPage() {
       setSuppliers(prev => prev.map(s => s.id === editingId ? {
         ...s,
         name: formName.trim(),
-        phone: formPhone.trim() || undefined,
         productIds: formProductIds,
       } : s));
       addAudit({
@@ -132,20 +127,6 @@ export function SuppliersPage() {
                 value={formName}
                 onChange={e => setFormName(e.target.value)}
                 placeholder="Ej: Distribuidora Norte"
-                className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
-              />
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-sm mb-2 text-foreground">
-                <Phone size={14} className="inline mr-1.5 opacity-60" />
-                Teléfono
-              </label>
-              <input
-                value={formPhone}
-                onChange={e => setFormPhone(e.target.value)}
-                placeholder="Ej: 11-2345-6789"
                 className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
               />
             </div>
@@ -253,11 +234,6 @@ export function SuppliersPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate" style={{ fontWeight: 600 }}>{supplier.name}</p>
-                  {supplier.phone && (
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                      <Phone size={12} /> {supplier.phone}
-                    </p>
-                  )}
                 </div>
                 <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-2.5 py-1 rounded-full flex-shrink-0" style={{ fontWeight: 500 }}>
                   {supplier.productIds.length} productos
@@ -325,7 +301,6 @@ export function SuppliersPage() {
             <thead>
               <tr className="bg-muted">
                 <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Proveedor</th>
-                <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Teléfono</th>
                 <th className="text-center px-4 py-3 text-xs text-muted-foreground uppercase">Productos</th>
                 <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Acciones</th>
               </tr>
@@ -336,7 +311,6 @@ export function SuppliersPage() {
                   <td className="px-4 py-3">
                     <p className="text-sm" style={{ fontWeight: 500 }}>{supplier.name}</p>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{supplier.phone || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}

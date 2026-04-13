@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import logoIcon from '../../assets/logo-LCH.png';
 import { getUnitLabel } from './store';
+import type { AuditEntry } from './store';
 
 export function DashboardPage() {
   const { products, warehouses, orders, auditLog, getTotalStock } = useAppContext();
   const navigate = useNavigate();
+  const [selectedAudit, setSelectedAudit] = useState<AuditEntry | null>(null);
 
   const totalStock = products.reduce((sum, p) => sum + getTotalStock(p), 0);
   const pendingOrders = orders.filter(o => o.status === 'Pendiente').length;
@@ -60,7 +63,7 @@ export function DashboardPage() {
           <button
             key={stat.label}
             onClick={() => stat.to && navigate(stat.to)}
-            className={`bg-card rounded-xl border border-border p-4 shadow-sm text-left transition-all ${stat.to ? 'hover:shadow-md hover:border-border/70 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+            className={`bg-card rounded-xl border border-border p-4 shadow-sm text-center transition-all ${stat.to ? 'hover:shadow-md hover:border-border/70 active:scale-95 cursor-pointer' : 'cursor-default'}`}
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`${stat.color} p-2 rounded-lg`}>
@@ -114,7 +117,11 @@ export function DashboardPage() {
           </div>
           <div className="space-y-3">
             {auditLog.slice(0, 5).map(entry => (
-              <div key={entry.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
+              <button
+                key={entry.id}
+                onClick={() => setSelectedAudit(entry)}
+                className="flex items-start gap-3 py-2 border-b border-border last:border-0 w-full text-left hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors"
+              >
                 <img src={logoIcon} alt="" className="logo-sidebar w-8 h-8 rounded-full flex-shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-foreground">
@@ -122,12 +129,65 @@ export function DashboardPage() {
                   </p>
                   <p className="text-xs text-muted-foreground">{entry.date}</p>
                 </div>
-              </div>
+                <ChevronRight size={14} className="text-muted-foreground mt-1 flex-shrink-0" />
+              </button>
             ))}
             {auditLog.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin actividad reciente</p>}
           </div>
         </div>
       </div>
+
+      {/* Audit Detail Modal */}
+      {selectedAudit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setSelectedAudit(null)}>
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h3 className="text-foreground">Detalle del Cambio</h3>
+              <button onClick={() => setSelectedAudit(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <img src={logoIcon} alt="" className="logo-sidebar w-10 h-10 rounded-full" />
+                <div>
+                  <p className="text-sm" style={{ fontWeight: 600 }}>{selectedAudit.user}</p>
+                  <p className="text-xs text-muted-foreground">{selectedAudit.date}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Acción</p>
+                  <p className="text-sm" style={{ fontWeight: 500 }}>{selectedAudit.action}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Elemento</p>
+                  <p className="text-sm" style={{ fontWeight: 500 }}>{selectedAudit.element}</p>
+                </div>
+                {selectedAudit.previousValue && selectedAudit.previousValue !== '-' && (
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor anterior</p>
+                        <p className="text-sm text-red-600" style={{ fontWeight: 500 }}>{selectedAudit.previousValue}</p>
+                      </div>
+                      <span className="text-muted-foreground text-lg">→</span>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Valor nuevo</p>
+                        <p className="text-sm text-[#3d7a3d]" style={{ fontWeight: 500 }}>{selectedAudit.newValue || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {(!selectedAudit.previousValue || selectedAudit.previousValue === '-') && selectedAudit.newValue && selectedAudit.newValue !== '-' && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Detalle</p>
+                    <p className="text-sm" style={{ fontWeight: 500 }}>{selectedAudit.newValue}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Almacenes quick view */}
       <div className="bg-card rounded-xl border border-border p-5 shadow-sm">

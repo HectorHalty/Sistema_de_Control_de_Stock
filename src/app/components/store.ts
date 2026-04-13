@@ -66,7 +66,6 @@ export interface CurrentUser {
 export interface AppUser {
   id: string;
   name: string;
-  email: string;
   role: UserRole;
 }
 
@@ -101,7 +100,6 @@ export interface ConsumptionLog {
 export interface Supplier {
   id: string;
   name: string;
-  phone?: string;
   productIds: string[]; // IDs de los productos que provee
 }
 export const initialCategories: Category[] = [
@@ -173,9 +171,9 @@ export const initialProducts: Product[] = [
 ];
 
 export const initialSuppliers: Supplier[] = [
-  { id: 'sup1', name: 'Distribuidora Norte', phone: '11-2345-6789', productIds: ['p1', 'p2', 'p3', 'p8', 'p9'] },
-  { id: 'sup2', name: 'Mayorista del Sur', phone: '11-9876-5432', productIds: ['p4', 'p5', 'p6', 'p10'] },
-  { id: 'sup3', name: 'Insumos La Pampa', phone: '11-5555-1234', productIds: ['p7'] },
+  { id: 'sup1', name: 'Distribuidora Norte', productIds: ['p1', 'p2', 'p3', 'p8', 'p9'] },
+  { id: 'sup2', name: 'Mayorista del Sur', productIds: ['p4', 'p5', 'p6', 'p10'] },
+  { id: 'sup3', name: 'Insumos La Pampa', productIds: ['p7'] },
 ];
 
 export const initialOrders: Order[] = [
@@ -207,10 +205,10 @@ export const initialAuditLog: AuditEntry[] = [
 ];
 
 export const initialUsers: AppUser[] = [
-  { id: 'u1', name: 'Admin', email: 'admin@lachacra.com', role: 'Admin' },
-  { id: 'u2', name: 'Juan Pérez', email: 'juan@lachacra.com', role: 'Operador' },
-  { id: 'u3', name: 'María García', email: 'maria@lachacra.com', role: 'Operador' },
-  { id: 'u4', name: 'Carlos López', email: 'carlos@lachacra.com', role: 'Viewer' },
+  { id: 'u1', name: 'Admin', role: 'Admin' },
+  { id: 'u2', name: 'Juan Pérez', role: 'Operador' },
+  { id: 'u3', name: 'María García', role: 'Operador' },
+  { id: 'u4', name: 'Carlos López', role: 'Viewer' },
 ];
 
 export function useAppState() {
@@ -222,6 +220,7 @@ export function useAppState() {
   const [consumptionLogs, setConsumptionLogs] = useLocalStorage<ConsumptionLog[]>('stock-consumption', []);
   const [suppliers, setSuppliers] = useLocalStorage<Supplier[]>('stock-suppliers', initialSuppliers);
   const [darkMode, setDarkModeState] = useLocalStorage<boolean>('stock-darkmode', false);
+  const [stockAlertDay, setStockAlertDay] = useLocalStorage<string>('stock-alert-day', 'Jueves');
   const [currentUser, setCurrentUser] = useLocalStorage<CurrentUser>('stock-current-user', { username: 'admin', role: 'Admin' });
   const [users, setUsers] = useLocalStorage<AppUser[]>('stock-users', initialUsers);
 
@@ -271,6 +270,7 @@ export function useAppState() {
     consumptionLogs, setConsumptionLogs,
     suppliers, setSuppliers,
     darkMode, setDarkMode,
+    stockAlertDay, setStockAlertDay,
     currentUser, setCurrentUser,
     users, setUsers,
     addAudit, getTotalStock, getWarehouseTotalProducts,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { getUnitLabel } from './store';
+import { getCategoryIcon } from './ProductsPage';
 import { Plus, Edit, Trash2, X, Warehouse, Package, ChevronDown, ChevronUp, Beer, Coffee, UtensilsCrossed, Refrigerator, Archive, ShoppingCart, Flame, Sandwich, Box, Star, Zap, Droplets } from 'lucide-react';
 import type { Warehouse as WarehouseType } from './store';
 
@@ -14,7 +15,7 @@ function getWarehouseIcon(iconName?: string): React.ComponentType<any> {
 }
 
 export function WarehousesPage() {
-  const { warehouses, setWarehouses, products, getWarehouseTotalProducts, addAudit } = useAppContext();
+  const { warehouses, setWarehouses, products, categories, getWarehouseTotalProducts, addAudit } = useAppContext();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<WarehouseType | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -113,10 +114,12 @@ export function WarehousesPage() {
                     <div className="space-y-1.5">
                       {warehouseProducts.map(p => {
                         const stock = p.stockByWarehouse.find(s => s.warehouseId === wh.id);
+                        const cat = categories.find(c => c.name === p.category);
+                        const CatIcon = getCategoryIcon(cat?.icon || '');
                         return (
                           <div key={p.id} className="flex items-center justify-between py-2 px-3 bg-card rounded-lg">
                             <div className="flex items-center gap-2">
-                              <Package size={14} className="text-[#3d7a3d]" />
+                              <CatIcon size={14} className="text-[#3d7a3d]" />
                               <span className="text-sm">{p.name}</span>
                             </div>
                             <span className="text-sm" style={{ fontWeight: 500 }}>{stock?.quantity || 0} {getUnitLabel(p.unit, true)}</span>

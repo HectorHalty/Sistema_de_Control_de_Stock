@@ -7,7 +7,7 @@ import logo10 from '../../assets/logo-10A.png';
 import type { AppUser } from './store';
 
 export function SettingsPage() {
-  const { darkMode, setDarkMode, currentUser, users, setUsers } = useAppContext();
+  const { darkMode, setDarkMode, stockAlertDay, setStockAlertDay, currentUser, users, setUsers } = useAppContext();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -83,7 +83,6 @@ export function SettingsPage() {
                   <img src={logoIcon} alt="" className="logo-sidebar w-10 h-10 rounded-full flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm" style={{ fontWeight: 600 }}>{user.name}</p>
-                    <p className="text-xs text-[#717182] break-all">{user.email}</p>
                   </div>
                   <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${user.role === 'Admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
                       user.role === 'Operador' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
@@ -119,7 +118,6 @@ export function SettingsPage() {
                 <thead>
                   <tr className="bg-secondary">
                     <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Usuario</th>
-                    <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Email</th>
                     <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Rol</th>
                     <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Acciones</th>
                   </tr>
@@ -133,7 +131,6 @@ export function SettingsPage() {
                           <span className="text-sm" style={{ fontWeight: 500 }}>{user.name}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{user.email}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2.5 py-1 rounded-full ${user.role === 'Admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
                             user.role === 'Operador' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
@@ -187,12 +184,18 @@ export function SettingsPage() {
             </div>
             <div className="flex items-center justify-between py-3 border-b border-[rgba(0,0,0,0.04)]">
               <div>
-                <p className="text-sm" style={{ fontWeight: 500 }}>Recordatorio de Pedidos</p>
-                <p className="text-xs text-muted-foreground">Alerta antes de cada viernes para revisar stock</p>
+                <p className="text-sm" style={{ fontWeight: 500 }}>Día de Alerta de Stock Faltante</p>
+                <p className="text-xs text-muted-foreground">Elegí qué día de la semana querés que te avise si falta stock</p>
               </div>
-              <div className="w-11 h-6 bg-[#3d7a3d] rounded-full relative cursor-pointer">
-                <div className="absolute right-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow" />
-              </div>
+              <select
+                value={stockAlertDay}
+                onChange={e => setStockAlertDay(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
+              >
+                {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map(day => (
+                  <option key={day} value={day}>{day}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center justify-between py-3">
               <div>
@@ -256,18 +259,13 @@ function UserForm({
   onCancel: () => void;
   disableCreate: boolean;
 }) {
-  const [form, setForm] = useState<AppUser>(initial || { id: '', name: '', email: '', role: 'Operador' });
+  const [form, setForm] = useState<AppUser>(initial || { id: '', name: '', role: 'Operador' });
 
   return (
     <div className="px-6 py-4 space-y-4">
       <div>
         <label className="block text-sm mb-1">Nombre</label>
         <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-          className="w-full px-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm" />
-      </div>
-      <div>
-        <label className="block text-sm mb-1">Email</label>
-        <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
           className="w-full px-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm" />
       </div>
       <div>
@@ -280,15 +278,10 @@ function UserForm({
         </select>
       </div>
 
-      {form.role === 'Operador' && (
-        <p className="text-xs text-muted-foreground -mt-2">
-          Para envío automático de pedidos, cargá un email Gmail en el campo Email (ej: nombre@gmail.com).
-        </p>
-      )}
       <div className="flex gap-3 justify-end pt-2">
         <button onClick={onCancel} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
         <button
-          onClick={() => form.name && form.email && !disableCreate && onSave(form)}
+          onClick={() => form.name && !disableCreate && onSave(form)}
           disabled={disableCreate}
           className={`px-4 py-2 rounded-lg text-sm ${disableCreate ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-[#3d7a3d] text-white hover:bg-[#2f5f2f]'
             }`}

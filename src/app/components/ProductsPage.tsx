@@ -28,6 +28,7 @@ export function ProductsPage() {
   const { products, setProducts, warehouses, categories, setCategories, getTotalStock, addAudit } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [showCatFilter, setShowCatFilter] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
@@ -91,14 +92,58 @@ export function ProductsPage() {
             className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-card border border-border focus:border-[#3d7a3d] focus:ring-2 focus:ring-[#3d7a3d]/20 outline-none"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-          className="px-4 py-2.5 rounded-lg bg-card border border-border focus:border-[#3d7a3d] outline-none text-sm"
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-        </select>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowCatFilter(!showCatFilter)}
+            className="px-4 py-2.5 rounded-lg bg-card border border-border focus:border-[#3d7a3d] outline-none text-sm flex items-center gap-2 min-w-[200px] justify-between"
+          >
+            <span className="flex items-center gap-2">
+              {categoryFilter ? (
+                <>
+                  {(() => { const Icon = getCatIcon(categoryFilter); return <Icon size={16} className="text-[#3d7a3d]" />; })()}
+                  {categoryFilter}
+                </>
+              ) : (
+                'Todas las categorías'
+              )}
+            </span>
+            <ChevronDown size={16} className="text-muted-foreground" />
+          </button>
+          {showCatFilter && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowCatFilter(false)} />
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => { setCategoryFilter(''); setShowCatFilter(false); }}
+                  className={`w-full px-4 py-3 flex items-center gap-3 text-sm hover:bg-muted transition-colors text-left ${!categoryFilter ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                    <Package size={16} className="text-[#3d7a3d]" />
+                  </div>
+                  <span style={{ fontWeight: !categoryFilter ? 500 : 400 }}>Todas las categorías</span>
+                </button>
+                {categories.map(c => {
+                  const CIcon = getCategoryIcon(c.icon);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { setCategoryFilter(c.name); setShowCatFilter(false); }}
+                      className={`w-full px-4 py-3 flex items-center gap-3 text-sm hover:bg-muted transition-colors text-left ${categoryFilter === c.name ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                        <CIcon size={16} className="text-[#3d7a3d]" />
+                      </div>
+                      <span style={{ fontWeight: categoryFilter === c.name ? 500 : 400 }}>{c.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Mobile card list */}
