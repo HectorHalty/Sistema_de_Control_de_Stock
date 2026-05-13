@@ -56,7 +56,14 @@ export interface Order {
   items: { productId: string; quantityOrdered: number; quantityReceived?: number }[];
 }
 
-export type UserRole = 'Admin' | 'Operador' | 'Viewer';
+export type UserRole =
+  | 'Admin'
+  | 'Operador'
+  | 'Viewer'
+  | 'SuperAdmin'
+  | 'Gerente_Operaciones'
+  | 'Encargado_Stock'
+  | 'Encargado_Futbol';
 
 export interface CurrentUser {
   username: string;
@@ -167,6 +174,21 @@ export const initialProducts: Product[] = [
     id: 'p10', name: 'Medialunas x6', code: 'PAN-002', description: 'Medialunas de manteca x6',
     category: 'Panadería', unit: 'unidades', image: '',
     stockByWarehouse: [{ warehouseId: 'w2', quantity: 10 }],
+  },
+  {
+    id: 'p11', name: 'Pan de Hamburguesa', code: 'INS-002', description: 'Pan de hamburguesa individual',
+    category: 'Insumos', unit: 'unidades', image: '',
+    stockByWarehouse: [{ warehouseId: 'w1', quantity: 60 }],
+  },
+  {
+    id: 'p12', name: 'Medallón de Carne', code: 'CAR-002', description: 'Medallón para hamburguesa',
+    category: 'Carnes', unit: 'unidades', image: '',
+    stockByWarehouse: [{ warehouseId: 'w1', quantity: 55 }],
+  },
+  {
+    id: 'p13', name: 'Queso Cheddar Feta', code: 'INS-003', description: 'Fetas de queso cheddar',
+    category: 'Insumos', unit: 'unidades', image: '',
+    stockByWarehouse: [{ warehouseId: 'w1', quantity: 80 }],
   },
 ];
 

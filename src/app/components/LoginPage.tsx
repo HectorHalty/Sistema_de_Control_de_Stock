@@ -21,15 +21,31 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       return;
     }
 
-    // Mock auth:
-    // - admin/admin => Admin
-    // - cualquier otro usuario/clave no vacíos => Operador
-    if (user === 'admin' && password === 'admin') {
-      onLogin({ username: 'admin', role: 'Admin' });
+    // Mock auth por roles LCH
+    const normalizedUser = user.trim().toLowerCase();
+    const normalizedPassword = password.trim().toLowerCase();
+
+    if ((normalizedUser === 'superadmin' && normalizedPassword === 'superadmin') || (normalizedUser === 'admin' && normalizedPassword === 'admin')) {
+      onLogin({ username: 'superadmin', role: 'SuperAdmin' });
       return;
     }
 
-    onLogin({ username: user, role: 'Operador' });
+    if (normalizedUser === 'gerente' && normalizedPassword === 'gerente') {
+      onLogin({ username: 'gerente.operaciones', role: 'Gerente_Operaciones' });
+      return;
+    }
+
+    if (normalizedUser === 'stock' && normalizedPassword === 'stock') {
+      onLogin({ username: 'encargado.stock', role: 'Encargado_Stock' });
+      return;
+    }
+
+    if (normalizedUser === 'futbol' && normalizedPassword === 'futbol') {
+      onLogin({ username: 'encargado.futbol', role: 'Encargado_Futbol' });
+      return;
+    }
+
+    onLogin({ username: user, role: 'Gerente_Operaciones' });
   };
 
   return (
@@ -95,7 +111,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Credenciales de prueba Admin: admin / admin
+          Demo: superadmin/superadmin - gerente/gerente - stock/stock - futbol/futbol
         </p>
       </div>
     </div>
