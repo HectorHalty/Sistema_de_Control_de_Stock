@@ -1,0 +1,97 @@
+services:
+  # PostgreSQL - primary database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lch
+      POSTGRES_PASSWORD: lch_dev_pass
+      POSTGRES_DB: lch_stock
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lch -d lch_stock"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Redis - caching and session store
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO - S3-compatible object storage for media uploads
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_dev_pass
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minio_admin minio_dev_pass;
+      mc mb local/lch-media || true;
+      mc mb local/lch-sponsors || true;
+      mc mb local/lch-football || true;
+      mc anonymous set download local/lch-media;
+      mc anonymous set download local/lch-sponsors;
+      mc anonymous set download local/lch-football;
+      "
+
+  # API service (optional - can also run locally with npm run dev)
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://lch:lch_dev_pass@postgres:5432/lch_stock?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-change-in-production
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: minio_admin
+      MINIO_SECRET_KEY: minio_dev_pass
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET_MEDIA: lch-media
+      MINIO_BUCKET_SPONSORS: lch-sponsors
+      MINIO_BUCKET_FOOTBALL: lch-football
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

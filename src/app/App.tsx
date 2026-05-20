@@ -21,6 +21,8 @@ import { canAccessModule } from './components/platformAccess';
 import { SalesModule } from './components/sales/SalesModule';
 import { OnlineModule } from './components/online/OnlineModule';
 import { FutbolModule } from './components/futbol/FutbolModule';
+import { KitchenDisplayScreen } from './components/KitchenDisplayScreen';
+import { PublicSite } from './components/public/PublicSite';
 
 // Logout context to avoid module-level mutable variables
 const LogoutContext = createContext<(() => void) | null>(null);
@@ -126,15 +128,26 @@ const router = createHashRouter([
       { path: 'consumo', Component: () => <StockGuard><ConsumptionPage /></StockGuard> },
       { path: 'reportes', Component: () => <StockGuard><ReportsPage /></StockGuard> },
       { path: 'configuracion', Component: SettingsPage },
+      { path: 'cocina', Component: () => <StockGuard><KitchenDisplayScreen /></StockGuard> },
     ],
   },
 ]);
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showPublic, setShowPublic] = useState(false);
   const appState = useAppState();
 
-  const handleLogout = useCallback(() => setIsLoggedIn(false), []);
+  const handleLogout = useCallback(() => {
+    setIsLoggedIn(false);
+    setShowPublic(false);
+  }, []);
+
+  const handleLoginFromPublic = useCallback((user: { username: string; role: string }) => {
+    setShowPublic(false);
+    appState.setCurrentUser(user as any);
+    setIsLoggedIn(true);
+  }, [appState]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -148,6 +161,17 @@ export default function App() {
     return () => { void listener.then(l => l.remove()); };
   }, []);
 
+  // Public site (no login required)
+  if (showPublic) {
+    return (
+      <ErrorBoundary>
+        <AppContext.Provider value={appState}>
+          <PublicSite onLoginClick={() => setShowPublic(false)} />
+        </AppContext.Provider>
+      </ErrorBoundary>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <ErrorBoundary>
@@ -156,6 +180,7 @@ export default function App() {
             appState.setCurrentUser(user);
             setIsLoggedIn(true);
           }}
+          onPublicAccess={() => setShowPublic(true)}
         />
       </ErrorBoundary>
     );

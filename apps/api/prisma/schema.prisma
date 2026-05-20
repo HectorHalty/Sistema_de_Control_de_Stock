@@ -1,0 +1,360 @@
+// Prisma schema for Sistema de Control de Stock LCH
+// Local-first modular backend with PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH ====================
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  name      String
+  role      String   @default("Operador") // Admin, Operador, Viewer, SuperAdmin, etc.
+  password  String   // bcrypt hash
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  salesTickets   SalesTicket[]
+  auditEntries   AuditEntry[]
+}
+
+// ==================== STOCK / INVENTORY ====================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  icon        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+}
+
+model Warehouse {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  location    String
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockLevels StockLevel[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  categoryId  String
+  unit        String   @default("unidades") // unidades, kg
+  orderUnit   Int?     // pack size for ordering
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category         Category        @relation(fields: [categoryId], references: [id])
+  stockLevels      StockLevel[]
+  recipeItems      RecipeItem[]
+  supplierProducts SupplierProduct[]
+
+  @@index([categoryId])
+}
+
+model StockLevel {
+  id          String   @id @default(uuid())
+  productId   String
+  warehouseId String
+  quantity    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products    SupplierProduct[]
+}
+
+model SupplierProduct {
+  id         String   @id @default(uuid())
+  supplierId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, productId])
+}
+
+// ==================== SALES ====================
+
+model SalesProduct {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   @default("Comidas")
+  kitchenId   String
+  price       Decimal  @db.Decimal(10, 2)
+  emoji       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipe      RecipeItem[]
+  ticketItems SalesTicketItem[]
+  kitchen     Kitchen    @relation(fields: [kitchenId], references: [id])
+}
+
+model RecipeItem {
+  id                String        @id @default(uuid())
+  salesProductId    String
+  stockProductId    String
+  quantity          Int
+  createdAt         DateTime      @default(now())
+
+  salesProduct      SalesProduct  @relation(fields: [salesProductId], references: [id], onDelete: Cascade)
+  stockProduct      Product       @relation(fields: [stockProductId], references: [id], onDelete: Cascade)
+
+  @@unique([salesProductId, stockProductId])
+  @@index([salesProductId])
+  @@index([stockProductId])
+}
+
+model SalesTicket {
+  id            String              @id @default(uuid())
+  number        Int                 @unique
+  createdAt     DateTime            @default(now())
+  status        String              @default("emitido") // emitido, anulado, devuelto
+  total         Decimal             @db.Decimal(10, 2)
+  operatorId    String
+  note          String?
+  idempotencyKey String?            @unique
+
+  operator      User                @relation(fields: [operatorId], references: [id])
+  items         SalesTicketItem[]
+  kitchenOrders KitchenOrder[]
+
+  @@index([operatorId])
+  @@index([status])
+}
+
+model SalesTicketItem {
+  id              String       @id @default(uuid())
+  ticketId        String
+  salesProductId  String
+  name            String
+  unitPrice       Decimal      @db.Decimal(10, 2)
+  quantity        Int
+  createdAt       DateTime     @default(now())
+
+  ticket          SalesTicket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  salesProduct    SalesProduct @relation(fields: [salesProductId], references: [id])
+
+  @@index([ticketId])
+  @@index([salesProductId])
+}
+
+// ==================== KITCHEN DISPLAY SYSTEM ====================
+
+model Kitchen {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  emoji       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  salesProducts SalesProduct[]
+  orders        KitchenOrder[]
+}
+
+model KitchenOrder {
+  id            String   @id @default(uuid())
+  ticketId      String
+  ticketNumber  Int
+  kitchenId     String
+  status        String   @default("pending") // pending, preparing, ready, delivered
+  operatorName  String
+  tableId       String?
+  tableName     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ticket        SalesTicket @relation(fields: [ticketId], references: [id])
+  kitchen       Kitchen     @relation(fields: [kitchenId], references: [id])
+  items         KitchenOrderItem[]
+
+  @@index([ticketId])
+  @@index([kitchenId])
+  @@index([status])
+}
+
+model KitchenOrderItem {
+  id              String       @id @default(uuid())
+  kitchenOrderId  String
+  salesProductId  String
+  name            String
+  quantity        Int
+  emoji           String?
+  createdAt       DateTime     @default(now())
+
+  kitchenOrder    KitchenOrder @relation(fields: [kitchenOrderId], references: [id], onDelete: Cascade)
+
+  @@index([kitchenOrderId])
+}
+
+// ==================== MEDIA / UPLOADS ====================
+
+model MediaItem {
+  id          String   @id @default(uuid())
+  title       String
+  type        String   // image, video
+  url         String
+  mimeType    String
+  size        Int      // bytes
+  bucket      String   @default("lch-media")
+  key         String   @unique // S3 object key
+  matchDate   String?  // YYYY-MM-DD for football media
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([matchDate])
+}
+
+// ==================== SPONSORS ====================
+
+model Sponsor {
+  id          String   @id @default(uuid())
+  name        String
+  imageUrl    String
+  placement   String   @default("banner") // banner, fullscreen, sidebar
+  active      Boolean  @default(true)
+  linkUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@index([placement])
+}
+
+// ==================== ONLINE CATALOG ====================
+
+model OnlineProduct {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  image           String?
+  images          String[] @default([])
+  category        String
+  attributes      Json?
+  active          Boolean  @default(true)
+  stockProductId  String?  // linkage to stock product
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([active])
+  @@index([category])
+}
+
+// ==================== FOOTBALL ====================
+
+model FootballTeam {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  shortName   String?
+  logo        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  homeMatches FootballMatch[] @relation("HomeTeam")
+  awayMatches FootballMatch[] @relation("AwayTeam")
+}
+
+model FootballMatch {
+  id          String   @id @default(uuid())
+  homeTeamId  String
+  awayTeamId  String
+  date        DateTime
+  status      String   @default("pendiente") // pendiente, jugado, suspendido
+  homeGoals   Int?
+  awayGoals   Int?
+  venue       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  homeTeam    FootballTeam @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    FootballTeam @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  @@index([status])
+  @@index([date])
+}
+
+// ==================== AUDIT ====================
+
+model AuditEntry {
+  id            String   @id @default(uuid())
+  userId        String
+  action        String
+  element       String
+  previousValue String?
+  newValue      String?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ==================== CONSUMPTION LOGS ====================
+
+model ConsumptionLog {
+  id          String   @id @default(uuid())
+  day         String   // YYYY-MM-DD
+  dateType    String   @default("regular") // regular, after
+  createdAt   DateTime @default(now())
+
+  entries     ConsumptionEntry[]
+
+  @@index([day])
+  @@index([dateType])
+}
+
+model ConsumptionEntry {
+  id              String          @id @default(uuid())
+  logId           String
+  productId       String
+  productName     String
+  warehouseId     String
+  warehouseName   String
+  previousStock   Int
+  newStock        Int
+  consumed        Int
+  unit            String          @default("unidades")
+  createdAt       DateTime        @default(now())
+
+  log             ConsumptionLog  @relation(fields: [logId], references: [id], onDelete: Cascade)
+
+  @@index([logId])
+  @@index([productId])
+}

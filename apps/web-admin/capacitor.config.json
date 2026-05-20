@@ -1,0 +1,15 @@
+{
+  "appId": "com.lch.admin",
+  "appName": "LCH Admin",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#3d7a3d",
+      "showSpinner": false
+    }
+  }
+}

@@ -1,5 +1,36 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
 release/
+
+# Native platforms (Capacitor)
+apps/web-admin/.android/
+apps/web-admin/.ios/
+apps/web-public/.android/
+apps/web-public/.ios/
+
+# Legacy root-level outputs (pre-split)
+android/
+ios/
+
+# Logs
 *.log
 *-errors.txt
 *_targets.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Environment files (keep examples)
+.env
+!.env.example
