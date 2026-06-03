@@ -1,4 +1,5 @@
-﻿import { Activity, AlertTriangle, BarChart3, ShoppingBag, ShoppingCart } from 'lucide-react';
+﻿import { AlertTriangle, BarChart3, Construction, ShoppingBag, ShoppingCart, Trophy } from 'lucide-react';
+import { Link } from 'react-router';
 import { useAppContext } from '@/app/providers/AppContext';
 import { canAccessModule } from '@/features/platform/config/modules';
 
@@ -58,41 +59,19 @@ export function PlatformDashboardPage() {
         )}
 
         {canSeeOnline && (
-          <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <header className="mb-4 flex items-center gap-2">
-              <ShoppingBag size={18} className="text-[#3d7a3d]" />
-              <h3 className="text-foreground">Ventas Online</h3>
-            </header>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-emerald-50 p-4">
-                <p className="text-xs uppercase tracking-wide text-emerald-700">Total Mes</p>
-                <p className="mt-1 text-2xl text-emerald-800" style={{ fontWeight: 700 }}>$ 3.480.000</p>
-              </div>
-              <div className="rounded-xl bg-slate-100 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-600">Pendientes</p>
-                <p className="mt-1 text-2xl text-slate-800" style={{ fontWeight: 700 }}>27</p>
-              </div>
-            </div>
-          </article>
+          <ComingSoonDashboardCard
+            to="/online"
+            title="Ventas Online"
+            icon={ShoppingBag}
+          />
         )}
 
         {canSeeFutbol && (
-          <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <header className="mb-4 flex items-center gap-2">
-              <Activity size={18} className="text-blue-700" />
-              <h3 className="text-foreground">Operacion Futbol</h3>
-            </header>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-blue-50 px-4 py-3">
-                <span className="text-sm text-blue-900">Partidos Pendientes</span>
-                <span className="text-xl text-blue-900" style={{ fontWeight: 700 }}>8</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3">
-                <span className="text-sm text-slate-700">Proximos Encuentros</span>
-                <span className="text-xl text-slate-800" style={{ fontWeight: 700 }}>14</span>
-              </div>
-            </div>
-          </article>
+          <ComingSoonDashboardCard
+            to="/futbol"
+            title="Fútbol"
+            icon={Trophy}
+          />
         )}
       </section>
 
@@ -116,5 +95,35 @@ export function PlatformDashboardPage() {
         </section>
       )}
     </div>
+  );
+}
+
+function ComingSoonDashboardCard({
+  to,
+  title,
+  icon: Icon,
+}: {
+  to: string;
+  title: string;
+  icon: typeof ShoppingBag;
+}) {
+  return (
+    <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <header className="mb-4 flex items-center gap-2">
+        <Icon size={18} className="text-[#3d7a3d]" />
+        <h3 className="text-foreground">{title}</h3>
+      </header>
+      <div className="flex flex-col items-center rounded-xl bg-[#3d7a3d]/5 px-4 py-6 text-center">
+        <Construction size={28} className="text-[#3d7a3d]" />
+        <p className="mt-3 text-sm font-medium text-foreground">En desarrollo</p>
+        <p className="mt-1 text-xs text-muted-foreground">Próximamente</p>
+        <Link
+          to={to}
+          className="mt-4 text-sm font-medium text-[#3d7a3d] hover:text-[#2f5f2f]"
+        >
+          Ver detalle →
+        </Link>
+      </div>
+    </article>
   );
 }

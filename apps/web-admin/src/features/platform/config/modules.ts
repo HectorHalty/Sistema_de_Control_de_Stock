@@ -53,6 +53,11 @@ export function canAccessModule(role: CurrentUser['role'], moduleId: Exclude<Mod
   return getAllowedModules(role).includes(moduleId);
 }
 
+export function isModuleReady(moduleId: ModuleId): boolean {
+  const mod = platformModules.find(m => m.id === moduleId);
+  return mod?.ready ?? false;
+}
+
 export function getRoleLabel(role: CurrentUser['role']): string {
   return roleLabels[normalizeRole(role)];
 }

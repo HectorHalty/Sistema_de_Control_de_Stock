@@ -1,26 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { useAppState } from '@/app/providers/use-app-state';
-import { AppContext } from '@/app/providers/AppContext';
 import { ErrorBoundary } from '@/app/layout/ErrorBoundary';
 import { attachNumberInputScrollGuard } from '@/shared/utils/number-input-scroll';
-import { LoginPage, LogoutContext, RouterProvider, router } from '@/app/router';
+import { LoginPage } from '@/features/platform/pages/LoginPage';
+import type { CurrentUser } from '@/features/platform/types';
 
-function openPublicSite() {
-  if (Capacitor.isNativePlatform()) {
-    window.open('https://lachacrafutbol.com', '_system');
-  } else {
-    window.open('http://localhost:5174', '_blank');
-  }
+const AuthenticatedApp = lazy(() => import('@/app/AuthenticatedApp'));
+
+function AppLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#faf8f5] text-[#3a3a3a]">
+      Cargando…
+    </div>
+  );
 }
 
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const appState = useAppState();
+function AppShell() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   const handleLogout = useCallback(() => {
-    setIsLoggedIn(false);
+    setCurrentUser(null);
   }, []);
 
   useEffect(() => attachNumberInputScrollGuard(), []);
@@ -37,27 +37,23 @@ export default function App() {
     return () => { void listener.then(l => l.remove()); };
   }, []);
 
-  if (!isLoggedIn) {
+  if (!currentUser) {
     return (
-      <ErrorBoundary>
-        <LoginPage
-          onLogin={(user) => {
-            appState.setCurrentUser(user);
-            setIsLoggedIn(true);
-          }}
-          onPublicAccess={openPublicSite}
-        />
-      </ErrorBoundary>
+      <LoginPage onLogin={setCurrentUser} />
     );
   }
 
   return (
+    <Suspense fallback={<AppLoading />}>
+      <AuthenticatedApp initialUser={currentUser} onLogout={handleLogout} />
+    </Suspense>
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary>
-      <LogoutContext.Provider value={handleLogout}>
-        <AppContext.Provider value={appState}>
-          <RouterProvider router={router} />
-        </AppContext.Provider>
-      </LogoutContext.Provider>
+      <AppShell />
     </ErrorBoundary>
   );
 }

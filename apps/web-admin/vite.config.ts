@@ -10,13 +10,18 @@ export default defineConfig({
     tailwindcss(),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@/app': path.resolve(__dirname, './src/app'),
-      '@/features': path.resolve(__dirname, './src/features'),
-      '@/shared': path.resolve(__dirname, './src/shared'),
-      '@/assets': path.resolve(__dirname, './src/assets'),
-    },
+    alias: [
+      { find: '@/app', replacement: path.resolve(__dirname, 'src/app') },
+      { find: '@/features', replacement: path.resolve(__dirname, 'src/features') },
+      { find: '@/shared', replacement: path.resolve(__dirname, 'src/shared') },
+      { find: '@/assets', replacement: path.resolve(__dirname, 'src/assets') },
+      { find: '@', replacement: path.resolve(__dirname, 'src') },
+    ],
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  server: {
+    port: 5173,
+    strictPort: true,
+    open: true,
+  },
 })

@@ -1,6 +1,5 @@
 import { useInventoryState } from '@/features/inventory/use-inventory-state';
 import { useKitchenState } from '@/features/kitchen/use-kitchen-state';
-import { useOnlineState } from '@/features/online/use-online-state';
 import { usePlatformState } from '@/features/platform/use-platform-state';
 import { useSalesState } from '@/features/sales/use-sales-state';
 
@@ -8,14 +7,12 @@ export function useAppState() {
   const inventory = useInventoryState();
   const sales = useSalesState();
   const kitchen = useKitchenState();
-  const online = useOnlineState();
   const platform = usePlatformState();
 
   return {
     ...inventory,
     ...sales,
     ...kitchen,
-    ...online,
     ...platform,
     /** @deprecated Usar addStockAudit o addSalesAudit según el módulo. */
     addAudit: inventory.addStockAudit,

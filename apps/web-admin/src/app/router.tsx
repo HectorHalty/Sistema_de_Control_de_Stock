@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { createHashRouter, RouterProvider } from 'react-router';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { AppContext } from '@/app/providers/AppContext';
-import { canAccessModule } from '@/features/platform/config/modules';
+import { canAccessModule, type ModuleId } from '@/features/platform/config/modules';
 import { ConsumptionPage } from '@/features/inventory/pages/ConsumptionPage';
 import { DashboardPage } from '@/features/inventory/pages/DashboardPage';
 import { OrdersPage } from '@/features/inventory/pages/OrdersPage';
@@ -11,9 +11,6 @@ import { RegisterConsumptionPage } from '@/features/inventory/pages/RegisterCons
 import { ReportsPage } from '@/features/inventory/pages/ReportsPage';
 import { SuppliersPage } from '@/features/inventory/pages/SuppliersPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
-import { FutbolModule } from '@/features/futbol/FutbolModule';
-import { OnlineModule } from '@/features/online/OnlineModule';
-import { LoginPage } from '@/features/platform/pages/LoginPage';
 import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlaceholderPage';
 import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
 import { SettingsPage } from '@/features/platform/pages/SettingsPage';
@@ -58,20 +55,26 @@ function VentasGuard() {
   return <SalesModule />;
 }
 
-function OnlineGuard() {
+function ComingSoonModuleGuard({
+  moduleId,
+  title,
+}: {
+  moduleId: Exclude<ModuleId, 'dashboard'>;
+  title: string;
+}) {
   const { currentUser } = useAppStateFromContext();
-  if (!canAccessModule(currentUser.role, 'online')) {
-    return <ModulePlaceholderPage title="Ventas Online" description="Tu perfil no tiene acceso al módulo de Ventas Online." denied />;
+  if (!canAccessModule(currentUser.role, moduleId)) {
+    return <ModulePlaceholderPage title={title} denied />;
   }
-  return <OnlineModule />;
+  return <ModulePlaceholderPage title={title} comingSoon />;
+}
+
+function OnlineGuard() {
+  return <ComingSoonModuleGuard moduleId="online" title="Ventas Online" />;
 }
 
 function FutbolGuard() {
-  const { currentUser } = useAppStateFromContext();
-  if (!canAccessModule(currentUser.role, 'futbol')) {
-    return <ModulePlaceholderPage title="Fútbol" description="Tu perfil no tiene acceso al módulo de Fútbol." denied />;
-  }
-  return <FutbolModule />;
+  return <ComingSoonModuleGuard moduleId="futbol" title="Fútbol" />;
 }
 
 const router = createHashRouter([
@@ -96,4 +99,4 @@ const router = createHashRouter([
   },
 ]);
 
-export { LoginPage, LogoutContext, router, RouterProvider };
+export { LogoutContext, router, RouterProvider };

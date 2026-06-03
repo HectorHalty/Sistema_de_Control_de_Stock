@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Eye, EyeOff, Globe } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import type { CurrentUser } from '@/app/components/store';
 import { getInitials, getRoleLabel } from '@/features/platform/config/modules';
 
@@ -7,7 +7,6 @@ import logo from '@/assets/logo-chacra.png';
 
 interface LoginPageProps {
   onLogin: (user: CurrentUser) => void;
-  onPublicAccess?: () => void;
 }
 
 interface RoleOption {
@@ -24,7 +23,7 @@ const roleOptions: RoleOption[] = [
   { username: 'encargado.futbol', role: 'Encargado_Futbol', label: 'Encargado de Futbol', initials: 'EF' },
 ];
 
-export function LoginPage({ onLogin, onPublicAccess }: LoginPageProps) {
+export function LoginPage({ onLogin }: LoginPageProps) {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -150,16 +149,6 @@ export function LoginPage({ onLogin, onPublicAccess }: LoginPageProps) {
         <p className="text-center text-xs text-muted-foreground mt-4">
           Demo: superadmin/superadmin · gerente/gerente · stock/stock · futbol/futbol
         </p>
-
-        {onPublicAccess && (
-          <button
-            onClick={onPublicAccess}
-            className="w-full mt-4 flex items-center justify-center gap-2 bg-transparent border border-border text-muted-foreground hover:text-[#6bfb9a] hover:border-[#6bfb9a] py-3 rounded-lg transition-colors text-sm"
-          >
-            <Globe size={16} />
-            Ver sitio publico
-          </button>
-        )}
       </div>
     </div>
   );

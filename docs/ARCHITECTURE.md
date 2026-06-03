@@ -52,6 +52,17 @@ El archivo `app/components/store.ts` reexporta tipos y `useAppState` por compati
 
 Rutas REST por dominio (`/stock`, `/sales`, …). El prefijo `stock` en la API es el módulo de inventario; en la UI se muestra como **Inventario**.
 
+## Desarrollo local (web-admin)
+
+- URL fija: **http://localhost:5173/** (Vite con `strictPort: true`).
+- Si `npm run dev:admin` falla con “puerto en uso”, hay otro proceso (a menudo un Vite viejo) ocupando el 5173:
+  ```bash
+  npm run stop:admin
+  npm run dev:admin
+  ```
+- Cerrá la terminal anterior donde corría Vite antes de volver a iniciar, para no dejar servidores huérfanos.
+- Sitio público: **http://localhost:5174/** (`npm run dev:public`).
+
 ## Próximos pasos sugeridos
 
 1. Extraer `packages/api-client` cuando `client.ts` de admin y public estén sincronizados.

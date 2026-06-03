@@ -2,28 +2,20 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   BarChart3,
-  CalendarRange,
   CircleDollarSign,
   ClipboardList,
-  Globe,
-  Goal,
   History,
   Home,
-  Image,
   LogOut,
   Menu,
   Package,
   RotateCcw,
   Settings,
-  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
-  Star,
-  Table2,
   TableProperties,
   Ticket,
   Trophy,
-  Truck,
   UserMinus,
   Users,
   Wallet,
@@ -96,44 +88,6 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
     }));
   }
 
-  if (activeModule === 'online') {
-    const selectedTab = currentTab || 'resumen';
-    return [
-      { key: 'resumen', label: 'Resumen', icon: BarChart3 },
-      { key: 'productos', label: 'Productos', icon: Package },
-      { key: 'sponsors', label: 'Sponsors', icon: Star },
-      { key: 'media', label: 'Multimedia', icon: Image },
-      { key: 'catalogo', label: 'Catalogo', icon: ShoppingBag },
-      { key: 'carrito', label: 'Carrito', icon: ShoppingCart },
-      { key: 'pedidos', label: 'Pedidos', icon: Truck },
-      { key: 'integracion', label: 'Integracion', icon: Globe },
-    ].map(item => ({
-      label: item.label,
-      to: `/online?tab=${item.key}`,
-      active: pathname.startsWith('/online') && selectedTab === item.key,
-      icon: item.icon,
-    }));
-  }
-
-  if (activeModule === 'futbol') {
-    const selectedTab = currentTab || 'fixture';
-    return [
-      { key: 'fixture', label: 'Fixture', icon: CalendarRange },
-      { key: 'partidos', label: 'Partidos', icon: ClipboardList },
-      { key: 'equipos', label: 'Equipos', icon: Users },
-      { key: 'jugadores', label: 'Jugadores', icon: Trophy },
-      { key: 'suspendidos', label: 'Suspendidos', icon: ShieldCheck },
-      { key: 'reglamento', label: 'Reglamento', icon: Table2 },
-      { key: 'avisos', label: 'Avisos', icon: Goal },
-      { key: 'media', label: 'Multimedia', icon: Image },
-    ].map(item => ({
-      label: item.label,
-      to: `/futbol?tab=${item.key}`,
-      active: pathname.startsWith('/futbol') && selectedTab === item.key,
-      icon: item.icon,
-    }));
-  }
-
   return [];
 }
 
@@ -150,8 +104,8 @@ function getTopbarTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard LCH';
   if (pathname.startsWith('/stock') || stockInternalPaths.some(path => pathname.startsWith(path))) return 'Modulo de Stock';
   if (pathname.startsWith('/ventas')) return 'Tickeo — Ventas';
-  if (pathname.startsWith('/online')) return 'Modulo de Ventas Online';
-  if (pathname.startsWith('/futbol')) return 'Modulo de Futbol';
+  if (pathname.startsWith('/online')) return 'Ventas Online';
+  if (pathname.startsWith('/futbol')) return 'Fútbol';
   if (pathname.startsWith('/configuracion')) return 'Configuracion';
   return 'LA CHACRA FUTBOL';
 }

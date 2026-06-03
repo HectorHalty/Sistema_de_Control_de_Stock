@@ -9,6 +9,7 @@
     "dev:infra": "docker compose up -d",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:admin": "npm run dev --workspace=apps/web-admin",
+    "stop:admin": "npx --yes kill-port 5173",
     "dev:public": "npm run dev --workspace=apps/web-public",
     "dev:webs": "concurrently -n admin,public -c green,blue \"npm run dev:admin\" \"npm run dev:public\"",
     "dev:all": "concurrently -n infra,api,admin,public -c yellow,magenta,green,blue \"npm run dev:infra\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:public\"",
