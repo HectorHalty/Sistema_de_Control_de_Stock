@@ -11,6 +11,7 @@ import { OrdersPage } from './components/OrdersPage';
 import { ReportsPage } from './components/ReportsPage';
 import { SettingsPage } from './components/SettingsPage';
 import { ConsumptionPage } from './components/ConsumptionPage';
+import { RegisterConsumptionPage } from './components/RegisterConsumptionPage';
 import { SuppliersPage } from './components/SuppliersPage';
 import { useAppState } from './components/store';
 import { AppContext } from './components/AppContext';
@@ -21,7 +22,7 @@ import { canAccessModule } from './components/platformAccess';
 import { SalesModule } from './components/sales/SalesModule';
 import { OnlineModule } from './components/online/OnlineModule';
 import { FutbolModule } from './components/futbol/FutbolModule';
-import { KitchenDisplayScreen } from './components/KitchenDisplayScreen';
+import { attachNumberInputScrollGuard } from './utils/number-input-scroll';
 
 // Logout context to avoid module-level mutable variables
 const LogoutContext = createContext<(() => void) | null>(null);
@@ -125,9 +126,9 @@ const router = createHashRouter([
       { path: 'pedidos', Component: () => <StockGuard><OrdersPage /></StockGuard> },
       { path: 'proveedores', Component: () => <StockGuard><SuppliersPage /></StockGuard> },
       { path: 'consumo', Component: () => <StockGuard><ConsumptionPage /></StockGuard> },
+      { path: 'registrar-consumo', Component: () => <StockGuard><RegisterConsumptionPage /></StockGuard> },
       { path: 'reportes', Component: () => <StockGuard><ReportsPage /></StockGuard> },
       { path: 'configuracion', Component: SettingsPage },
-      { path: 'cocina', Component: () => <StockGuard><KitchenDisplayScreen /></StockGuard> },
     ],
   },
 ]);
@@ -150,6 +151,8 @@ export default function App() {
   const handleLogout = useCallback(() => {
     setIsLoggedIn(false);
   }, []);
+
+  useEffect(() => attachNumberInputScrollGuard(), []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

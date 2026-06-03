@@ -137,7 +137,7 @@ export function ConsumptionPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-foreground">Registrar Consumo</h1>
+          <h1 className="text-foreground">Controlar Stock</h1>
           <p className="text-sm text-muted-foreground mt-1">Consumo registrado correctamente</p>
         </div>
 
@@ -256,7 +256,7 @@ export function ConsumptionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-foreground">Registrar Consumo</h1>
+        <h1 className="text-foreground">Controlar Stock</h1>
         <p className="text-sm text-muted-foreground mt-1">Actualizá el stock actual por almacén</p>
       </div>
 

@@ -78,7 +78,25 @@ export function useSalesApiAdapter() {
     }
   }, [apiAvailable]);
 
-  return { checkout, returnSale, loading, error, apiAvailable };
+  const voidTicket = useCallback(async (ticketId: string, operatorId: string) => {
+    if (!apiAvailable) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await salesApi.tickets.void(ticketId, operatorId, '');
+      return { ok: true, apiUnavailable: false, result } as const;
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Void failed';
+      setError(msg);
+      return { ok: false, apiUnavailable: false, error: msg } as const;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiAvailable]);
+
+  return { checkout, returnSale, voidTicket, loading, error, apiAvailable };
 }
 
 // ==================== Kitchen Adapter ====================

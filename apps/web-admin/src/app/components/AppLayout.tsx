@@ -24,8 +24,8 @@ import {
   Ticket,
   Trophy,
   Truck,
+  UserMinus,
   Users,
-  UtensilsCrossed,
   Wallet,
   Warehouse,
 } from 'lucide-react';
@@ -46,7 +46,7 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
   futbol: { label: 'Futbol', to: '/futbol', icon: Trophy },
 };
 
-const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/reportes', '/cocina'];
+const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
 
 interface ContextNavItem {
   label: string;
@@ -63,9 +63,9 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
       { label: 'Almacenes', to: '/almacenes', icon: Warehouse },
       { label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
       { label: 'Proveedores', to: '/proveedores', icon: Users },
-      { label: 'Registrar Consumo', to: '/consumo', icon: ClipboardList },
+      { label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
+      { label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
       { label: 'Reportes', to: '/reportes', icon: BarChart3 },
-      { label: 'Pantalla Cocina', to: '/cocina', icon: UtensilsCrossed },
     ];
 
     return stockRoutes.map(item => ({
@@ -77,10 +77,10 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
   const currentTab = new URLSearchParams(search).get('tab') || '';
 
   if (activeModule === 'ventas') {
-    const selectedTab = currentTab || 'inicio';
+    const selectedTab = currentTab === 'caja' ? 'mostrador' : currentTab || 'mostrador';
     return [
       { key: 'inicio', label: 'Inicio', icon: Home },
-      { key: 'caja', label: 'Caja', icon: Wallet },
+      { key: 'mostrador', label: 'Mostrador', icon: Wallet },
       { key: 'pedidos', label: 'Mis Pedidos', icon: ClipboardList },
       { key: 'devoluciones', label: 'Devoluciones', icon: RotateCcw },
       { key: 'productos', label: 'Productos', icon: Package },
@@ -149,7 +149,7 @@ function getActiveModule(pathname: string): ModuleId {
 function getTopbarTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard LCH';
   if (pathname.startsWith('/stock') || stockInternalPaths.some(path => pathname.startsWith(path))) return 'Modulo de Stock';
-  if (pathname.startsWith('/ventas')) return 'Modulo de Ventas Fisicas';
+  if (pathname.startsWith('/ventas')) return 'Tickeo — Ventas';
   if (pathname.startsWith('/online')) return 'Modulo de Ventas Online';
   if (pathname.startsWith('/futbol')) return 'Modulo de Futbol';
   if (pathname.startsWith('/configuracion')) return 'Configuracion';

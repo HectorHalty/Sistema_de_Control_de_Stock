@@ -1,5 +1,6 @@
 import type { Product, Category } from './store';
 import { getUnitLabel } from './store';
+import { previewNextProductCode, reassignProductCodes } from './product-codes';
 import { useState } from 'react';
 import { useAppContext } from './AppContext';
 import {
@@ -42,17 +43,17 @@ export function ProductsPage() {
 
   const handleDelete = (id: string) => {
     const product = products.find(p => p.id === id);
-    setProducts(prev => prev.filter(p => p.id !== id));
+    setProducts(prev => reassignProductCodes(prev.filter(p => p.id !== id)));
     addAudit({ user: 'Admin', action: 'Eliminación Producto', element: product?.name || '', previousValue: '-', newValue: '-' });
     setDeleteConfirm(null);
   };
 
   const handleSave = (product: Product) => {
     if (editingProduct) {
-      setProducts(prev => prev.map(p => p.id === product.id ? product : p));
+      setProducts(prev => reassignProductCodes(prev.map(p => (p.id === product.id ? product : p))));
       addAudit({ user: 'Admin', action: 'Edición Producto', element: product.name, previousValue: '-', newValue: '-' });
     } else {
-      setProducts(prev => [...prev, { ...product, id: `p${Date.now()}` }]);
+      setProducts(prev => reassignProductCodes([...prev, { ...product, id: `p${Date.now()}`, code: '' }]));
       addAudit({ user: 'Admin', action: 'Alta Producto', element: product.name, previousValue: '-', newValue: '-' });
     }
     setShowModal(false);
@@ -355,6 +356,7 @@ export function ProductsPage() {
       {showModal && (
         <ProductFormModal
           product={editingProduct}
+          allProducts={products}
           warehouses={warehouses}
           categories={categories}
           onAddCategory={(cat: Category) => setCategories(prev => [...prev, cat])}
@@ -395,8 +397,9 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
   );
 }
 
-function ProductFormModal({ product, warehouses, categories, onAddCategory, onSave, onClose }: {
+function ProductFormModal({ product, allProducts, warehouses, categories, onAddCategory, onSave, onClose }: {
   product: Product | null;
+  allProducts: Product[];
   warehouses: { id: string; name: string }[];
   categories: Category[];
   onAddCategory: (cat: Category) => void;
@@ -452,6 +455,12 @@ function ProductFormModal({ product, warehouses, categories, onAddCategory, onSa
 
   const NewCatIconComponent = getCategoryIcon(newCategoryIcon);
 
+  const autoCode = product
+    ? (form.category && form.category !== product.category
+        ? previewNextProductCode(allProducts, form.category, product.id)
+        : product.code)
+    : previewNextProductCode(allProducts, form.category);
+
   return (
     <Modal onClose={onClose} title={product ? 'Editar Producto' : 'Nuevo Producto'}>
       <div className="space-y-4">
@@ -463,8 +472,13 @@ function ProductFormModal({ product, warehouses, categories, onAddCategory, onSa
           </div>
           <div>
             <label className="block text-sm mb-1">Código</label>
-            <input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm text-foreground" />
+            <input
+              value={autoCode}
+              readOnly
+              className="w-full px-3 py-2 rounded-lg bg-muted border border-border outline-none text-sm text-muted-foreground cursor-default"
+              title="Se asigna automáticamente al guardar"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Asignado automáticamente por categoría</p>
           </div>
         </div>
 
@@ -676,7 +690,7 @@ function ProductFormModal({ product, warehouses, categories, onAddCategory, onSa
           </button>
           <button
             type="button"
-            onClick={() => form.name && form.code && form.category && onSave(form)}
+            onClick={() => form.name && form.category && onSave(form)}
             className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f] transition-colors"
           >
             {product ? 'Guardar Cambios' : 'Crear Producto'}

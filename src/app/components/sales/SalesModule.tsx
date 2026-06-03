@@ -3,10 +3,17 @@ import { Search, Plus, X, Edit, Trash2, RotateCcw, Wallet, ClipboardList, Packag
 import { useSearchParams } from 'react-router';
 import { useAppContext } from '../AppContext';
 import type { SalesProduct, SalesTicket, SalesTable, Kitchen, SalesHistoryEntry } from '../store';
-import type { Product as StockProduct } from '../store';
 import { roundUpToOrderUnit } from '../store';
 import { createKitchenOrdersFromTicket } from '../kitchen/domain';
 import { useSalesApiAdapter } from '../../api/adapters';
+import {
+  deductStockForSale,
+  getMaxSellableUnits,
+  isSalesProductAvailable,
+  restoreStockForTicket,
+  validateStockForCart,
+} from './stock-link';
+import { SalesProductsPanel } from './SalesProductsPanel';
 
 type SalesTab = 'inicio' | 'caja' | 'pedidos' | 'devoluciones' | 'productos' | 'mesas' | 'metricas' | 'reportes' | 'historial';
 
@@ -23,112 +30,8 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 }
 
-/**
- * Validate stock for a cart of sales products.
- * Returns ok=true if all ingredients are available, or ok=false with missing items.
- * Race condition protection: re-validates against current stock at checkout time.
- */
-function validateStockForCart(
-  cart: CartItem[],
-  salesProducts: SalesProduct[],
-  stockProducts: ReturnType<typeof useAppContext>['products'],
-): { ok: boolean; missing: { name: string; required: number; available: number }[] } {
-  const salesMap = new Map(salesProducts.map(p => [p.id, p]));
-  const required: Record<string, number> = {};
-
-  cart.forEach(item => {
-    const sp = salesMap.get(item.salesProductId);
-    if (!sp) return;
-    sp.recipe.forEach(r => {
-      required[r.stockProductId] = (required[r.stockProductId] || 0) + r.quantity * item.quantity;
-    });
-  });
-
-  const stockMap = new Map(stockProducts.map(p => [p.id, p]));
-  const missing: { name: string; required: number; available: number }[] = [];
-
-  Object.entries(required).forEach(([stockId, qty]) => {
-    const stock = stockMap.get(stockId);
-    const available = stock ? stock.stockByWarehouse.reduce((s, w) => s + w.quantity, 0) : 0;
-    if (available < qty) {
-      missing.push({ name: stock?.name || stockId, required: qty, available });
-    }
-  });
-
-  return { ok: missing.length === 0, missing };
-}
-
-/**
- * Deduct stock for a completed sale.
- * Deducts from the first warehouse that has stock (FIFO-like).
- */
-function deductStockForSale(
-  stockProducts: ReturnType<typeof useAppContext>['products'],
-  cart: CartItem[],
-  salesProducts: SalesProduct[],
-): ReturnType<typeof useAppContext>['products'] {
-  const salesMap = new Map(salesProducts.map(p => [p.id, p]));
-  const required: Record<string, number> = {};
-
-  cart.forEach(item => {
-    const sp = salesMap.get(item.salesProductId);
-    if (!sp) return;
-    sp.recipe.forEach(r => {
-      required[r.stockProductId] = (required[r.stockProductId] || 0) + r.quantity * item.quantity;
-    });
-  });
-
-  return stockProducts.map(product => {
-    const qty = required[product.id] || 0;
-    if (qty <= 0) return product;
-
-    let remaining = qty;
-    const updatedStock = product.stockByWarehouse.map(ws => {
-      if (remaining <= 0) return ws;
-      const deduction = Math.min(ws.quantity, remaining);
-      remaining -= deduction;
-      return { ...ws, quantity: ws.quantity - deduction };
-    });
-
-    return { ...product, stockByWarehouse: updatedStock };
-  });
-}
-
-/**
- * Restore stock for a returned/cancelled ticket.
- */
-function restoreStockForTicket(
-  stockProducts: ReturnType<typeof useAppContext>['products'],
-  ticket: SalesTicket,
-  salesProducts: SalesProduct[],
-): ReturnType<typeof useAppContext>['products'] {
-  const salesMap = new Map(salesProducts.map(p => [p.id, p]));
-  const required: Record<string, number> = {};
-
-  ticket.items.forEach(item => {
-    const sp = salesMap.get(item.salesProductId);
-    if (!sp) return;
-    sp.recipe.forEach(r => {
-      required[r.stockProductId] = (required[r.stockProductId] || 0) + r.quantity * item.quantity;
-    });
-  });
-
-  return stockProducts.map(product => {
-    const qty = required[product.id] || 0;
-    if (qty <= 0) return product;
-    if (product.stockByWarehouse.length === 0) return product;
-
-    return {
-      ...product,
-      stockByWarehouse: product.stockByWarehouse.map((ws, idx) =>
-        idx === 0 ? { ...ws, quantity: ws.quantity + qty } : ws,
-      ),
-    };
-  });
-}
-
 export function SalesModule() {
-  const { products, setProducts, currentUser, addAudit, kitchens, setKitchens, salesProducts, setSalesProducts, salesTickets, setSalesTickets, salesTicketCounter, setSalesTicketCounter, salesTables, setSalesTables, salesHistory, setSalesHistory, kitchenOrders, setKitchenOrders } = useAppContext();
+  const { products, setProducts, currentUser, addSalesAudit, kitchens, setKitchens, salesProducts, setSalesProducts, salesTickets, setSalesTickets, salesTicketCounter, setSalesTicketCounter, salesTables, setSalesTables, salesHistory, setSalesHistory, kitchenOrders, setKitchenOrders } = useAppContext();
   const salesApi = useSalesApiAdapter();
   const [searchParams] = useSearchParams();
 
@@ -160,7 +63,7 @@ export function SalesModule() {
       const kitchenMatch = kitchenFilter === 'Todas' || item.kitchenId === kitchenFilter;
       const searchMatch = item.name.toLowerCase().includes(search.toLowerCase());
       // Check stock availability
-      const hasStock = checkProductStock(item, products);
+      const hasStock = isSalesProductAvailable(item, products);
       return categoryMatch && kitchenMatch && searchMatch && hasStock;
     });
   }, [salesProducts, categoryFilter, kitchenFilter, search, products]);
@@ -169,9 +72,11 @@ export function SalesModule() {
     return salesProducts.filter(item => {
       if (!item.active) return false;
       const searchMatch = item.name.toLowerCase().includes(search.toLowerCase());
-      return searchMatch && !checkProductStock(item, products);
+      const categoryMatch = categoryFilter === 'Todas' || item.category === categoryFilter;
+      const kitchenMatch = kitchenFilter === 'Todas' || item.kitchenId === kitchenFilter;
+      return categoryMatch && kitchenMatch && searchMatch && !isSalesProductAvailable(item, products);
     });
-  }, [salesProducts, search, products]);
+  }, [salesProducts, search, products, categoryFilter, kitchenFilter]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
@@ -215,8 +120,25 @@ export function SalesModule() {
   }, [salesTickets]);
 
   // --- Cart actions ---
+  const getCartQuantity = useCallback(
+    (salesProductId: string) => cart.find(item => item.salesProductId === salesProductId)?.quantity ?? 0,
+    [cart],
+  );
+
   const addToCart = (menuProduct: SalesProduct) => {
+    const maxUnits = getMaxSellableUnits(menuProduct, products);
+    if (maxUnits <= 0) {
+      setMessage(`"${menuProduct.name}" no tiene stock disponible. Configurá su receta en Productos de venta.`);
+      return;
+    }
+
     const kitchen = kitchens.find(k => k.id === menuProduct.kitchenId);
+    const currentQty = getCartQuantity(menuProduct.id);
+    if (currentQty >= maxUnits) {
+      setMessage(`Stock máximo para "${menuProduct.name}": ${maxUnits} unidad(es).`);
+      return;
+    }
+
     setCart(prev => {
       const current = prev.find(item => item.salesProductId === menuProduct.id);
       if (current) {
@@ -238,18 +160,29 @@ export function SalesModule() {
         },
       ];
     });
+    setMessage('');
   };
 
   const updateQuantity = (salesProductId: string, delta: number) => {
-    setCart(prev =>
-      prev
-        .map(item =>
-          item.salesProductId === salesProductId
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item,
-        )
-        .filter(item => item.quantity > 0),
-    );
+    const salesProduct = salesProducts.find(p => p.id === salesProductId);
+    if (!salesProduct) return;
+
+    const maxUnits = getMaxSellableUnits(salesProduct, products);
+    setCart(prev => {
+      const next = prev
+        .map(item => {
+          if (item.salesProductId !== salesProductId) return item;
+          const nextQty = Math.max(0, item.quantity + delta);
+          if (nextQty > maxUnits) {
+            setMessage(`Stock máximo para "${salesProduct.name}": ${maxUnits} unidad(es).`);
+            return { ...item, quantity: Math.min(item.quantity, maxUnits) };
+          }
+          return { ...item, quantity: nextQty };
+        })
+        .filter(item => item.quantity > 0);
+
+      return next;
+    });
   };
 
   const removeFromCart = (salesProductId: string) => {
@@ -283,6 +216,8 @@ export function SalesModule() {
       if (apiResult.ok && 'result' in apiResult) {
         // API succeeded — sync local state from server response
         const ticket = apiResult.result.ticket;
+        const cartSnapshot = [...cart];
+        setProducts(prev => deductStockForSale(prev, cartSnapshot, salesProducts));
         setSalesTickets(prev => [{
           id: ticket.id,
           number: ticket.number,
@@ -359,7 +294,7 @@ export function SalesModule() {
     };
     setSalesHistory(prev => [historyEntry, ...prev]);
 
-    addAudit({
+    addSalesAudit({
       user: currentUser.username,
       action: `Venta registrada #${nextCounter}`,
       element: `Ticket ${nextCounter}`,
@@ -389,7 +324,7 @@ export function SalesModule() {
     };
     setSalesHistory(prev => [historyEntry, ...prev]);
 
-    addAudit({
+    addSalesAudit({
       user: currentUser.username,
       action: `Anulacion ticket #${ticket.number}`,
       element: `Ticket ${ticket.number}`,
@@ -411,9 +346,28 @@ export function SalesModule() {
       });
 
       if (apiResult.ok && 'result' in apiResult) {
-        // API succeeded — update local state
+        setProducts(prev => restoreStockForTicket(prev, ticket, salesProducts));
         setSalesTickets(prev => prev.map(t => (t.id === ticket.id ? { ...t, status: 'devuelto' } : t)));
-        setMessage(`Devolucion aplicada sobre ticket #${ticket.number}. Stock reintegrado (servidor).`);
+        setMessage(`Devolucion aplicada sobre ticket #${ticket.number}. Stock reintegrado.`);
+
+        const historyEntry: SalesHistoryEntry = {
+          id: `h-${Date.now()}`,
+          timestampISO: new Date().toISOString(),
+          operatorId: currentUser.username,
+          operatorName: currentUser.username,
+          type: 'devolucion',
+          detail: `Devolucion ticket #${ticket.number}`,
+          ticketId: ticket.id,
+        };
+        setSalesHistory(prev => [historyEntry, ...prev]);
+        addSalesAudit({
+          user: currentUser.username,
+          action: `Devolucion ticket #${ticket.number}`,
+          element: `Ticket ${ticket.number}`,
+          previousValue: 'emitido',
+          newValue: 'devuelto',
+        });
+        return;
       } else if (!apiResult.apiUnavailable && 'error' in apiResult) {
         setMessage(`Error en devolucion: ${apiResult.error}`);
         return;
@@ -437,7 +391,7 @@ export function SalesModule() {
     };
     setSalesHistory(prev => [historyEntry, ...prev]);
 
-    addAudit({
+    addSalesAudit({
       user: currentUser.username,
       action: `Devolucion ticket #${ticket.number}`,
       element: `Ticket ${ticket.number}`,
@@ -784,128 +738,15 @@ export function SalesModule() {
       )}
 
       {tab === 'productos' && (
-        <div className="space-y-4">
-          {/* Kitchen management */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-foreground">Cocinas / Estaciones</h3>
-              <button
-                onClick={() => {
-                  const name = prompt('Nombre de la nueva cocina:');
-                  if (name?.trim()) {
-                    const emoji = prompt('Emoji (ej: 🔥):') || '🍽️';
-                    setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: name.trim(), emoji, active: true }]);
-                  }
-                }}
-                className="text-xs bg-[#3d7a3d] text-white px-3 py-1.5 rounded-lg hover:bg-[#2f5f2f] flex items-center gap-1"
-              >
-                <Plus size={12} /> Nueva Cocina
-              </button>
-            </div>
-            <div className="grid gap-2 md:grid-cols-3">
-              {kitchens.map(k => (
-                <div key={k.id} className="flex items-center justify-between rounded-xl border border-border bg-background p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{k.emoji}</span>
-                    <span className="text-sm text-foreground">{k.name}</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setKitchens(prev => prev.map(x => x.id === k.id ? { ...x, active: !x.active } : x))}
-                      className={`text-xs px-2 py-1 rounded ${k.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
-                    >
-                      {k.active ? 'Activa' : 'Inactiva'}
-                    </button>
-                    <button
-                      onClick={() => setKitchens(prev => prev.filter(x => x.id !== k.id))}
-                      className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Sales products management */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-foreground">Productos de Venta y Recetas</h3>
-              <button
-                onClick={() => {
-                  const name = prompt('Nombre del producto:');
-                  if (!name?.trim()) return;
-                  const priceStr = prompt('Precio:');
-                  const price = parseInt(priceStr || '0');
-                  const emoji = prompt('Emoji:') || '🍽️';
-                  const kitchenId = kitchens[0]?.id || '';
-                  setSalesProducts(prev => [...prev, {
-                    id: `sp-${Date.now()}`,
-                    name: name.trim(),
-                    category: 'General',
-                    kitchenId,
-                    price,
-                    emoji,
-                    recipe: [],
-                    active: true,
-                  }]);
-                }}
-                className="text-xs bg-[#3d7a3d] text-white px-3 py-1.5 rounded-lg hover:bg-[#2f5f2f] flex items-center gap-1"
-              >
-                <Plus size={12} /> Nuevo Producto
-              </button>
-            </div>
-            <div className="space-y-2">
-              {salesProducts.map(product => (
-                <article key={product.id} className="rounded-xl border border-border bg-background p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{product.emoji}</span>
-                      <div>
-                        <p className="text-sm text-foreground" style={{ fontWeight: 600 }}>{product.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {kitchens.find(k => k.id === product.kitchenId)?.name || 'Sin cocina'} • {formatCurrency(product.price)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          const recipeStr = prompt('Receta (stockProductId:cantidad, separado por comas):', product.recipe.map(r => `${r.stockProductId}:${r.quantity}`).join(', '));
-                          if (recipeStr !== null) {
-                            const recipe = recipeStr.split(',').filter(Boolean).map(pair => {
-                              const [stockProductId, quantity] = pair.split(':');
-                              return { stockProductId: stockProductId.trim(), quantity: parseInt(quantity) || 1 };
-                            });
-                            setSalesProducts(prev => prev.map(p => p.id === product.id ? { ...p, recipe } : p));
-                          }
-                        }}
-                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                      >
-                        Receta
-                      </button>
-                      <button
-                        onClick={() => setSalesProducts(prev => prev.filter(p => p.id !== product.id))}
-                        className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Receta: {product.recipe.length > 0
-                      ? product.recipe.map(item => `${products.find(p => p.id === item.stockProductId)?.name || item.stockProductId} x${item.quantity}`).join(' · ')
-                      : 'Sin ingredientes definidos'}
-                  </p>
-                  {!checkProductStock(product, products) && (
-                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={10} /> Sin stock - No disponible para venta</p>
-                  )}
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
+        <SalesProductsPanel
+          salesProducts={salesProducts}
+          setSalesProducts={setSalesProducts}
+          stockProducts={products}
+          kitchens={kitchens}
+          setKitchens={setKitchens}
+          apiOnline={salesApi.apiAvailable}
+          onNotify={setMessage}
+        />
       )}
 
       {tab === 'mesas' && (
@@ -1268,18 +1109,3 @@ export function SalesModule() {
   );
 }
 
-/**
- * Check if a sales product has enough stock for at least 1 unit.
- */
-function checkProductStock(product: SalesProduct, stockProducts: ReturnType<typeof useAppContext>['products']): boolean {
-  if (product.recipe.length === 0) return true;
-  const stockMap = new Map(stockProducts.map(p => [p.id, p]));
-
-  for (const recipeItem of product.recipe) {
-    const stock = stockMap.get(recipeItem.stockProductId);
-    if (!stock) return false;
-    const available = stock.stockByWarehouse.reduce((s, w) => s + w.quantity, 0);
-    if (available < recipeItem.quantity) return false;
-  }
-  return true;
-}

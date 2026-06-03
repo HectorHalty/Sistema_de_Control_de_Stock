@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
 
 function useLocalStorage<T>(key: string, initialValue: T) {
   const [storedValue, setStoredValue] = useState<T>(() => {
@@ -77,6 +77,8 @@ export interface AppUser {
   role: UserRole;
 }
 
+export type AuditModule = 'stock' | 'ventas';
+
 export interface AuditEntry {
   id: string;
   date: string;
@@ -85,6 +87,7 @@ export interface AuditEntry {
   element: string;
   previousValue?: string;
   newValue?: string;
+  module?: AuditModule;
 }
 
 export interface ConsumptionLog {
@@ -103,6 +106,23 @@ export interface ConsumptionLog {
     consumed: number;
     unit: 'unidades' | 'kg';
   }[];
+}
+
+/** Consumo manual (no venta): producto retirado del stock. */
+export interface EmployeeConsumptionEntry {
+  id: string;
+  date: string;
+  day: string;
+  createdAtISO: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  warehouseId: string;
+  warehouseName: string;
+  quantity: number;
+  unit: 'unidades' | 'kg';
+  previousStock: number;
+  newStock: number;
 }
 
 export interface Supplier {
@@ -389,12 +409,12 @@ export const initialOrders: Order[] = [
 ];
 
 export const initialAuditLog: AuditEntry[] = [
-  { id: 'a1', date: '2026-03-16 09:15', user: 'Admin', action: 'Edición Stock Almacén Depósito Principal', element: 'Coca-Cola 500ml', previousValue: '100', newValue: '120' },
-  { id: 'a2', date: '2026-03-15 18:30', user: 'Juan Pérez', action: 'Confirmación Pedido PED-001', element: 'PED-001', previousValue: '-', newValue: 'Confirmado' },
-  { id: 'a3', date: '2026-03-15 14:00', user: 'Admin', action: 'Alta Producto', element: 'Medialunas x6', previousValue: '-', newValue: '-' },
-  { id: 'a4', date: '2026-03-14 10:45', user: 'María García', action: 'Edición Stock Almacén Quincho Bar', element: 'Cerveza Quilmes Lata', previousValue: '48', newValue: '72' },
-  { id: 'a5', date: '2026-03-13 16:20', user: 'Admin', action: 'Creación Pedido PED-002', element: 'PED-002', previousValue: '-', newValue: 'Enviado' },
-  { id: 'a6', date: '2026-03-12 11:00', user: 'Juan Pérez', action: 'Edición Stock Almacén Kiosco Cancha', element: 'Agua Mineral 500ml', previousValue: '24', newValue: '36' },
+  { id: 'a1', date: '2026-03-16 09:15', user: 'Admin', module: 'stock', action: 'Edición Stock Almacén Depósito Principal', element: 'Coca-Cola 500ml', previousValue: '100', newValue: '120' },
+  { id: 'a2', date: '2026-03-15 18:30', user: 'Juan Pérez', module: 'stock', action: 'Confirmación Pedido PED-001', element: 'PED-001', previousValue: '-', newValue: 'Confirmado' },
+  { id: 'a3', date: '2026-03-15 14:00', user: 'Admin', module: 'stock', action: 'Alta Producto', element: 'Medialunas x6', previousValue: '-', newValue: '-' },
+  { id: 'a4', date: '2026-03-14 10:45', user: 'María García', module: 'stock', action: 'Edición Stock Almacén Quincho Bar', element: 'Cerveza Quilmes Lata', previousValue: '48', newValue: '72' },
+  { id: 'a5', date: '2026-03-13 16:20', user: 'Admin', module: 'stock', action: 'Creación Pedido PED-002', element: 'PED-002', previousValue: '-', newValue: 'Enviado' },
+  { id: 'a6', date: '2026-03-12 11:00', user: 'Juan Pérez', module: 'stock', action: 'Edición Stock Almacén Kiosco Cancha', element: 'Agua Mineral 500ml', previousValue: '24', newValue: '36' },
 ];
 
 export const initialUsers: AppUser[] = [
@@ -409,8 +429,13 @@ export function useAppState() {
   const [warehouses, setWarehouses] = useLocalStorage<Warehouse[]>('stock-warehouses', initialWarehouses);
   const [orders, setOrders] = useLocalStorage<Order[]>('stock-orders', initialOrders);
   const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>('stock-auditlog', initialAuditLog);
+  const [salesAuditLog, setSalesAuditLog] = useLocalStorage<AuditEntry[]>('sales-auditlog', []);
   const [categories, setCategories] = useLocalStorage<Category[]>('stock-categories', initialCategories);
   const [consumptionLogs, setConsumptionLogs] = useLocalStorage<ConsumptionLog[]>('stock-consumption', []);
+  const [employeeConsumptionLogs, setEmployeeConsumptionLogs] = useLocalStorage<EmployeeConsumptionEntry[]>(
+    'stock-employee-consumption',
+    [],
+  );
   const [suppliers, setSuppliers] = useLocalStorage<Supplier[]>('stock-suppliers', initialSuppliers);
   const [darkMode, setDarkModeState] = useLocalStorage<boolean>('stock-darkmode', false);
   const [stockAlertDay, setStockAlertDay] = useLocalStorage<string>('stock-alert-day', 'Jueves');
@@ -448,13 +473,29 @@ export function useAppState() {
     }
   }, [darkMode]);
 
-  const addAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date'>) => {
-    setAuditLog(prev => [{
+  const appendAudit = (
+    setter: Dispatch<SetStateAction<AuditEntry[]>>,
+    module: AuditModule,
+    entry: Omit<AuditEntry, 'id' | 'date' | 'module'>,
+  ) => {
+    setter(prev => [{
       ...entry,
+      module,
       id: `a${Date.now()}`,
       date: new Date().toLocaleString('es-AR'),
     }, ...prev]);
-  }, []);
+  };
+
+  const addStockAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
+    appendAudit(setAuditLog, 'stock', entry);
+  }, [setAuditLog]);
+
+  const addSalesAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
+    appendAudit(setSalesAuditLog, 'ventas', entry);
+  }, [setSalesAuditLog]);
+
+  /** @deprecated Usar addStockAudit o addSalesAudit según el módulo. */
+  const addAudit = addStockAudit;
 
   const getTotalStock = useCallback((product: Product) => {
     return product.stockByWarehouse.reduce((sum, s) => sum + s.quantity, 0);
@@ -472,14 +513,20 @@ export function useAppState() {
     warehouses, setWarehouses,
     orders, setOrders,
     auditLog, setAuditLog,
+    salesAuditLog, setSalesAuditLog,
+    addStockAudit,
+    addSalesAudit,
     categories, setCategories,
     consumptionLogs, setConsumptionLogs,
+    employeeConsumptionLogs, setEmployeeConsumptionLogs,
     suppliers, setSuppliers,
     darkMode, setDarkMode,
     stockAlertDay, setStockAlertDay,
     currentUser, setCurrentUser,
     users, setUsers,
-    addAudit, getTotalStock, getWarehouseTotalProducts,
+    addAudit,
+    getTotalStock,
+    getWarehouseTotalProducts,
     // Sales module
     kitchens, setKitchens,
     salesProducts, setSalesProducts,

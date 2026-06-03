@@ -100,7 +100,7 @@ export const initialSalesMenu: SalesMenuProduct[] = [
 
 export const salesMenuTabs = [
   { key: 'inicio', label: 'Inicio' },
-  { key: 'caja', label: 'Caja' },
+  { key: 'mostrador', label: 'Mostrador' },
   { key: 'pedidos', label: 'Mis Pedidos' },
   { key: 'devoluciones', label: 'Devoluciones' },
   { key: 'productos', label: 'Productos' },

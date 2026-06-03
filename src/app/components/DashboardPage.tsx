@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { getStockAuditEntries } from '../utils/audit-log';
 import { useAppContext } from './AppContext';
-import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, X } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, UserMinus, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import logoIcon from '../../assets/logo-LCH.png';
 import { getUnitLabel } from './store';
 import type { AuditEntry } from './store';
 
 export function DashboardPage() {
-  const { products, warehouses, orders, auditLog, getTotalStock } = useAppContext();
+  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, employeeConsumptionLogs } = useAppContext();
+
+  const stockAuditEntries = useMemo(
+    () => getStockAuditEntries(auditLog, salesAuditLog),
+    [auditLog, salesAuditLog],
+  );
   const navigate = useNavigate();
   const [selectedAudit, setSelectedAudit] = useState<AuditEntry | null>(null);
 
@@ -25,12 +31,20 @@ export function DashboardPage() {
       to: '/productos',
     },
     {
-      label: 'Registrar Consumo',
+      label: 'Controlar Stock',
       value: warehouses.length,
       icon: ClipboardList,
       color: 'bg-amber-600',
       sub: 'Actualizar por almacén',
       to: '/consumo',
+    },
+    {
+      label: 'Registrar Consumo',
+      value: employeeConsumptionLogs.length,
+      icon: UserMinus,
+      color: 'bg-orange-600',
+      sub: 'Retiros de stock',
+      to: '/registrar-consumo',
     },
     {
       label: 'Pedidos Pendientes',
@@ -58,22 +72,31 @@ export function DashboardPage() {
       </div>
 
       {/* Clickable stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(stat => (
           <button
             key={stat.label}
+            type="button"
             onClick={() => stat.to && navigate(stat.to)}
-            className={`bg-card rounded-xl border border-border p-4 shadow-sm text-center transition-all ${stat.to ? 'hover:shadow-md hover:border-border/70 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+            className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left shadow-sm transition-all sm:p-4 ${
+              stat.to
+                ? 'cursor-pointer hover:border-border/70 hover:shadow-md active:scale-[0.99]'
+                : 'cursor-default'
+            }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className={`${stat.color} p-2 rounded-lg`}>
-                <stat.icon size={18} className="text-white" />
-              </div>
-              {stat.to && <ChevronRight size={16} className="text-muted-foreground" />}
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${stat.color}`}
+            >
+              <stat.icon size={20} className="text-white" />
             </div>
-            <p className="text-base text-foreground" style={{ fontWeight: 600 }}>{stat.label}</p>
-            <p className="text-sm text-muted-foreground mt-0.5">{stat.value}</p>
-            <p className="text-xs text-[#3d7a3d] mt-1" style={{ fontWeight: 500 }}>{stat.sub}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-muted-foreground">{stat.label}</p>
+              <p className="text-lg font-semibold leading-tight text-foreground">{stat.value}</p>
+              <p className="truncate text-xs font-medium text-[#3d7a3d]">{stat.sub}</p>
+            </div>
+            {stat.to && (
+              <ChevronRight size={18} className="shrink-0 text-muted-foreground/70" aria-hidden />
+            )}
           </button>
         ))}
       </div>
@@ -116,7 +139,7 @@ export function DashboardPage() {
             <h3 className="text-foreground">Actividad Reciente</h3>
           </div>
           <div className="space-y-3">
-            {auditLog.slice(0, 5).map(entry => (
+            {stockAuditEntries.slice(0, 5).map(entry => (
               <button
                 key={entry.id}
                 onClick={() => setSelectedAudit(entry)}
@@ -132,7 +155,7 @@ export function DashboardPage() {
                 <ChevronRight size={14} className="text-muted-foreground mt-1 flex-shrink-0" />
               </button>
             ))}
-            {auditLog.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin actividad reciente</p>}
+            {stockAuditEntries.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin actividad reciente</p>}
           </div>
         </div>
       </div>

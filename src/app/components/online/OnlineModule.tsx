@@ -25,7 +25,7 @@ function formatCurrency(value: number): string {
 type OnlineTab = 'resumen' | 'catalogo' | 'carrito' | 'pedidos' | 'productos' | 'sponsors' | 'media' | 'integracion';
 
 export function OnlineModule() {
-  const { products, setProducts, currentUser, addAudit, onlineProducts, setOnlineProducts, sponsors, setSponsors, mediaItems, setMediaItems } = useAppContext();
+  const { products, setProducts, currentUser, addSalesAudit, onlineProducts, setOnlineProducts, sponsors, setSponsors, mediaItems, setMediaItems } = useAppContext();
   const mediaApi = useMediaApiAdapter();
   const sponsorsApi = useSponsorsApiAdapter();
   const catalogApi = useOnlineCatalogApiAdapter();
@@ -372,7 +372,7 @@ export function OnlineModule() {
     setOrders(prev => [newOrder, ...prev]);
     setCart([]);
     setMessage(`Pedido online confirmado (${newOrder.channel}) por ${formatCurrency(newOrder.total)}.`);
-    addAudit({ user: currentUser.username, action: `Venta Online #${newOrder.id}`, element: 'Pedidos Online', previousValue: '-', newValue: `${newOrder.items.length} item(s)` });
+    addSalesAudit({ user: currentUser.username, action: `Venta Online #${newOrder.id}`, element: 'Pedidos Online', previousValue: '-', newValue: `${newOrder.items.length} item(s)` });
   };
 
   return (

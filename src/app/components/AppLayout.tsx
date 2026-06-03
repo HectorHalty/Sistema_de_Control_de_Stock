@@ -24,8 +24,8 @@ import {
   Ticket,
   Trophy,
   Truck,
+  UserMinus,
   Users,
-  UtensilsCrossed,
   Wallet,
   Warehouse,
 } from 'lucide-react';
@@ -46,7 +46,7 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
   futbol: { label: 'Futbol', to: '/futbol', icon: Trophy },
 };
 
-const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/reportes', '/cocina'];
+const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
 
 interface ContextNavItem {
   label: string;
@@ -63,9 +63,9 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
       { label: 'Almacenes', to: '/almacenes', icon: Warehouse },
       { label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
       { label: 'Proveedores', to: '/proveedores', icon: Users },
-      { label: 'Registrar Consumo', to: '/consumo', icon: ClipboardList },
+      { label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
+      { label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
       { label: 'Reportes', to: '/reportes', icon: BarChart3 },
-      { label: 'Pantalla Cocina', to: '/cocina', icon: UtensilsCrossed },
     ];
 
     return stockRoutes.map(item => ({

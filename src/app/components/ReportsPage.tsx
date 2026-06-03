@@ -6,11 +6,17 @@ import { getUnitLabel } from './store';
 import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from './download';
 import { buildMultiSheetConsumptionReportXlsx } from './xlsxExport';
+import { getStockAuditEntries } from '../utils/audit-log';
 
 type ReportTab = 'consumo' | 'alertas' | 'historial';
 
 export function ReportsPage() {
-  const { products, orders, auditLog, warehouses, getTotalStock, consumptionLogs } = useAppContext();
+  const { products, orders, auditLog, salesAuditLog, warehouses, getTotalStock, consumptionLogs } = useAppContext();
+
+  const stockAuditEntries = useMemo(
+    () => getStockAuditEntries(auditLog, salesAuditLog),
+    [auditLog, salesAuditLog],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<ReportTab>('consumo');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
@@ -311,7 +317,7 @@ export function ReportsPage() {
         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-border">
             <h3>Historial de Modificaciones</h3>
-            <p className="text-sm text-muted-foreground mt-1">Registro de auditoría de todas las acciones</p>
+            <p className="text-sm text-muted-foreground mt-1">Registro de cambios del módulo Stock</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
@@ -326,21 +332,29 @@ export function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {auditLog.map(entry => (
-                  <tr key={entry.id} className="border-b border-border/40 hover:bg-muted/50">
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{entry.date}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <img src={logoIcon} alt="" className="logo-sidebar w-6 h-6 rounded-full" />
-                        <span className="text-sm">{entry.user}</span>
-                      </div>
+                {stockAuditEntries.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      Sin registros de cambios en stock
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{entry.action}</td>
-                    <td className="px-4 py-3 text-sm" style={{ fontWeight: 500 }}>{entry.element}</td>
-                    <td className="px-4 py-3 text-sm text-right text-muted-foreground">{entry.previousValue || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-right" style={{ fontWeight: 500 }}>{entry.newValue || '-'}</td>
                   </tr>
-                ))}
+                ) : (
+                  stockAuditEntries.map(entry => (
+                    <tr key={entry.id} className="border-b border-border/40 hover:bg-muted/50">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{entry.date}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <img src={logoIcon} alt="" className="logo-sidebar w-6 h-6 rounded-full" />
+                          <span className="text-sm">{entry.user}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{entry.action}</td>
+                      <td className="px-4 py-3 text-sm" style={{ fontWeight: 500 }}>{entry.element}</td>
+                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">{entry.previousValue || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-right" style={{ fontWeight: 500 }}>{entry.newValue || '-'}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
