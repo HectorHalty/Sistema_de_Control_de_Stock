@@ -165,7 +165,7 @@ export function SettingsPage() {
             <img src={logo10} alt="La Chacra 10 años" className="logo-sidebar w-24 h-24 object-contain" />
             <div>
               <h3 className="text-foreground">La Chacra Futbol</h3>
-              <p className="text-sm text-muted-foreground">Control de Stock v1.0</p>
+              <p className="text-sm text-muted-foreground">Sistema de Gestión LCH</p>
               <p className="text-xs text-muted-foreground mt-1">10 Años de pasion por el futbol</p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 {
   "appId": "com.lch.public",
-  "appName": "La Chacra Futbol",
+  "appName": "La Chacra Fútbol",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

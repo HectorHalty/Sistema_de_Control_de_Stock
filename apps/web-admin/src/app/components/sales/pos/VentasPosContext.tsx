@@ -131,7 +131,7 @@ const initialPrinters: Printer[] = [
 
 const initialTemplate: TicketTemplate = {
   header: 'LA CHACRA FUTBOL — CANTINA',
-  subheader: 'Control de Stock integrado',
+  subheader: 'Sistema de Gestión LCH',
   footer: '¡Gracias por tu compra!',
   showLogo: true,
   showDate: true,

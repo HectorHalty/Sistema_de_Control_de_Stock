@@ -5,24 +5,30 @@ node_modules/
 dist/
 release/
 
-# Native platforms (Capacitor)
+# Agent / IDE (no van al repo)
+.agents/
+.claude/
+.atl/
+skills-lock.json
+.vscode/
+.idea/
+
+# Native platforms (Capacitor — generar con cap sync)
 apps/web-admin/.android/
 apps/web-admin/.ios/
 apps/web-public/.android/
 apps/web-public/.ios/
 
-# Legacy root-level outputs (pre-split)
+# Legacy root-level (pre-monorepo)
 android/
 ios/
+electron/
+build/
 
 # Logs
 *.log
 *-errors.txt
 *_targets.txt
-
-# IDE
-.vscode/
-.idea/
 
 # OS
 .DS_Store

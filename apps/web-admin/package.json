@@ -106,7 +106,7 @@
   },
   "build": {
     "appId": "com.lch.admin",
-    "productName": "LCH Admin",
+    "productName": "Sistema de Gestión LCH",
     "directories": {
       "output": "release"
     },

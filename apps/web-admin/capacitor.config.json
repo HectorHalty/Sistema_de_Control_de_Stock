@@ -1,6 +1,6 @@
 {
   "appId": "com.lch.admin",
-  "appName": "LCH Admin",
+  "appName": "Sistema de Gestión LCH",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

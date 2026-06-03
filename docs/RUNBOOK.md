@@ -1,6 +1,6 @@
-# Sistema de Control de Stock LCH
+# Sistema de Gestión LCH — Runbook
 
-Stock management system for La Chacra Futbol club with local-first architecture.
+Guía de instalación y desarrollo del sistema de gestión para **La Chacra Fútbol** (arquitectura local-first con monorepo).
 
 ## Architecture
 

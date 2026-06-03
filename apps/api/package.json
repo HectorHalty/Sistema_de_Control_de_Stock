@@ -2,7 +2,7 @@
   "name": "@lch/api",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first modular backend for Sistema de Control de Stock LCH",
+  "description": "Backend del Sistema de Gestión LCH — La Chacra Fútbol",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",

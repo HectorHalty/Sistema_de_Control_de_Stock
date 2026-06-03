@@ -137,7 +137,7 @@ export function OrdersPage() {
     doc.text('La Chacra Futbol', 100, y - 6);
     doc.setTextColor(180, 180, 180);
     doc.setFontSize(8);
-    doc.text('Control de Stock', 100, y + 8);
+    doc.text('Sistema de Gestión LCH', 100, y + 8);
 
     y += 50;
     doc.setDrawColor(45, 80, 22);
@@ -228,7 +228,7 @@ export function OrdersPage() {
     doc.setTextColor(180, 180, 180);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('Documento generado automaticamente por Control de Stock - La Chacra Futbol', W / 2, y, { align: 'center' });
+    doc.text('Documento generado por Sistema de Gestión LCH - La Chacra Fútbol', W / 2, y, { align: 'center' });
     doc.text('Generado el ' + now.toLocaleDateString('es-AR') + ' a las ' + now.toLocaleTimeString('es-AR'), W / 2, y + 12, { align: 'center' });
 
     return doc.output('blob');
@@ -451,7 +451,7 @@ export function OrdersPage() {
       '</div>',
       '<div style="margin-left: 20px; padding-top: 8px;">',
       '<h2 style="font-size: 11px; color: #717182; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;">La Chacra Futbol</h2>',
-      '<p style="font-size: 10px; color: #999; margin-top: 2px;">Control de Stock</p>',
+      '<p style="font-size: 10px; color: #999; margin-top: 2px;">Sistema de Gestión LCH</p>',
       '</div></div>',
       '<h1 style="text-align: center; font-size: 22px; font-weight: 600; color: #2D5016; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #2D5016;">Detalle del Pedido</h1>',
       '<div style="margin-bottom: 28px; background: #f9f9f7; padding: 20px 24px; border-radius: 10px; border-left: 4px solid #2D5016;">',
@@ -478,7 +478,7 @@ export function OrdersPage() {
       '<span style="font-size: 14px; font-weight: 600; color: #2D5016;">' + totalUnits + '</span>',
       '</div>',
       '<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center;">',
-      '<p style="font-size: 10px; color: #999;">Documento generado automaticamente por Control de Stock - La Chacra Futbol</p>',
+      '<p style="font-size: 10px; color: #999;">Documento generado por Sistema de Gestión LCH - La Chacra Fútbol</p>',
       '<p style="font-size: 10px; color: #ccc; margin-top: 4px;">Generado el ' + now.toLocaleDateString('es-AR') + ' a las ' + now.toLocaleTimeString('es-AR') + '</p>',
       '</div>',
       '<div class="no-print" style="text-align: center; margin-top: 24px;">',

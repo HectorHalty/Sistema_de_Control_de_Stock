@@ -68,7 +68,7 @@ export function LoginPage({ onLogin, onPublicAccess }: LoginPageProps) {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <img src={logo} alt="La Chacra Fútbol" className="logo-sidebar w-56 h-56 mb-4 object-contain" />
-          <h1 className="text-foreground tracking-wide">Control de Stock</h1>
+          <h1 className="text-foreground tracking-wide">Sistema de Gestión LCH</h1>
         </div>
 
         <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
