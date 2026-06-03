@@ -1,4 +1,4 @@
-// Prisma schema for Sistema de Control de Stock LCH
+// Prisma schema — Sistema de Gestión LCH (La Chacra Fútbol)
 // Local-first modular backend with PostgreSQL
 
 generator client {

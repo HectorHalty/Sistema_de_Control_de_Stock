@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAllowedModules, getBottomNavModules, getInitials, getSidebarModules, normalizeRole, shouldShowBottomNavigation } from './platformAccess';
+import { getAllowedModules, getBottomNavModules, getInitials, getSidebarModules, normalizeRole, shouldShowBottomNavigation } from '@/features/platform/config/modules';
 import type { CurrentUser } from './store';
 
 describe('platformAccess', () => {

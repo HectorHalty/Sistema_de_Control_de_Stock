@@ -82,7 +82,7 @@ async function bootstrap() {
 
   // Swagger docs (dev only recommended)
   const config = new DocumentBuilder()
-    .setTitle('LCH Stock API')
+    .setTitle('LCH API — Sistema de Gestión')
     .setDescription('Sistema de Gestión LCH — La Chacra Fútbol')
     .setVersion('0.1.0')
     .addBearerAuth()

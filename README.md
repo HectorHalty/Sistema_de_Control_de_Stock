@@ -20,9 +20,11 @@ El panel **admin** (`apps/web-admin`) lo usan empleados con roles (SuperAdmin, g
 ```
 apps/
 ├── api/           Backend (NestJS + Prisma + PostgreSQL)
-├── web-admin/     Panel interno (React + Vite)
+├── web-admin/     Panel interno (React + Vite) — organizado por features
 └── web-public/    Sitio público (React + Vite)
 ```
+
+Documentación detallada: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Cada frontend puede publicarse en web, empaquetarse con **Capacitor** (Android) o **Electron** (escritorio).
 
