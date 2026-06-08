@@ -13,14 +13,11 @@ import {
   YAxis,
 } from "recharts";
 import {
-  DollarSign,
   TrendingUp,
   Users,
   Clock,
-  ChefHat,
-  Receipt,
-  Trophy,
-  Star,
+  Warehouse,
+  Package,
 } from "lucide-react";
 import { useStore } from "./VentasPosContext";
 import {
@@ -111,8 +108,8 @@ export function InicioModule() {
       label: "Ventas del día",
       value: formatMoney(ventasHoy),
       sub: ticketsHoy > 0 ? `${ticketsHoy} venta${ticketsHoy !== 1 ? "s" : ""} registrada${ticketsHoy !== 1 ? "s" : ""}` : "Sin ventas hoy",
-      icon: DollarSign,
-      color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+      icon: TrendingUp,
+      color: "bg-blue-600",
     },
     {
       label: "Producto más vendido",
@@ -120,8 +117,8 @@ export function InicioModule() {
       sub: topProductToday
         ? `${topProductToday.units} unidad${topProductToday.units !== 1 ? "es" : ""} hoy`
         : "Sin datos hoy",
-      icon: Trophy,
-      color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+      icon: Package,
+      color: "bg-amber-600",
       valueClass: "text-lg sm:text-xl line-clamp-2",
     },
     {
@@ -130,8 +127,8 @@ export function InicioModule() {
       sub: empleadoDelDia
         ? `${formatMoney(empleadoDelDia.totalVentas)} · más ventas`
         : "Sin ventas hoy",
-      icon: Star,
-      color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+      icon: Users,
+      color: "bg-purple-600",
       valueClass: "text-xl",
     },
   ];
@@ -152,24 +149,22 @@ export function InicioModule() {
       </div>
 
       {/* Tarjetas superiores — datos reales del día */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {cards.map((c) => (
           <div
             key={c.label}
-            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+            className="flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 shadow-sm sm:p-4"
           >
-            <div className="mb-3 flex items-center justify-between">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${c.color}`}>
-                <c.icon className="h-6 w-6" />
-              </div>
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${c.color}`}>
+              <c.icon size={20} className="text-white" />
             </div>
-            <div className="mb-1 text-sm text-gray-500 dark:text-gray-400">{c.label}</div>
-            <div
-              className={`text-2xl text-gray-900 dark:text-gray-100 ${"valueClass" in c ? c.valueClass : ""}`}
-            >
-              {c.value}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-muted-foreground">{c.label}</p>
+              <p className={`text-lg font-semibold leading-tight text-foreground ${"valueClass" in c ? c.valueClass : ""}`}>
+                {c.value}
+              </p>
+              <p className="truncate text-xs font-medium text-[#3d7a3d]">{c.sub}</p>
             </div>
-            <div className="mt-1 text-xs text-gray-400">{c.sub}</div>
           </div>
         ))}
       </div>
@@ -280,7 +275,7 @@ export function InicioModule() {
           {/* Ventas por cocina */}
           <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-4 flex items-center gap-2">
-              <ChefHat className="h-5 w-5 text-orange-600" />
+              <Warehouse className="h-5 w-5 text-[#3d7a3d]" />
               <h4 className="text-gray-900 dark:text-gray-100">Unidades por cocina (7 días)</h4>
             </div>
             {metrics.topProductsByKitchen.length === 0 ? (
@@ -325,7 +320,7 @@ export function InicioModule() {
           {/* Top productos por cocina */}
           <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2">
             <div className="mb-4 flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-purple-600" />
+              <Package className="h-5 w-5 text-[#3d7a3d]" />
               <h4 className="text-gray-900 dark:text-gray-100">
                 Productos más vendidos por cocina
               </h4>

@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DollarSign, TrendingUp, Users, ChefHat, Receipt } from "lucide-react";
+import { TrendingUp, Users, Warehouse, Package } from "lucide-react";
 import { useStore } from "./VentasPosContext";
 import {
   computeDashboardMetrics,
@@ -138,7 +138,7 @@ export function DashboardModule() {
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-emerald-100">
-              <DollarSign className="h-5 w-5" />
+              <TrendingUp className="h-5 w-5" />
               <span className="text-sm font-medium uppercase tracking-wide">
                 Ventas totales · {range}
               </span>
@@ -287,7 +287,7 @@ export function DashboardModule() {
             {/* Top por cocina — resumen */}
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <div className="mb-4 flex items-center gap-2">
-                <ChefHat className="h-5 w-5 text-orange-600" />
+                <Warehouse className="h-5 w-5 text-[#3d7a3d]" />
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100">
                   Ventas por cocina
                 </h4>
@@ -337,7 +337,7 @@ export function DashboardModule() {
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-purple-600" />
+                <Package className="h-5 w-5 text-[#3d7a3d]" />
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100">
                   Productos más vendidos por cocina
                 </h4>

@@ -26,26 +26,11 @@ interface TournamentSuspension {
 
 const categories = ['Hombres A', 'Hombres B', 'Hombres C', 'Mujeres A', 'Mujeres B', 'Mujeres C'] as const;
 
-const initialPlayers: TournamentPlayer[] = [
-  { id: 'p1', fullName: 'Tomás Pérez', teamId: 't1', number: 9 },
-  { id: 'p2', fullName: 'Lucas Arias', teamId: 't2', number: 10 },
-  { id: 'p3', fullName: 'Juan Molina', teamId: 't3', number: 8 },
-  { id: 'p4', fullName: 'Nicolás Suárez', teamId: 't4', number: 1 },
-  { id: 'p5', fullName: 'Camila Rojas', teamId: 't5', number: 7 },
-  { id: 'p6', fullName: 'Sofía Díaz', teamId: 't6', number: 11 },
-];
+const initialPlayers: TournamentPlayer[] = [];
 
-const initialSuspensions: TournamentSuspension[] = [
-  { id: 's1', playerName: 'Lucas Arias', teamId: 't2', reason: 'Doble Amarilla', remainingMatches: 1 },
-  { id: 's2', playerName: 'Camila Rojas', teamId: 't5', reason: 'Roja Directa', remainingMatches: 2 },
-];
+const initialSuspensions: TournamentSuspension[] = [];
 
-const initialRegulation = [
-  'Partido ganado: 3 puntos, empate: 1 punto, derrota: 0 puntos.',
-  'Máxima tolerancia de presentación: 15 minutos.',
-  'Las sanciones se computan sobre partidos oficiales publicados.',
-  'Todos los cambios de fixture deben publicarse desde este módulo interno.',
-].join('\n');
+const initialRegulation = '';
 
 function usePersistedState<T>(key: string, initialValue: T) {
   const [value, setValue] = useState<T>(() => {
@@ -86,7 +71,7 @@ export function FutbolModule() {
   const [players, setPlayers] = usePersistedState<TournamentPlayer[]>('futbol-players', initialPlayers);
   const [suspensions] = usePersistedState<TournamentSuspension[]>('futbol-suspensions', initialSuspensions);
   const [regulation, setRegulation] = usePersistedState<string>('futbol-reglamento', initialRegulation);
-  const [notices, setNotices] = usePersistedState<string[]>('futbol-avisos', ['Fecha 3 confirmada para sábado 24/05.']);
+  const [notices, setNotices] = usePersistedState<string[]>('futbol-avisos', []);
 
   const [noticeInput, setNoticeInput] = useState('');
   const [teamNameInput, setTeamNameInput] = useState('');

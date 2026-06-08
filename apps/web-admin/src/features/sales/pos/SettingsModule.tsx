@@ -170,6 +170,10 @@ function PrintersTab() {
                 <span className="font-mono">{p.ip}</span>
               </div>
               <div className="flex justify-between">
+                <span>Puerto</span>
+                <span className="font-mono">{p.port ?? 9100}</span>
+              </div>
+              <div className="flex justify-between">
                 <span>Papel</span>
                 <span>{p.paperWidth} mm</span>
               </div>
@@ -233,24 +237,12 @@ function AddPrinterModal({
   const [draft, setDraft] = useState<Omit<Printer, "id">>({
     name: "",
     type: "Comandera Cocina",
-    ip: "192.168.1.",
+    ip: "",
+    port: 9100,
     paperWidth: 80,
     connected: false,
     isDefault: false,
   });
-  const [scanning, setScanning] = useState(false);
-
-  const scan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      setDraft((d) => ({
-        ...d,
-        ip: `192.168.1.${50 + Math.floor(Math.random() * 50)}`,
-        connected: true,
-      }));
-      setScanning(false);
-    }, 1500);
-  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -263,15 +255,6 @@ function AddPrinterModal({
         </div>
 
         <div className="space-y-3">
-          <button
-            onClick={scan}
-            disabled={scanning}
-            className="w-full bg-blue-50 text-blue-700 py-2 rounded-lg flex items-center justify-center gap-2"
-          >
-            <Wifi className="w-4 h-4" />
-            {scanning ? "Buscando en la red..." : "Escanear red local"}
-          </button>
-
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Nombre</label>
             <input
@@ -301,10 +284,23 @@ function AddPrinterModal({
               <input
                 value={draft.ip}
                 onChange={(e) => setDraft({ ...draft, ip: e.target.value })}
+                placeholder="192.168.1.50"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg font-mono"
               />
             </div>
             <div>
+              <label className="text-sm text-gray-600 mb-1 block">Puerto</label>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={draft.port}
+                onChange={(e) => setDraft({ ...draft, port: +e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+          <div>
               <label className="text-sm text-gray-600 mb-1 block">Ancho papel</label>
               <select
                 value={draft.paperWidth}
@@ -316,7 +312,6 @@ function AddPrinterModal({
                 <option value={58}>58 mm</option>
                 <option value={80}>80 mm</option>
               </select>
-            </div>
           </div>
         </div>
 
@@ -342,18 +337,17 @@ function TemplateTab() {
 
   const sampleTicket: Ticket = {
     id: "preview",
-    number: 1234,
+    number: 1,
     createdAt: new Date().toLocaleString("es-AR"),
     items: [
-      { productId: "p1", name: "Hamburguesa Simple", price: 3500, qty: 2 },
-      { productId: "p4", name: "Gatorade", price: 2800, qty: 3 },
+      { productId: "preview-1", name: "Producto de ejemplo", price: 1000, qty: 1 },
     ],
-    total: 15400,
+    total: 1000,
     status: "emitido",
     kind: "venta",
     source: "Mostrador",
-    operator: "Demo",
-    operatorId: "u1",
+    operator: "Operador",
+    operatorId: "preview",
   };
 
   return (

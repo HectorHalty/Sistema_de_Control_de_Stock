@@ -5,6 +5,7 @@ import logoIcon from '@/assets/logo-LCH.png';
 import logo10 from '@/assets/logo-10A.png';
 
 import type { AppUser } from '@/app/components/store';
+import { PrinterSettingsPanel } from '@/features/sales/components/PrinterSettingsPanel';
 import { canAccessModule, getRoleLabel } from '@/features/platform/config/modules';
 
 export function SettingsPage() {
@@ -239,28 +240,33 @@ export function SettingsPage() {
       )}
 
       {tab === 'ventas' && canSeeVentas && (
-        <div className="bg-card rounded-xl border border-border p-6 shadow-sm space-y-4">
-          <h3 className="text-foreground">Configuracion de Ventas</h3>
-          <p className="text-sm text-muted-foreground">Ajustes especificos del modulo de Ventas.</p>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="text-sm" style={{ fontWeight: 500 }}>Validacion de stock en venta</p>
-                <p className="text-xs text-muted-foreground">Bloquear venta si no hay stock suficiente de ingredientes</p>
+        <div className="space-y-4">
+          <div className="bg-card rounded-xl border border-border p-6 shadow-sm space-y-3">
+            <h3 className="text-foreground">Configuracion de Ventas</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-3 border-b border-border">
+                <div>
+                  <p className="text-sm" style={{ fontWeight: 500 }}>Validacion de stock en venta</p>
+                  <p className="text-xs text-muted-foreground">Bloquear venta si no hay stock suficiente de ingredientes</p>
+                </div>
+                <div className="px-3 py-1.5 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-sm" style={{ fontWeight: 500 }}>
+                  Activado
+                </div>
               </div>
-              <div className="px-3 py-1.5 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-sm" style={{ fontWeight: 500 }}>
-                Activado
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm" style={{ fontWeight: 500 }}>Proteccion contra condiciones de carrera</p>
+                  <p className="text-xs text-muted-foreground">Evitar que dos vendedores vendan el mismo ultimo producto</p>
+                </div>
+                <div className="px-3 py-1.5 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-sm" style={{ fontWeight: 500 }}>
+                  Activado
+                </div>
               </div>
             </div>
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm" style={{ fontWeight: 500 }}>Proteccion contra condiciones de carrera</p>
-                <p className="text-xs text-muted-foreground">Evitar que dos vendedores vendan el mismo ultimo producto</p>
-              </div>
-              <div className="px-3 py-1.5 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-sm" style={{ fontWeight: 500 }}>
-                Activado
-              </div>
-            </div>
+          </div>
+
+          <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+            <PrinterSettingsPanel />
           </div>
         </div>
       )}

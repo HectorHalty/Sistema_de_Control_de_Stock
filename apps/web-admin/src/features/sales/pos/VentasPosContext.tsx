@@ -19,6 +19,7 @@ import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
 import type { SalesTicket as ApiSalesTicket } from '@/app/api/client';
 import type { Kitchen, Product, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
+import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
 import { OrderItem, Station, stations } from './mockData';
 
 export type { OrderItem, Station };
@@ -45,7 +46,7 @@ export type PosProduct = {
   id: string;
   name: string;
   price: number;
-  category: 'Bebidas' | 'Comidas' | 'Snacks' | 'Postres' | 'Promos';
+  category: string;
   station: Station;
   stock: number;
   emoji: string;
@@ -55,30 +56,12 @@ export type PosProduct = {
 export type PosIngredient = {
   id: string;
   name: string;
-  unit: string;
+  unit: 'unidades' | 'kg';
   stock: number;
 };
 
-export type Printer = {
-  id: string;
-  name: string;
-  type: 'Comandera Cocina' | 'Mostrador' | 'Barra';
-  ip: string;
-  paperWidth: 58 | 80;
-  connected: boolean;
-  isDefault: boolean;
-};
-
-export type TicketTemplate = {
-  header: string;
-  subheader: string;
-  footer: string;
-  showLogo: boolean;
-  showDate: boolean;
-  showOperator: boolean;
-  showItemDetails: boolean;
-  fontSize: 'sm' | 'md' | 'lg';
-};
+export type Printer = SalesPrinter;
+export type { TicketTemplate };
 
 type VentasPosStore = {
   tickets: PosTicket[];
@@ -99,11 +82,20 @@ type VentasPosStore = {
   voidTicket: (id: string, reason?: string) => Promise<PosTicket | null>;
   replaceTicketItems: (id: string, items: OrderItem[]) => PosTicket | null;
   printReturn: (items: OrderItem[]) => PosTicket | null;
+  salesCategories: string[];
+  salesCategoryEmojis: Record<string, string>;
+  addSalesCategory: (name: string, emoji?: string) => string | null;
   saveProduct: (p: PosProduct) => void;
   deleteProduct: (id: string) => void;
   saveIngredient: (i: PosIngredient) => void;
   printers: Printer[];
+  addPrinter: (printer: Omit<Printer, 'id'>) => void;
+  updatePrinter: (id: string, patch: Partial<Printer>) => void;
+  removePrinter: (id: string) => void;
+  setDefaultPrinter: (id: string) => void;
+  togglePrinter: (id: string) => void;
   template: TicketTemplate;
+  updateTemplate: (patch: Partial<TicketTemplate>) => void;
   salesTables: ReturnType<typeof useAppContext>['salesTables'];
   setSalesTables: ReturnType<typeof useAppContext>['setSalesTables'];
   selectedTableId: string | null;
@@ -117,41 +109,14 @@ type VentasPosStore = {
 
 const VentasPosContext = createContext<VentasPosStore | null>(null);
 
-const initialPrinters: Printer[] = [
-  {
-    id: 'pr1',
-    name: 'Comandera Cocina',
-    type: 'Comandera Cocina',
-    ip: '192.168.1.50',
-    paperWidth: 80,
-    connected: true,
-    isDefault: true,
-  },
-];
-
-const initialTemplate: TicketTemplate = {
-  header: 'LA CHACRA FUTBOL — CANTINA',
-  subheader: 'Sistema de Gestión LCH',
-  footer: '¡Gracias por tu compra!',
-  showLogo: true,
-  showDate: true,
-  showOperator: true,
-  showItemDetails: true,
-  fontSize: 'md',
-};
-
 function stationFromKitchen(kitchen: Kitchen | undefined): Station {
   const name = kitchen?.name ?? 'Cocina';
   if (stations.includes(name as Station)) return name as Station;
   return 'Cocina';
 }
 
-function mapCategory(category: string): PosProduct['category'] {
-  if (category === 'Bebidas' || category === 'Comidas' || category === 'Snacks' || category === 'Postres') {
-    return category;
-  }
-  if (category === 'Promos') return 'Promos';
-  return 'Comidas';
+function mapCategory(category: string): string {
+  return category.trim() || 'Comidas';
 }
 
 function mapApiTicketToLocal(
@@ -220,8 +185,6 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   const [pendingEdit, setPendingEdit] = useState<{ ticketId: string; items: OrderItem[] } | null>(
     null,
   );
-  const [printers] = useState<Printer[]>(initialPrinters);
-  const [template] = useState<TicketTemplate>(initialTemplate);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
   const currentUser = useMemo(
@@ -259,7 +222,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         (p): PosIngredient => ({
           id: p.id,
           name: p.name,
-          unit: p.unit === 'kg' ? 'kg' : 'u',
+          unit: p.unit,
           stock: getTotalStockQuantity(p),
         }),
       ),
@@ -617,11 +580,20 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     voidTicket,
     replaceTicketItems,
     printReturn,
+    salesCategories: ctx.salesCategories,
+    salesCategoryEmojis: ctx.salesCategoryEmojis,
+    addSalesCategory: ctx.addSalesCategory,
     saveProduct,
     deleteProduct,
     saveIngredient,
-    printers,
-    template,
+    printers: ctx.salesPrinters,
+    addPrinter: ctx.addPrinter,
+    updatePrinter: ctx.updatePrinter,
+    removePrinter: ctx.removePrinter,
+    setDefaultPrinter: ctx.setDefaultPrinter,
+    togglePrinter: ctx.togglePrinter,
+    template: ctx.ticketTemplate,
+    updateTemplate: ctx.updateTicketTemplate,
     salesTables: ctx.salesTables,
     setSalesTables: ctx.setSalesTables,
     selectedTableId,

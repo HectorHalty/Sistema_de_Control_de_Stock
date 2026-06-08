@@ -4,8 +4,7 @@ import { useAppContext } from '@/app/providers/AppContext';
 import { ShieldCheck, Plus, X, Edit, Trash2, Search, Package, Image, Video, Calendar, Star, Link, Tag, Eye, EyeOff, Save, WifiOff } from 'lucide-react';
 import type { OnlineProduct, Sponsor, MediaItem, Product } from '@/app/components/store';
 import { isOnlineProductAvailable, validateSponsor, validateMediaItem, PLACEMENT_LABELS } from './cms-domain';
-import { initialSalesMenu } from '@/features/sales/data';
-import type { SalesOrderItem } from '@/features/sales/menu-types';
+import type { SalesMenuProduct, SalesOrderItem, SalesStation } from '@/features/sales/menu-types';
 import { checkoutOnlineOrder } from './domain';
 import { useMediaApiAdapter, useSponsorsApiAdapter, useOnlineCatalogApiAdapter } from '@/app/api/adapters';
 
@@ -24,8 +23,26 @@ function formatCurrency(value: number): string {
 
 type OnlineTab = 'resumen' | 'catalogo' | 'carrito' | 'pedidos' | 'productos' | 'sponsors' | 'media' | 'integracion';
 
+function kitchenToStation(name: string): SalesStation {
+  if (name === 'Parrilla' || name === 'Barra' || name === 'Cocina') return name;
+  return 'Cocina';
+}
+
 export function OnlineModule() {
-  const { products, setProducts, currentUser, addSalesAudit, onlineProducts, setOnlineProducts, sponsors, setSponsors, mediaItems, setMediaItems } = useAppContext();
+  const {
+    products,
+    setProducts,
+    currentUser,
+    addSalesAudit,
+    onlineProducts,
+    setOnlineProducts,
+    sponsors,
+    setSponsors,
+    mediaItems,
+    setMediaItems,
+    salesProducts,
+    kitchens,
+  } = useAppContext();
   const mediaApi = useMediaApiAdapter();
   const sponsorsApi = useSponsorsApiAdapter();
   const catalogApi = useOnlineCatalogApiAdapter();
@@ -67,7 +84,25 @@ export function OnlineModule() {
   const [mediaErrors, setMediaErrors] = useState<string[]>([]);
   const [mediaDateFilter, setMediaDateFilter] = useState<string>('all');
 
-  const menu = initialSalesMenu.filter(item => item.active);
+  const menu = useMemo(
+    (): SalesMenuProduct[] =>
+      salesProducts
+        .filter(sp => sp.active)
+        .map(sp => {
+          const kitchen = kitchens.find(k => k.id === sp.kitchenId);
+          return {
+            id: sp.id,
+            name: sp.name,
+            category: sp.category as SalesMenuProduct['category'],
+            station: kitchenToStation(kitchen?.name ?? 'Cocina'),
+            price: sp.price,
+            emoji: sp.emoji,
+            active: sp.active,
+            recipe: sp.recipe,
+          };
+        }),
+    [salesProducts, kitchens],
+  );
   const filteredMenu = menu.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
   const total = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
 

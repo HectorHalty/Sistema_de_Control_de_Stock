@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
-import { WifiOff, X } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { VentasPosProvider, useVentasPos } from './pos/VentasPosContext';
 import { POSModule } from './pos/POSModule';
 import { ProductsModule } from './pos/ProductsModule';
@@ -8,9 +8,7 @@ import { MyOrdersModule } from './pos/MyOrdersModule';
 import { ReturnsModule } from './pos/ReturnsModule';
 import { TablesModule } from './pos/TablesModule';
 import { InicioModule } from './pos/InicioModule';
-import { DashboardModule } from './pos/DashboardModule';
 import { ReportesModule } from './pos/ReportesModule';
-import { HistoryModule } from './pos/HistoryModule';
 
 type VentasTab =
   | 'inicio'
@@ -19,9 +17,7 @@ type VentasTab =
   | 'devoluciones'
   | 'productos'
   | 'mesas'
-  | 'metricas'
-  | 'reportes'
-  | 'historial';
+  | 'reportes';
 
 const VALID_TABS: VentasTab[] = [
   'mostrador',
@@ -30,13 +26,12 @@ const VALID_TABS: VentasTab[] = [
   'productos',
   'mesas',
   'inicio',
-  'metricas',
   'reportes',
-  'historial',
 ];
 
 function resolveTab(tabParam: string | null): VentasTab {
   const normalized = tabParam === 'caja' ? 'mostrador' : tabParam;
+  if (normalized === 'metricas' || normalized === 'historial') return 'reportes';
   if (normalized && VALID_TABS.includes(normalized as VentasTab)) {
     return normalized as VentasTab;
   }
@@ -44,9 +39,19 @@ function resolveTab(tabParam: string | null): VentasTab {
 }
 
 function VentasPosShell() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tab = resolveTab(searchParams.get('tab'));
   const { apiOnline, toast, setToast } = useVentasPos();
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'metricas' || tabParam === 'historial') {
+      const sp = new URLSearchParams(searchParams);
+      sp.set('tab', 'reportes');
+      sp.set('section', tabParam);
+      setSearchParams(sp, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!toast) return;
@@ -76,9 +81,7 @@ function VentasPosShell() {
         {tab === 'devoluciones' && <ReturnsModule />}
         {tab === 'productos' && <ProductsModule />}
         {tab === 'mesas' && <TablesModule />}
-        {tab === 'metricas' && <DashboardModule />}
         {tab === 'reportes' && <ReportesModule />}
-        {tab === 'historial' && <HistoryModule />}
       </div>
     </div>
   );

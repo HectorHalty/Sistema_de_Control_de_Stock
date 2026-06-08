@@ -60,7 +60,7 @@ export function POSModule() {
   const printTicket = async () => {
     if (order.length === 0) return;
     if (!defaultPrinter) {
-      setToast("⚠️ No hay impresora conectada. Configurala en Ajustes.");
+      setToast("⚠️ No hay impresora conectada. Configurala en Configuración → Ventas.");
       setTimeout(() => setToast(null), 2500);
       return;
     }

@@ -9,21 +9,32 @@ export function getTotalStockQuantity(product: Product): number {
   return product.stockByWarehouse.reduce((sum, item) => sum + item.quantity, 0);
 }
 
+export type RecipeStockItem = { stockProductId: string; quantity: number };
+
+/** Units sellable from a recipe and per-ingredient availability (ids → total qty in stock). */
+export function computeSellableStock(
+  recipe: RecipeStockItem[],
+  getAvailable: (stockProductId: string) => number,
+): number {
+  if (recipe.length === 0) return 0;
+
+  let maxUnits = Number.POSITIVE_INFINITY;
+
+  for (const recipeItem of recipe) {
+    if (recipeItem.quantity <= 0) return 0;
+    const available = getAvailable(recipeItem.stockProductId);
+    maxUnits = Math.min(maxUnits, Math.floor(available / recipeItem.quantity));
+  }
+
+  return Number.isFinite(maxUnits) ? maxUnits : 0;
+}
+
 /** Units that can still be sold according to recipe ingredients in stock. */
 export function getMaxSellableUnits(salesProduct: SalesProduct, stockProducts: Product[]): number {
   if (!salesProduct.active || salesProduct.recipe.length === 0) return 0;
 
-  const stockMap = new Map(stockProducts.map(p => [p.id, p]));
-  let maxUnits = Number.POSITIVE_INFINITY;
-
-  for (const recipeItem of salesProduct.recipe) {
-    if (recipeItem.quantity <= 0) return 0;
-    const stock = stockMap.get(recipeItem.stockProductId);
-    if (!stock) return 0;
-    maxUnits = Math.min(maxUnits, Math.floor(getTotalStockQuantity(stock) / recipeItem.quantity));
-  }
-
-  return Number.isFinite(maxUnits) ? maxUnits : 0;
+  const stockMap = new Map(stockProducts.map(p => [p.id, getTotalStockQuantity(p)]));
+  return computeSellableStock(salesProduct.recipe, id => stockMap.get(id) ?? 0);
 }
 
 export function isSalesProductAvailable(salesProduct: SalesProduct, stockProducts: Product[]): boolean {

@@ -6,13 +6,8 @@ import { stations, type Station } from "./mockData";
 
 import type { PosProduct } from "./VentasPosContext";
 
+import { mergeSalesCategories } from "@/features/sales/lib/sales-categories";
 import { useFavoriteProductIds } from "./sales-favorites";
-
-
-
-const categoryOptions = ["Todos", "Comidas", "Bebidas", "Snacks", "Postres", "Promos"] as const;
-
-type CategoryFilter = (typeof categoryOptions)[number];
 
 
 
@@ -78,13 +73,16 @@ export function PosProductPicker({
 
   const [query, setQuery] = useState("");
 
-  const [category, setCategory] = useState<CategoryFilter>("Todos");
+  const [category, setCategory] = useState("Todos");
 
   const [kitchen, setKitchen] = useState<KitchenFilter>("Todas");
 
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteProductIds();
 
-
+  const categoryOptions = useMemo(
+    () => ["Todos", ...mergeSalesCategories([], products.map((p) => p.category))],
+    [products],
+  );
 
   const filtered = useMemo(
 
@@ -138,7 +136,7 @@ export function PosProductPicker({
 
           value={category}
 
-          onChange={(e) => setCategory(e.target.value as CategoryFilter)}
+          onChange={(e) => setCategory(e.target.value)}
 
           className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 min-w-[9.5rem]"
 
@@ -292,7 +290,7 @@ export function PosProductPicker({
 
                   <div className={`text-xs ${p.stock < 10 ? "text-red-500" : "text-gray-400"}`}>
 
-                    Stock: {p.stock}
+                    Disp.: {p.stock}
 
                   </div>
 

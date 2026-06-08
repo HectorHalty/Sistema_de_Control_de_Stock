@@ -2,7 +2,7 @@
 import { useAppContext } from '@/app/providers/AppContext';
 import type { EmployeeConsumptionEntry, Product } from '@/app/components/store';
 import { getUnitLabel } from '@/app/components/store';
-import { getCategoryIcon } from '@/features/inventory/lib/category-icons';
+import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { Search, Package, Minus, Plus, Check, History, X } from 'lucide-react';
 
 function warehousesWithStock(product: Product, warehouseIds: { id: string; name: string }[]) {
@@ -131,9 +131,8 @@ export function RegisterConsumptionPage() {
     setError('');
   };
 
-  const getCatIcon = (categoryName: string) => {
-    const cat = categories.find(c => c.name === categoryName);
-    return getCategoryIcon(cat?.icon || 'Package');
+  const getCatIconName = (categoryName: string) => {
+    return categories.find(c => c.name === categoryName)?.icon ?? 'Package';
   };
 
   return (
@@ -176,7 +175,6 @@ export function RegisterConsumptionPage() {
         ) : (
           <ul className="divide-y divide-border/60 max-h-[min(420px,50vh)] overflow-y-auto">
             {availableProducts.map(product => {
-              const CatIcon = getCatIcon(product.category);
               const total = getTotalStock(product);
               return (
                 <li key={product.id}>
@@ -185,9 +183,7 @@ export function RegisterConsumptionPage() {
                     onClick={() => openProduct(product.id)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                      <CatIcon size={18} className="text-[#3d7a3d]" />
-                    </div>
+                    <CategoryIconBadge iconName={getCatIconName(product.category)} size="md" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate" style={{ fontWeight: 500 }}>{product.name}</p>
                       <p className="text-xs text-muted-foreground">{product.code} · {product.category}</p>

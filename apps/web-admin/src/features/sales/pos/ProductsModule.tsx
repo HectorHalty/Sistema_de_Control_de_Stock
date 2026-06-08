@@ -1,6 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { computeSellableStock } from "@/features/sales/stock-link";
 import { Plus, Edit2, Trash2, X, ChefHat } from "lucide-react";
-import { Product, Ingredient, Station, stations } from "./mockData";
+import { ProductEmojiPicker } from "@/features/sales/components/ProductEmojiPicker";
+import { RecipeIngredientsEditor } from "@/features/sales/components/RecipeIngredientsEditor";
+import { SalesCategorySelect } from "@/features/sales/components/SalesCategorySelect";
+import { getSalesCategoryEmoji, mergeSalesCategories } from "@/features/sales/lib/sales-categories";
+import { Product, Station, stations } from "./mockData";
 import { useStore } from "./VentasPosContext";
 
 const stationStyle: Record<Station, string> = {
@@ -10,21 +15,20 @@ const stationStyle: Record<Station, string> = {
   Cocina: "bg-emerald-100 text-emerald-700",
 };
 
-const categoryEmoji: Record<string, string> = {
-  Comidas: "🍔",
-  Bebidas: "🥤",
-  Snacks: "🍟",
-  Postres: "🍦",
-  Promos: "🎯",
-};
-
 export function ProductsModule() {
   const {
     products,
+    salesCategories,
+    salesCategoryEmojis,
+    addSalesCategory,
     saveProduct: storeSave,
     deleteProduct: storeDelete,
-    ingredients,
   } = useStore();
+
+  const categoryList = useMemo(
+    () => mergeSalesCategories(salesCategories, products.map((p) => p.category)),
+    [salesCategories, products],
+  );
   const [tab, setTab] = useState<"productos" | "cocinas">("productos");
   const [editing, setEditing] = useState<Product | null>(null);
   const [creating, setCreating] = useState(false);
@@ -48,13 +52,6 @@ export function ProductsModule() {
     stock: 0,
     emoji: "🍽️",
     recipe: [],
-  };
-
-  const blankIng: Ingredient = {
-    id: `ing${Date.now()}`,
-    name: "",
-    unit: "u",
-    stock: 0,
   };
 
   return (
@@ -88,12 +85,12 @@ export function ProductsModule() {
       </div>
 
       <div className="space-y-5 pb-20">
-        {(["Comidas", "Bebidas", "Snacks", "Postres", "Promos"] as const).map((cat) => {
+        {categoryList.map((cat) => {
           const list = products.filter((p) => p.category === cat);
           return (
             <section key={cat}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{categoryEmoji[cat]}</span>
+                <span className="text-xl">{getSalesCategoryEmoji(cat, salesCategoryEmojis)}</span>
                 <h4 className="text-gray-900">{cat}</h4>
                 <span className="text-xs text-gray-500">({list.length})</span>
               </div>
@@ -115,7 +112,7 @@ export function ProductsModule() {
                           </span>
                           <span className="text-emerald-600">${p.price.toLocaleString()}</span>
                           <span className={p.stock < 10 ? "text-red-500" : "text-gray-500"}>
-                            · stock {p.stock}
+                            · disp. {p.stock}
                           </span>
                           {p.recipe && p.recipe.length > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-emerald-700">
@@ -148,7 +145,7 @@ export function ProductsModule() {
       {(editing || creating) && (
         <ProductEditor
           product={editing || blank}
-          ingredients={ingredients}
+          categories={categoryList}
           isNew={creating}
           onSave={saveProduct}
           onClose={() => {
@@ -194,103 +191,29 @@ function StationsTab({ products }: { products: Product[] }) {
   );
 }
 
-function IngredientEditor({
-  ingredient,
-  isNew,
-  onSave,
-  onClose,
-}: {
-  ingredient: Ingredient;
-  isNew: boolean;
-  onSave: (i: Ingredient) => void;
-  onClose: () => void;
-}) {
-  const [draft, setDraft] = useState<Ingredient>(ingredient);
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-md">
-        <div className="flex justify-between items-center p-4 border-b border-gray-200">
-          <h3>{isNew ? "Nuevo insumo" : `Editar ${ingredient.name}`}</h3>
-          <button onClick={onClose}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">Nombre</label>
-            <input
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Unidad</label>
-              <input
-                value={draft.unit}
-                onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
-                placeholder="u, g, ml..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Stock</label>
-              <input
-                type="number"
-                value={draft.stock}
-                onChange={(e) => setDraft({ ...draft, stock: +e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="border-t border-gray-200 p-3 flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700">
-            Cancelar
-          </button>
-          <button
-            onClick={() => onSave(draft)}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg"
-          >
-            Guardar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ProductEditor({
   product,
-  ingredients,
+  categories,
   isNew,
   onSave,
   onClose,
 }: {
   product: Product;
-  ingredients: Ingredient[];
+  categories: string[];
   isNew: boolean;
   onSave: (p: Product) => void;
   onClose: () => void;
 }) {
+  const { addSalesCategory, salesCategoryEmojis, ingredients } = useStore();
   const [draft, setDraft] = useState<Product>({ ...product, recipe: product.recipe || [] });
 
-  const addIngredient = (id: string) => {
-    if (draft.recipe?.find((r) => r.ingredientId === id)) return;
-    setDraft({ ...draft, recipe: [...(draft.recipe || []), { ingredientId: id, qty: 1 }] });
-  };
-
-  const updateQty = (id: string, qty: number) => {
-    setDraft({
-      ...draft,
-      recipe: draft.recipe?.map((r) => (r.ingredientId === id ? { ...r, qty } : r)),
-    });
-  };
-
-  const removeIng = (id: string) => {
-    setDraft({ ...draft, recipe: draft.recipe?.filter((r) => r.ingredientId !== id) });
-  };
+  const calculatedStock = useMemo(() => {
+    const availability = new Map(ingredients.map(i => [i.id, i.stock]));
+    return computeSellableStock(
+      (draft.recipe || []).map(r => ({ stockProductId: r.ingredientId, quantity: r.qty })),
+      id => availability.get(id) ?? 0,
+    );
+  }, [draft.recipe, ingredients]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -304,21 +227,19 @@ function ProductEditor({
 
         <div className="overflow-y-auto p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="col-span-2">
               <label className="text-sm text-gray-600 mb-1 block">Nombre</label>
-              <input
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Emoji</label>
-              <input
-                value={draft.emoji}
-                onChange={(e) => setDraft({ ...draft, emoji: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-              />
+              <div className="flex gap-2">
+                <ProductEmojiPicker
+                  value={draft.emoji}
+                  onChange={(emoji) => setDraft({ ...draft, emoji })}
+                />
+                <input
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  className="min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg"
+                />
+              </div>
             </div>
             <div>
               <label className="text-sm text-gray-600 mb-1 block">Precio</label>
@@ -330,27 +251,31 @@ function ProductEditor({
               />
             </div>
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">Stock</label>
-              <input
-                type="number"
-                value={draft.stock}
-                onChange={(e) => setDraft({ ...draft, stock: +e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Categoría</label>
-              <select
-                value={draft.category}
-                onChange={(e) => setDraft({ ...draft, category: e.target.value as Product["category"] })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+              <label className="text-sm text-gray-600 mb-1 block">Disponible</label>
+              <div
+                className={`w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 ${
+                  calculatedStock < 10 ? "text-red-600" : "text-gray-900"
+                }`}
               >
-                <option>Comidas</option>
-                <option>Bebidas</option>
-                <option>Snacks</option>
-                <option>Postres</option>
-              </select>
+                {(draft.recipe?.length ?? 0) > 0 ? calculatedStock : "—"}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Calculado según inventario y receta
+              </p>
             </div>
+            <SalesCategorySelect
+              value={draft.category}
+              categories={categories}
+              categoryEmojis={salesCategoryEmojis}
+              onChange={(category, emojiOverride) => {
+                setDraft((prev) => ({
+                  ...prev,
+                  category,
+                  emoji: emojiOverride ?? getSalesCategoryEmoji(category, salesCategoryEmojis),
+                }));
+              }}
+              onAddCategory={addSalesCategory}
+            />
             <div>
               <label className="text-sm text-gray-600 mb-1 block">Cocina / Sector</label>
               <select
@@ -373,61 +298,13 @@ function ProductEditor({
               <h4 className="text-gray-900">Receta — descuento de stock</h4>
             </div>
             <p className="text-sm text-gray-500 mb-3">
-              Insumos que se descontarán automáticamente al vender 1 unidad.
+              Productos del inventario que se descontarán al vender 1 unidad de este producto.
             </p>
 
-            <div className="space-y-2 mb-3">
-              {draft.recipe?.length === 0 && (
-                <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-lg">
-                  Sin receta. Agregá insumos abajo.
-                </div>
-              )}
-              {draft.recipe?.map((r) => {
-                const ing = ingredients.find((i) => i.id === r.ingredientId);
-                if (!ing) return null;
-                return (
-                  <div
-                    key={r.ingredientId}
-                    className="flex items-center gap-2 bg-emerald-50 rounded-lg p-2"
-                  >
-                    <span className="flex-1 text-gray-900">
-                      {ing.name}
-                      <span className="text-xs text-gray-500 ml-2">
-                        (stock: {ing.stock} {ing.unit})
-                      </span>
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={r.qty}
-                      onChange={(e) => updateQty(r.ingredientId, +e.target.value)}
-                      className="w-16 px-2 py-1 border border-gray-200 rounded bg-white"
-                    />
-                    <span className="text-sm text-gray-500 w-8">{ing.unit}</span>
-                    <button onClick={() => removeIng(r.ingredientId)} className="text-red-500">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Agregar insumo</label>
-              <div className="flex flex-wrap gap-2">
-                {ingredients
-                  .filter((i) => !draft.recipe?.find((r) => r.ingredientId === i.id))
-                  .map((i) => (
-                    <button
-                      key={i.id}
-                      onClick={() => addIngredient(i.id)}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-emerald-100 rounded-lg text-sm flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> {i.name}
-                    </button>
-                  ))}
-              </div>
-            </div>
+            <RecipeIngredientsEditor
+              recipe={draft.recipe || []}
+              onChange={recipe => setDraft(prev => ({ ...prev, recipe }))}
+            />
           </div>
         </div>
 

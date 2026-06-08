@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Plus, Users, DollarSign, X, Trash2 } from "lucide-react";
-import { TeamAccount, initialTeams } from "./mockData";
+import { TeamAccount } from "./mockData";
 import { useStore } from "./VentasPosContext";
 
 export function TablesModule() {
   const { products: initialProducts } = useStore();
-  const [teams, setTeams] = useState<TeamAccount[]>(initialTeams);
+  const [teams, setTeams] = useState<TeamAccount[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");

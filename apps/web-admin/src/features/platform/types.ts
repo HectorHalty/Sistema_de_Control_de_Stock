@@ -20,7 +20,4 @@ export interface AppUser {
 
 export const initialUsers: AppUser[] = [
   { id: 'u1', name: 'Admin', role: 'Admin' },
-  { id: 'u2', name: 'Juan Pérez', role: 'Operador' },
-  { id: 'u3', name: 'María García', role: 'Operador' },
-  { id: 'u4', name: 'Carlos López', role: 'Viewer' },
 ];

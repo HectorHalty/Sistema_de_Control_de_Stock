@@ -6,6 +6,7 @@ import { getUnitLabel } from '@/app/components/store';
 import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildMultiSheetConsumptionReportXlsx } from '@/app/components/xlsxExport';
+import { calculateAvgDailyConsumption } from '@/features/kitchen/domain';
 import { getStockAuditEntries } from '@/shared/utils/audit-log';
 
 type ReportTab = 'consumo' | 'alertas' | 'historial';
@@ -138,8 +139,6 @@ export function ReportsPage() {
     });
   };
 
-  // Stock alerts
-  const weeklyAvg = 30; // Mock weekly average
   const pendingOrdersQty = (productId: string) => {
     return orders.filter(o => o.status === 'Pendiente').reduce((sum, o) => {
       const item = o.items.find(i => i.productId === productId);
@@ -147,11 +146,26 @@ export function ReportsPage() {
     }, 0);
   };
 
-  const alertProducts = products.filter(p => {
-    const current = getTotalStock(p);
-    const pending = pendingOrdersQty(p.id);
-    return (current + pending) < weeklyAvg;
-  });
+  const getWeeklyAvg = (productId: string) => {
+    const { avgDaily } = calculateAvgDailyConsumption(consumptionLogs, productId, 1);
+    return Math.ceil(avgDaily * 7);
+  };
+
+  const alertProducts = useMemo(
+    () =>
+      products
+        .map(p => {
+          const weeklyAvg = getWeeklyAvg(p.id);
+          const current = getTotalStock(p);
+          const pending = pendingOrdersQty(p.id);
+          return { product: p, weeklyAvg, current, pending };
+        })
+        .filter(
+          ({ weeklyAvg, current, pending }) =>
+            weeklyAvg > 0 && current + pending < weeklyAvg,
+        ),
+    [products, orders, consumptionLogs, getTotalStock],
+  );
 
   return (
     <div className="space-y-6">
@@ -266,7 +280,7 @@ export function ReportsPage() {
             Productos en riesgo para esta semana. Fórmula:
           </p>
           <div className="bg-muted rounded-lg px-4 py-2 text-xs text-muted-foreground mb-6 inline-block">
-            (Stock Actual + Pedidos Pendientes) &lt; Promedio Semanal ({weeklyAvg} uds)
+            (Stock Actual + Pedidos Pendientes) &lt; Promedio Semanal (según consumo histórico)
           </div>
 
           {alertProducts.length === 0 ? (
@@ -278,10 +292,7 @@ export function ReportsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {alertProducts.map(p => {
-                const current = getTotalStock(p);
-                const pending = pendingOrdersQty(p.id);
-                return (
+              {alertProducts.map(({ product: p, weeklyAvg, current, pending }) => (
                   <div key={p.id} className="border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm" style={{ fontWeight: 500 }}>{p.name}</span>
@@ -305,8 +316,7 @@ export function ReportsPage() {
                       Déficit: {weeklyAvg - (current + pending)} unidades
                     </div>
                   </div>
-                );
-              })}
+              ))}
             </div>
           )}
         </div>

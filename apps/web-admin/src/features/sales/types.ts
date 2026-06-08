@@ -35,6 +35,41 @@ export interface SalesTable {
   currentOrderId?: string;
 }
 
+export type SalesPrinterType = 'Comandera Cocina' | 'Mostrador' | 'Barra';
+
+export interface SalesPrinter {
+  id: string;
+  name: string;
+  type: SalesPrinterType;
+  ip: string;
+  port: number;
+  paperWidth: 58 | 80;
+  connected: boolean;
+  isDefault: boolean;
+}
+
+export interface TicketTemplate {
+  header: string;
+  subheader: string;
+  footer: string;
+  showLogo: boolean;
+  showDate: boolean;
+  showOperator: boolean;
+  showItemDetails: boolean;
+  fontSize: 'sm' | 'md' | 'lg';
+}
+
+export const DEFAULT_TICKET_TEMPLATE: TicketTemplate = {
+  header: 'LA CHACRA FUTBOL — CANTINA',
+  subheader: 'Sistema de Gestión LCH',
+  footer: '¡Gracias por tu compra!',
+  showLogo: true,
+  showDate: true,
+  showOperator: true,
+  showItemDetails: true,
+  fontSize: 'md',
+};
+
 export interface SalesHistoryEntry {
   id: string;
   timestampISO: string;

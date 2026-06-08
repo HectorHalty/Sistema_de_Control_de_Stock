@@ -1,10 +1,9 @@
-﻿import { useMemo, useState, type ComponentType } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   BarChart3,
   CircleDollarSign,
   ClipboardList,
-  History,
   Home,
   LogOut,
   Menu,
@@ -13,12 +12,9 @@ import {
   Settings,
   ShoppingBag,
   ShoppingCart,
-  TableProperties,
-  Ticket,
   Trophy,
   UserMinus,
   Users,
-  Wallet,
   Warehouse,
 } from 'lucide-react';
 import { useAppContext } from '@/app/providers/AppContext';
@@ -39,6 +35,7 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
 };
 
 const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
+const BOTTOM_NAV_IDLE_MS = 4000;
 
 interface ContextNavItem {
   label: string;
@@ -70,20 +67,20 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
 
   if (activeModule === 'ventas') {
     const selectedTab = currentTab === 'caja' ? 'mostrador' : currentTab || 'mostrador';
+    const normalizedTab =
+      selectedTab === 'metricas' || selectedTab === 'historial' ? 'reportes' : selectedTab;
     return [
       { key: 'inicio', label: 'Inicio', icon: Home },
-      { key: 'mostrador', label: 'Mostrador', icon: Wallet },
-      { key: 'pedidos', label: 'Mis Pedidos', icon: ClipboardList },
+      { key: 'mostrador', label: 'Mostrador', icon: CircleDollarSign },
+      { key: 'pedidos', label: 'Mis Pedidos', icon: ShoppingCart },
       { key: 'devoluciones', label: 'Devoluciones', icon: RotateCcw },
       { key: 'productos', label: 'Productos', icon: Package },
-      { key: 'mesas', label: 'Mesas', icon: TableProperties },
-      { key: 'metricas', label: 'Metricas', icon: BarChart3 },
-      { key: 'reportes', label: 'Reportes', icon: Ticket },
-      { key: 'historial', label: 'Historial', icon: History },
+      { key: 'mesas', label: 'Mesas', icon: Warehouse },
+      { key: 'reportes', label: 'Reportes', icon: BarChart3 },
     ].map(item => ({
       label: item.label,
-      to: `/ventas?tab=${item.key}`,
-      active: pathname.startsWith('/ventas') && selectedTab === item.key,
+      to: item.key === 'reportes' ? '/ventas?tab=reportes&section=ventas' : `/ventas?tab=${item.key}`,
+      active: pathname.startsWith('/ventas') && normalizedTab === item.key,
       icon: item.icon,
     }));
   }
@@ -113,6 +110,8 @@ function getTopbarTitle(pathname: string): string {
 export function AppLayout({ onLogout }: AppLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [bottomNavCompact, setBottomNavCompact] = useState(false);
+  const bottomNavIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { currentUser } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
@@ -126,7 +125,35 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const bottomNavModules = useMemo(() => getBottomNavModules(currentUser.role), [currentUser.role]);
   const sidebarWidthClass = collapsed ? 'lg:w-[88px]' : 'lg:w-72';
 
+  const clearBottomNavIdleTimer = useCallback(() => {
+    if (bottomNavIdleTimer.current) {
+      clearTimeout(bottomNavIdleTimer.current);
+      bottomNavIdleTimer.current = null;
+    }
+  }, []);
+
+  const startBottomNavIdleTimer = useCallback(() => {
+    clearBottomNavIdleTimer();
+    bottomNavIdleTimer.current = setTimeout(() => {
+      setBottomNavCompact(true);
+    }, BOTTOM_NAV_IDLE_MS);
+  }, [clearBottomNavIdleTimer]);
+
+  const expandBottomNav = useCallback(() => {
+    setBottomNavCompact(false);
+    clearBottomNavIdleTimer();
+  }, [clearBottomNavIdleTimer]);
+
+  useEffect(() => {
+    if (!shouldShowBottomNavigation(currentUser.role)) return;
+    expandBottomNav();
+    startBottomNavIdleTimer();
+    return clearBottomNavIdleTimer;
+  }, [currentUser.role, location.pathname, location.search, expandBottomNav, startBottomNavIdleTimer, clearBottomNavIdleTimer]);
+
   const handleModuleNavigation = (moduleId: ModuleId) => {
+    expandBottomNav();
+    startBottomNavIdleTimer();
     const destination = moduleMeta[moduleId].to;
     if (moduleId !== 'dashboard' && !canAccessModule(currentUser.role, moduleId)) {
       navigate(destination, { replace: true });
@@ -249,14 +276,30 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-auto p-4 lg:p-6 ${showBottomNavigation ? 'pb-28 lg:pb-24' : ''}`}>
+        <main className={`flex-1 overflow-auto p-4 lg:p-6 ${showBottomNavigation ? (bottomNavCompact ? 'pb-16' : 'pb-28') : ''}`}>
           <Outlet />
         </main>
       </div>
 
       {showBottomNavigation && bottomNavModules.length > 0 && (
-        <nav className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-2 backdrop-blur lg:inset-x-auto lg:bottom-4 lg:right-4 lg:rounded-2xl lg:border lg:shadow-xl ${collapsed ? 'lg:left-[104px]' : 'lg:left-[304px]'}`}>
-          <div className="mx-auto flex items-end justify-center gap-1" style={{ maxWidth: `${bottomNavModules.length * 72}px` }}>
+        <nav
+          aria-label="Navegación principal"
+          onMouseEnter={expandBottomNav}
+          onMouseLeave={startBottomNavIdleTimer}
+          onTouchStart={expandBottomNav}
+          onFocus={expandBottomNav}
+          className={`fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2 pt-2 backdrop-blur transition-transform duration-300 ease-out will-change-transform ${
+            bottomNavCompact
+              ? 'translate-y-[calc(100%-2.75rem)] shadow-[0_-4px_20px_rgba(0,0,0,0.06)]'
+              : 'translate-y-0 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]'
+          } pb-[calc(env(safe-area-inset-bottom)+0.35rem)]`}
+        >
+          <div
+            className={`mx-auto flex items-end justify-center gap-1 transition-all duration-300 ${
+              bottomNavCompact ? 'max-w-xl' : ''
+            }`}
+            style={{ maxWidth: bottomNavCompact ? undefined : `${bottomNavModules.length * 72}px` }}
+          >
             {bottomNavModules.map(moduleId => {
               const item = moduleMeta[moduleId];
               const Icon = item.icon;
@@ -266,15 +309,26 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
               return (
                 <button
                   key={moduleId}
+                  type="button"
                   onClick={() => handleModuleNavigation(moduleId)}
-                  className={`relative flex flex-col items-center justify-center rounded-xl px-2 py-1.5 text-[11px] transition-all ${
+                  className={`relative flex flex-col items-center justify-center rounded-xl px-2 text-[11px] transition-all duration-300 ${
                     isCenter
-                      ? `-mt-7 h-16 w-16 justify-center rounded-full border-4 border-background bg-[#3d7a3d] text-white`
-                      : `h-12 min-w-[56px] ${active ? 'text-[#3d7a3d]' : 'text-muted-foreground'}`
+                      ? bottomNavCompact
+                        ? 'h-11 w-11 rounded-full border-2 border-background bg-[#3d7a3d] text-white'
+                        : '-mt-7 h-16 w-16 justify-center rounded-full border-4 border-background bg-[#3d7a3d] text-white py-1.5'
+                      : `min-w-[56px] ${bottomNavCompact ? 'h-10 py-1' : 'h-12 py-1.5'} ${active ? 'text-[#3d7a3d]' : 'text-muted-foreground'}`
                   }`}
                 >
-                  <Icon size={isCenter ? 20 : 16} />
-                  {!isCenter && <span>{item.label}</span>}
+                  <Icon size={isCenter ? (bottomNavCompact ? 18 : 20) : (bottomNavCompact ? 15 : 16)} />
+                  {!isCenter && (
+                    <span
+                      className={`overflow-hidden transition-all duration-300 ${
+                        bottomNavCompact ? 'max-h-0 opacity-0' : 'max-h-5 opacity-100'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
                 </button>
               );
             })}

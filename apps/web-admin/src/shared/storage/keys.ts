@@ -15,6 +15,8 @@ export const storageKeys = {
     users: 'stock-users',
   },
   sales: {
+    categories: 'sales-categories',
+    categoryEmojis: 'sales-category-emojis',
     kitchens: 'sales-kitchens',
     products: 'sales-products',
     tickets: 'sales-tickets',
@@ -22,6 +24,8 @@ export const storageKeys = {
     tables: 'sales-tables',
     history: 'sales-history',
     auditLog: 'sales-auditlog',
+    printers: 'sales-printers',
+    ticketTemplate: 'sales-ticket-template',
   },
   kitchen: {
     orders: 'kitchen-orders',

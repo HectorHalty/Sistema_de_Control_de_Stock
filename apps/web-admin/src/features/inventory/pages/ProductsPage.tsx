@@ -4,6 +4,7 @@ import { previewNextProductCode, reassignProductCodes } from '@/features/invento
 import { useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { Plus, Search, Edit, Trash2, X, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
 
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
@@ -47,6 +48,10 @@ export function ProductsPage() {
     const cat = categories.find(c => c.name === categoryName);
     if (!cat) return Package;
     return getCategoryIcon(cat.icon);
+  };
+
+  const getCatIconName = (categoryName: string) => {
+    return categories.find(c => c.name === categoryName)?.icon ?? 'Package';
   };
 
   return (
@@ -134,7 +139,6 @@ export function ProductsPage() {
       <div className="block sm:hidden space-y-2">
         {filtered.map(product => {
           const total = getTotalStock(product);
-          const CatIcon = getCatIcon(product.category);
           const isExpanded = expandedProductId === product.id;
           return (
             <div key={product.id} className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
@@ -142,9 +146,7 @@ export function ProductsPage() {
                 className="flex items-center gap-3 px-4 py-3 cursor-pointer"
                 onClick={() => setExpandedProductId(isExpanded ? null : product.id)}
               >
-                        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                  <CatIcon size={18} className="text-[#3d7a3d]" />
-                </div>
+                <CategoryIconBadge iconName={getCatIconName(product.category)} size="md" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate" style={{ fontWeight: 500 }}>{product.name}</p>
                   <p className="text-xs text-muted-foreground">{product.code}</p>
@@ -220,7 +222,6 @@ export function ProductsPage() {
             <tbody>
               {filtered.flatMap(product => {
                 const total = getTotalStock(product);
-                const CatIcon = getCatIcon(product.category);
                 const isExpanded = expandedProductId === product.id;
                 const rows = [
                   <tr
@@ -230,9 +231,7 @@ export function ProductsPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                          <CatIcon size={18} className="text-[#3d7a3d]" />
-                        </div>
+                        <CategoryIconBadge iconName={getCatIconName(product.category)} size="md" />
                         <div className="min-w-0">
                           <span className="text-sm block" style={{ fontWeight: 500 }}>{product.name}</span>
                           <span className="text-xs text-muted-foreground">{product.code}</span>
@@ -542,7 +541,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   {showIconPicker && (
                     <div className="grid grid-cols-7 gap-1 p-2 bg-card rounded-lg border border-border">
                       {AVAILABLE_ICON_NAMES.map(name => {
-                        const IconComp = ICON_MAP[name];
+                        const IconComp = getCategoryIcon(name);
                         return (
                           <button
                             key={name}
