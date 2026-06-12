@@ -18,6 +18,7 @@ export function POSModule() {
     printTicket: storePrint,
     voidTicket,
     replaceTicketItems,
+    printToPrinter,
     printers,
     products,
     currentUser,
@@ -27,7 +28,7 @@ export function POSModule() {
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
   const [showMobileOrder, setShowMobileOrder] = useState(false);
   const [previewTicket, setPreviewTicket] = useState<Ticket | null>(null);
-  const defaultPrinter = printers.find((p) => p.isDefault && p.connected) || printers.find((p) => p.connected);
+  const defaultPrinter = printers.find((p) => p.isDefault) || printers[0];
   const recent = tickets.slice(0, 6);
   const editingTicket = tickets.find((t) => t.id === editingTicketId) || null;
 
@@ -65,9 +66,11 @@ export function POSModule() {
       setTimeout(() => setToast(null), 2500);
       return;
     }
+    let ticketToPrint: Ticket | null = null;
     if (editingTicket) {
       const updated = replaceTicketItems(editingTicket.id, order);
       if (updated) {
+        if (print) ticketToPrint = updated;
         setToast(
           print
             ? `✏️ Comanda #${updated.number} actualizada y reimpresa`
@@ -78,6 +81,7 @@ export function POSModule() {
     } else {
       const t = await storePrint({ items: order, total, source: "Mostrador" });
       if (!t) return;
+      if (print) ticketToPrint = t;
       setToast(
         print
           ? `✅ Pedido #${t.number} realizado con éxito — enviado a ${defaultPrinter!.name}`
@@ -86,7 +90,17 @@ export function POSModule() {
     }
     setOrder([]);
     setShowMobileOrder(false);
-    setTimeout(() => setToast(null), 2500);
+
+    if (ticketToPrint && defaultPrinter) {
+      const result = await printToPrinter(ticketToPrint, defaultPrinter);
+      if (!result.ok) {
+        const reason = result.apiUnavailable
+          ? "el servidor de impresión no está disponible"
+          : result.error || "no se pudo conectar con la impresora";
+        setToast(`⚠️ Ticket #${ticketToPrint.number} registrado, pero no se imprimió: ${reason}`);
+      }
+    }
+    setTimeout(() => setToast(null), 3500);
   };
 
   const cancelEditing = () => {

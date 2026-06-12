@@ -7,12 +7,13 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi,
+  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
   API_BASE_URL, ApiError,
 } from './client';
 import type {
   CheckoutPayload, ReturnPayload, KitchenOrderStatus,
   PresignPayload, ConfirmMediaPayload,
+  TestPrinterPayload, PrintTicketPayload,
 } from './client';
 
 /**
@@ -31,12 +32,17 @@ async function isApiReachable(): Promise<boolean> {
 }
 
 /**
- * The admin panel works primarily on localStorage and does not hold an API JWT.
- * When the API rejects a request for auth reasons (401/403), we treat it as
- * "API unavailable" so the caller falls back to the local flow instead of failing.
+ * Errors that mean "the API can't serve this request right now" and the caller
+ * should fall back to local (localStorage) behavior instead of hard-failing.
+ * This covers the offline-first setup where the frontend isn't authenticated
+ * (no JWT) or the database is down while the API is only used for printing.
  */
-function isAuthError(e: unknown): boolean {
-  return e instanceof ApiError && (e.status === 401 || e.status === 403);
+function shouldFallbackToLocal(e: unknown): boolean {
+  if (e instanceof ApiError) {
+    return e.status === 401 || e.status === 403 || e.status === 0 || e.status >= 500;
+  }
+  // Network/abort errors → fall back to local.
+  return true;
 }
 
 // ==================== Sales Adapter ====================
@@ -61,8 +67,7 @@ export function useSalesApiAdapter() {
       const result = await salesApi.checkout(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
-        // La API requiere autenticación que el panel no tiene: usar modo local.
+      if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Checkout failed';
@@ -83,7 +88,7 @@ export function useSalesApiAdapter() {
       const result = await salesApi.returnSale(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
+      if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Return failed';
@@ -104,7 +109,7 @@ export function useSalesApiAdapter() {
       const result = await salesApi.tickets.void(ticketId, operatorId, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
+      if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Void failed';
@@ -116,6 +121,50 @@ export function useSalesApiAdapter() {
   }, [apiAvailable]);
 
   return { checkout, returnSale, voidTicket, loading, error, apiAvailable };
+}
+
+// ==================== Printing Adapter ====================
+
+export function usePrintingApiAdapter() {
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    isApiReachable().then(setApiAvailable);
+  }, []);
+
+  const testPrinter = useCallback(async (payload: TestPrinterPayload) => {
+    if (!apiAvailable) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    try {
+      const result = await printingApi.test(payload);
+      return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+    } catch (e) {
+      return {
+        ok: false,
+        apiUnavailable: false,
+        error: e instanceof ApiError ? e.message : 'No se pudo probar la impresora',
+      } as const;
+    }
+  }, [apiAvailable]);
+
+  const printTicket = useCallback(async (payload: PrintTicketPayload) => {
+    if (!apiAvailable) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    try {
+      const result = await printingApi.print(payload);
+      return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+    } catch (e) {
+      return {
+        ok: false,
+        apiUnavailable: false,
+        error: e instanceof ApiError ? e.message : 'No se pudo imprimir',
+      } as const;
+    }
+  }, [apiAvailable]);
+
+  return { testPrinter, printTicket, apiAvailable };
 }
 
 // ==================== Kitchen Adapter ====================

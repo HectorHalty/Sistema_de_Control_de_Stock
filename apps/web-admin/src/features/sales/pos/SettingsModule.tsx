@@ -1,11 +1,7 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   Printer as PrinterIcon,
   Plus,
-  Trash2,
-  Wifi,
-  WifiOff,
-  Star,
   FileText,
   X,
   Shield,
@@ -13,7 +9,9 @@ import {
   Moon,
   Bell,
 } from "lucide-react";
+import { usePrintingApiAdapter } from '@/app/api/adapters';
 import { useStore, type Printer, type Ticket } from './VentasPosContext';
+import { PrinterCard } from '@/features/sales/components/PrinterCard';
 import { TicketPreview } from "./TicketPreview";
 import { UsersModule } from "./UsersModule";
 
@@ -111,17 +109,79 @@ function GeneralTab() {
 }
 
 function PrintersTab() {
-  const { printers, addPrinter, updatePrinter, removePrinter, setDefaultPrinter, togglePrinter } =
+  const { printers, addPrinter, updatePrinter, removePrinter, printTestTicket, testPrinter, setToast } =
     useStore();
-  const [showAdd, setShowAdd] = useState(false);
-  const [scanning, setScanning] = useState<string | null>(null);
+  const printingApi = usePrintingApiAdapter();
+  const [showForm, setShowForm] = useState(false);
+  const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [printingTest, setPrintingTest] = useState<string | null>(null);
+  const [checkingIds, setCheckingIds] = useState<Set<string>>(new Set());
 
-  const testConnection = (id: string) => {
-    setScanning(id);
-    setTimeout(() => {
-      updatePrinter(id, { connected: true });
-      setScanning(null);
-    }, 1200);
+  const refreshStatus = async (printer: Printer) => {
+    if (!printingApi.apiAvailable) return;
+    setCheckingIds(prev => new Set(prev).add(printer.id));
+    try {
+      const result = await testPrinter(printer);
+      updatePrinter(printer.id, { connected: result.ok });
+    } finally {
+      setCheckingIds(prev => {
+        const next = new Set(prev);
+        next.delete(printer.id);
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!printingApi.apiAvailable) return;
+    let cancelled = false;
+    (async () => {
+      for (const p of printers) {
+        if (cancelled) break;
+        await refreshStatus(p);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printers.map(p => `${p.id}:${p.ip}:${p.port}`).join('|'), printingApi.apiAvailable]);
+
+  const openCreate = () => {
+    setEditingPrinter(null);
+    setShowForm(true);
+  };
+
+  const openEdit = (printer: Printer) => {
+    setEditingPrinter(printer);
+    setShowForm(true);
+  };
+
+  const toggleExpand = (id: string) => {
+    const willExpand = expandedId !== id;
+    setExpandedId(willExpand ? id : null);
+    if (willExpand) {
+      const printer = printers.find(p => p.id === id);
+      if (printer) void refreshStatus(printer);
+    }
+  };
+
+  const sendTestTicket = async (id: string) => {
+    const printer = printers.find((p) => p.id === id);
+    if (!printer) return;
+    setPrintingTest(id);
+    const result = await printTestTicket(printer);
+    if (result.ok) {
+      setToast(`🧾 Ticket de prueba enviado a ${printer.name}`);
+    } else {
+      const reason = result.apiUnavailable
+        ? "el servidor de impresión no está disponible"
+        : result.error || "no respondió";
+      setToast(`⚠️ ${printer.name}: ${reason}`);
+    }
+    setTimeout(() => setToast(null), 3500);
+    setPrintingTest(null);
   };
 
   return (
@@ -129,139 +189,88 @@ function PrintersTab() {
       <div className="flex justify-between items-center">
         <h3 className="text-foreground">Impresoras configuradas ({printers.length})</h3>
         <button
-          onClick={() => setShowAdd(true)}
+          onClick={openCreate}
           className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
         >
           <Plus className="w-4 h-4" /> Agregar
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {printers.map((p) => (
-          <div key={p.id} className="bg-card rounded-xl border border-border p-4">
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    p.connected ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <PrinterIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-foreground flex items-center gap-1">
-                    {p.name}
-                    {p.isDefault && (
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{p.type}</div>
-                </div>
-              </div>
-              <span
-                className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                  p.connected
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
-                    : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300"
-                }`}
-              >
-                {p.connected ? (
-                  <>
-                    <Wifi className="w-3 h-3" /> Conectada
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="w-3 h-3" /> Desconectada
-                  </>
-                )}
-              </span>
-            </div>
+      {printers.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+          No hay impresoras configuradas. Agregá una con su dirección IP y puerto (habitualmente 9100).
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          {printers.map((p) => (
+            <PrinterCard
+              key={p.id}
+              printer={p}
+              expanded={expandedId === p.id}
+              printing={printingTest === p.id}
+              checkingStatus={checkingIds.has(p.id)}
+              onToggleExpand={() => toggleExpand(p.id)}
+              onEdit={() => openEdit(p)}
+              onPrintTest={() => sendTestTicket(p.id)}
+            />
+          ))}
+        </div>
+      )}
 
-            <div className="text-sm text-muted-foreground space-y-1 mb-3">
-              <div className="flex justify-between">
-                <span>IP</span>
-                <span className="font-mono">{p.ip}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Puerto</span>
-                <span className="font-mono">{p.port ?? 9100}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Papel</span>
-                <span>{p.paperWidth} mm</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => testConnection(p.id)}
-                disabled={scanning === p.id}
-                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm flex items-center gap-1"
-              >
-                {scanning === p.id ? "Conectando..." : "Probar conexión"}
-              </button>
-              <button
-                onClick={() => togglePrinter(p.id)}
-                className="px-3 py-1.5 bg-muted text-foreground rounded-lg text-sm"
-              >
-                {p.connected ? "Desconectar" : "Conectar"}
-              </button>
-              {!p.isDefault && (
-                <button
-                  onClick={() => setDefaultPrinter(p.id)}
-                  className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-lg text-sm flex items-center gap-1"
-                >
-                  <Star className="w-3 h-3" /> Predeterminada
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (confirm(`¿Eliminar ${p.name}?`)) removePrinter(p.id);
-                }}
-                className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-1 ml-auto"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showAdd && (
-        <AddPrinterModal
-          onClose={() => setShowAdd(false)}
-          onAdd={(p) => {
-            addPrinter(p);
-            setShowAdd(false);
+      {showForm && (
+        <PrinterFormModal
+          key={editingPrinter?.id ?? "new"}
+          printer={editingPrinter}
+          onClose={() => setShowForm(false)}
+          onSave={(draft) => {
+            if (editingPrinter) {
+              updatePrinter(editingPrinter.id, draft);
+            } else {
+              addPrinter(draft);
+            }
+            setShowForm(false);
           }}
+          onDelete={
+            editingPrinter
+              ? () => {
+                  removePrinter(editingPrinter.id);
+                  setShowForm(false);
+                  setExpandedId(null);
+                }
+              : undefined
+          }
         />
       )}
     </div>
   );
 }
 
-function AddPrinterModal({
+function PrinterFormModal({
+  printer,
   onClose,
-  onAdd,
+  onSave,
+  onDelete,
 }: {
+  printer: Printer | null;
   onClose: () => void;
-  onAdd: (p: Omit<Printer, "id">) => void;
+  onSave: (p: Omit<Printer, "id">) => void;
+  onDelete?: () => void;
 }) {
   const [draft, setDraft] = useState<Omit<Printer, "id">>({
-    name: "",
-    type: "Comandera Cocina",
-    ip: "",
-    port: 9100,
-    paperWidth: 80,
-    connected: false,
-    isDefault: false,
+    name: printer?.name ?? "",
+    type: printer?.type ?? "Comandera Cocina",
+    ip: printer?.ip ?? "",
+    port: printer?.port ?? 9100,
+    paperWidth: printer?.paperWidth ?? 80,
+    connected: printer?.connected ?? false,
+    isDefault: printer?.isDefault ?? false,
   });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-card rounded-xl w-full max-w-md p-5">
         <div className="flex justify-between items-center mb-4">
-          <h3>Agregar impresora</h3>
+          <h3>{printer ? "Editar impresora" : "Agregar impresora"}</h3>
           <button onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
@@ -328,17 +337,31 @@ function AddPrinterModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="px-4 py-2 text-foreground">
-            Cancelar
-          </button>
-          <button
-            onClick={() => draft.name && onAdd(draft)}
-            disabled={!draft.name}
-            className="px-4 py-2 bg-emerald-600 disabled:bg-secondary text-white rounded-lg"
-          >
-            Agregar
-          </button>
+        <div className="flex items-center gap-2 mt-5">
+          {printer && onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`¿Eliminar ${printer.name}?`)) onDelete();
+              }}
+              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+            >
+              Eliminar
+            </button>
+          )}
+          <div className="flex justify-end gap-2 flex-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => draft.name && onSave(draft)}
+              disabled={!draft.name}
+              className="px-4 py-2 bg-emerald-600 disabled:bg-gray-300 text-white rounded-lg"
+            >
+              {printer ? "Guardar" : "Agregar"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -352,6 +375,7 @@ function TemplateTab() {
     id: "preview",
     number: 1,
     createdAt: new Date().toLocaleString("es-AR"),
+    createdAtISO: new Date().toISOString(),
     items: [
       { productId: "preview-1", name: "Producto de ejemplo", price: 1000, qty: 1 },
     ],

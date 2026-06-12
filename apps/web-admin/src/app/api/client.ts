@@ -125,6 +125,16 @@ export const salesApi = {
 };
 
 /**
+ * Network printing endpoints (raw TCP / ESC-POS handled by the API).
+ */
+export const printingApi = {
+  test: (data: TestPrinterPayload) =>
+    apiFetch<PrintResult>('/printing/test', { method: 'POST', body: data }),
+  print: (data: PrintTicketPayload) =>
+    apiFetch<PrintResult>('/printing/print', { method: 'POST', body: data }),
+};
+
+/**
  * Kitchen Display System endpoints
  */
 export const kitchenApi = {
@@ -433,6 +443,41 @@ export interface ReturnResult {
   ok: boolean;
   ticket: SalesTicket;
   idempotent: boolean;
+}
+
+export interface TestPrinterPayload {
+  ip: string;
+  port: number;
+}
+
+export interface PrintTicketItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface PrintTicketPayload {
+  ip: string;
+  port: number;
+  paperWidth: 58 | 80;
+  ticketNumber: number;
+  createdAt: string;
+  items: PrintTicketItem[];
+  total: number;
+  header?: string;
+  subheader?: string;
+  footer?: string;
+  operatorName?: string;
+  note?: string;
+  kind?: 'venta' | 'devolucion';
+  showDate?: boolean;
+  showOperator?: boolean;
+  showItemDetails?: boolean;
+}
+
+export interface PrintResult {
+  ok: boolean;
+  error?: string;
 }
 
 export interface PresignPayload {

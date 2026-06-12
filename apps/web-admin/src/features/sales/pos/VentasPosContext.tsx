@@ -2,12 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
-import { useSalesApiAdapter } from '@/app/api/adapters';
+import { useSalesApiAdapter, usePrintingApiAdapter } from '@/app/api/adapters';
 import {
   buildRequiredStockFromCart,
   deductStockForSale,
@@ -20,8 +22,9 @@ import type { SalesCartLine } from '../stock-link';
 import type { StockMovement } from '@/app/components/store';
 import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
+import { buildTestTicketPayload } from '../lib/test-ticket';
 import type { SalesTicket as ApiSalesTicket } from '@/app/api/client';
-import type { Kitchen, Product, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
+import type { Kitchen, Product as StoreProduct, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
 import { OrderItem, Station, stations } from './mockData';
 
@@ -97,6 +100,16 @@ type VentasPosStore = {
   removePrinter: (id: string) => void;
   setDefaultPrinter: (id: string) => void;
   togglePrinter: (id: string) => void;
+  testPrinter: (
+    printer: Printer,
+  ) => Promise<{ ok: boolean; error?: string; apiUnavailable?: boolean }>;
+  printTestTicket: (
+    printer: Printer,
+  ) => Promise<{ ok: boolean; error?: string; apiUnavailable?: boolean }>;
+  printToPrinter: (
+    ticket: PosTicket,
+    printer: Printer,
+  ) => Promise<{ ok: boolean; error?: string; apiUnavailable?: boolean }>;
   template: TicketTemplate;
   updateTemplate: (patch: Partial<TicketTemplate>) => void;
   salesTables: ReturnType<typeof useAppContext>['salesTables'];
@@ -207,6 +220,7 @@ function buildStockMovementsFromCart(
 export function VentasPosProvider({ children }: { children: ReactNode }) {
   const ctx = useAppContext();
   const salesApi = useSalesApiAdapter();
+  const printingApi = usePrintingApiAdapter();
   const [toast, setToast] = useState<string | null>(null);
   const [pendingEdit, setPendingEdit] = useState<{ ticketId: string; items: OrderItem[] } | null>(
     null,
@@ -629,7 +643,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     (ing: PosIngredient) => {
       const stockProduct = ctx.products.find(p => p.id === ing.id);
       if (!stockProduct) return;
-      const updated: Product = {
+      const updated: StoreProduct = {
         ...stockProduct,
         name: ing.name,
         unit: ing.unit === 'kg' ? 'kg' : 'unidades',
@@ -640,6 +654,94 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       ctx.setProducts(prev => prev.map(p => (p.id === ing.id ? updated : p)));
     },
     [ctx],
+  );
+
+  const testPrinter = useCallback<VentasPosStore['testPrinter']>(
+    async printer => {
+      const result = await printingApi.testPrinter({ ip: printer.ip, port: printer.port });
+      return result;
+    },
+    [printingApi],
+  );
+
+  const printTestTicket = useCallback<VentasPosStore['printTestTicket']>(
+    async printer => {
+      return printingApi.printTicket(buildTestTicketPayload(printer, ctx.ticketTemplate));
+    },
+    [printingApi, ctx.ticketTemplate],
+  );
+
+  const printerFingerprint = ctx.salesPrinters
+    .map(p => `${p.id}:${p.ip}:${p.port}`)
+    .join('|');
+  const printerConnectedRef = useRef<Map<string, boolean>>(new Map());
+  const printerMonitorReadyRef = useRef(false);
+
+  useEffect(() => {
+    if (printingApi.apiAvailable !== true || ctx.salesPrinters.length === 0) return;
+
+    const printers = ctx.salesPrinters;
+    printerMonitorReadyRef.current = false;
+    for (const printer of printers) {
+      if (!printerConnectedRef.current.has(printer.id)) {
+        printerConnectedRef.current.set(printer.id, printer.connected);
+      }
+    }
+
+    const checkPrinters = async () => {
+      for (const printer of printers) {
+        const prevConnected = printerConnectedRef.current.has(printer.id)
+          ? printerConnectedRef.current.get(printer.id)!
+          : printer.connected;
+
+        const result = await testPrinter(printer);
+        const connected = result.ok;
+        ctx.updatePrinter(printer.id, { connected });
+
+        if (printerMonitorReadyRef.current && prevConnected && !connected) {
+          const label = printer.isDefault
+            ? `La impresora predeterminada "${printer.name}" se desconectó`
+            : `La impresora "${printer.name}" se desconectó`;
+          setToast(`⚠️ ${label}`);
+        }
+
+        printerConnectedRef.current.set(printer.id, connected);
+      }
+      printerMonitorReadyRef.current = true;
+    };
+
+    void checkPrinters();
+    const timer = window.setInterval(() => void checkPrinters(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [printingApi.apiAvailable, printerFingerprint, testPrinter, ctx.updatePrinter, setToast]);
+
+  const printToPrinter = useCallback<VentasPosStore['printToPrinter']>(
+    async (ticket, printer) => {
+      const template = ctx.ticketTemplate;
+      return printingApi.printTicket({
+        ip: printer.ip,
+        port: printer.port,
+        paperWidth: printer.paperWidth,
+        ticketNumber: ticket.number,
+        createdAt: ticket.createdAt,
+        items: ticket.items.map(i => ({
+          name: i.name,
+          quantity: i.qty,
+          unitPrice: i.price,
+        })),
+        total: ticket.total,
+        header: template.header,
+        subheader: template.subheader,
+        footer: template.footer,
+        operatorName: ticket.operator,
+        note: ticket.context,
+        kind: ticket.kind,
+        showDate: template.showDate,
+        showOperator: template.showOperator,
+        showItemDetails: template.showItemDetails,
+      });
+    },
+    [printingApi, ctx.ticketTemplate],
   );
 
   const value: VentasPosStore = {
@@ -668,6 +770,9 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     removePrinter: ctx.removePrinter,
     setDefaultPrinter: ctx.setDefaultPrinter,
     togglePrinter: ctx.togglePrinter,
+    testPrinter,
+    printTestTicket,
+    printToPrinter,
     template: ctx.ticketTemplate,
     updateTemplate: ctx.updateTicketTemplate,
     salesTables: ctx.salesTables,

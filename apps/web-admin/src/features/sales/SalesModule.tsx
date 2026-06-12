@@ -55,7 +55,8 @@ function VentasPosShell() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2800);
+    const duration = toast.includes('desconect') ? 5000 : 2800;
+    const t = setTimeout(() => setToast(null), duration);
     return () => clearTimeout(t);
   }, [toast, setToast]);
 

@@ -3,7 +3,8 @@ import { getUnitLabel } from '@/app/components/store';
 import { previewNextProductCode, reassignProductCodes } from '@/features/inventory/product-codes';
 import { useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
-import { Plus, Search, Edit, Trash2, X, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Package, ChevronDown } from 'lucide-react';
+import { ExpandChevron } from '@/shared/components/ExpandChevron';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
 
@@ -174,7 +175,7 @@ export function ProductsPage() {
                   <span className={`text-sm ${total < 20 ? 'text-red-600' : 'text-foreground'}`} style={{ fontWeight: 600 }}>
                     {total} {getUnitLabel(product.unit, true)}
                   </span>
-                  {isExpanded ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+                  <ExpandChevron expanded={isExpanded} />
                 </div>
               </div>
               {isExpanded && (
@@ -256,7 +257,7 @@ export function ProductsPage() {
                           <span className="text-xs text-muted-foreground">{product.code}</span>
                         </div>
                         <div className="ml-1 text-muted-foreground">
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          <ExpandChevron expanded={isExpanded} />
                         </div>
                       </div>
                     </td>

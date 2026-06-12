@@ -70,11 +70,13 @@ export function TicketPreview({
       <div className="space-y-0.5">
         {ticket.items.map((i) => (
           <div key={i.productId}>
-            <div className="flex justify-between">
-              <span className="truncate pr-1">
+            <div className="flex justify-between items-baseline gap-1">
+              <span className="truncate pr-1 font-bold text-sm">
                 {i.qty}× {i.name}
               </span>
-              <span>${(i.qty * i.price).toLocaleString()}</span>
+              <span className="shrink-0 font-bold text-sm">
+                ${(i.qty * i.price).toLocaleString()}
+              </span>
             </div>
             {template.showItemDetails && (
               <div className="text-[10px] text-gray-500 pl-3">
