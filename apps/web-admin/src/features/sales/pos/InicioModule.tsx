@@ -52,9 +52,9 @@ function ChartTooltip({
   const tickets = payload[0]?.payload?.tickets ?? 0;
   return (
     <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg dark:border-gray-600 dark:bg-gray-800">
-      <p className="text-xs font-medium capitalize text-gray-500">{label}</p>
-      <p className="text-base font-semibold text-emerald-600">{formatMoney(ventas)}</p>
-      <p className="text-xs text-gray-400">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
+      <p className="text-xs font-medium capitalize text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatMoney(ventas)}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
     </div>
   );
 }
@@ -223,13 +223,13 @@ export function InicioModule() {
             <div className="mb-4 flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600" />
               <h4 className="text-gray-900 dark:text-gray-100">Empleados del día</h4>
-              <span className="ml-auto text-xs text-gray-400">
+              <span className="ml-auto text-xs text-muted-foreground">
                 {format(new Date(), "dd/MM/yyyy")}
               </span>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto">
               {metrics.employeesToday.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">Sin ventas hoy</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">Sin ventas hoy</p>
               ) : (
                 metrics.employeesToday.map((emp, idx) => (
                   <div
@@ -239,8 +239,8 @@ export function InicioModule() {
                     <div
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                         idx === 0
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-blue-100 text-blue-800"
+                          ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
+                          : "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300"
                       }`}
                     >
                       {initials(emp.name)}
@@ -262,7 +262,7 @@ export function InicioModule() {
                           }}
                         />
                       </div>
-                      <p className="mt-0.5 text-xs text-gray-500">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {emp.tickets} tickets · {emp.unitsSold} u.
                       </p>
                     </div>
@@ -279,7 +279,7 @@ export function InicioModule() {
               <h4 className="text-gray-900 dark:text-gray-100">Unidades por cocina (7 días)</h4>
             </div>
             {metrics.topProductsByKitchen.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">Sin datos</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Sin datos</p>
             ) : (
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -326,7 +326,7 @@ export function InicioModule() {
               </h4>
             </div>
             {metrics.topProductsByKitchen.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-400">Sin productos vendidos</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">Sin productos vendidos</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {metrics.topProductsByKitchen.map((kitchen) => (
@@ -342,12 +342,12 @@ export function InicioModule() {
                       <h5 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {kitchen.kitchen}
                       </h5>
-                      <span className="ml-auto text-xs text-gray-400">
+                      <span className="ml-auto text-xs text-muted-foreground">
                         {kitchen.totalUnits} u.
                       </span>
                     </div>
                     {kitchen.products.length === 0 ? (
-                      <p className="text-xs text-gray-400">Sin ventas</p>
+                      <p className="text-xs text-muted-foreground">Sin ventas</p>
                     ) : (
                       <ul className="space-y-2">
                         {kitchen.products.map((p, idx) => (

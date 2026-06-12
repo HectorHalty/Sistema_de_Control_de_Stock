@@ -23,20 +23,20 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#faf8f5] p-6">
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full border border-[rgba(0,0,0,0.06)]">
+        <div className="min-h-screen flex items-center justify-center bg-background p-6">
+          <div className="bg-card text-card-foreground rounded-xl shadow-lg p-8 max-w-lg w-full border border-border">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle size={24} className="text-red-600" />
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-950 rounded-full flex items-center justify-center">
+                <AlertTriangle size={24} className="text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <h2 className="text-[#3a3a3a]">Error en la aplicación</h2>
-                <p className="text-sm text-[#717182]">Algo salió mal al cargar el contenido.</p>
+                <h2 className="text-foreground">Error en la aplicación</h2>
+                <p className="text-sm text-muted-foreground">Algo salió mal al cargar el contenido.</p>
               </div>
             </div>
             {this.state.error && (
-              <div className="bg-red-50 rounded-lg p-4 mb-4 border border-red-200">
-                <p className="text-sm text-red-800 break-words">{this.state.error.message}</p>
+              <div className="bg-red-50 dark:bg-red-950/40 rounded-lg p-4 mb-4 border border-red-200 dark:border-red-900">
+                <p className="text-sm text-red-800 dark:text-red-300 break-words">{this.state.error.message}</p>
               </div>
             )}
             <button

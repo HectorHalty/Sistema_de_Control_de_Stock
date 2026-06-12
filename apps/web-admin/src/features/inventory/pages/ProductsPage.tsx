@@ -10,7 +10,7 @@ import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inven
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
 
 export function ProductsPage() {
-  const { products, setProducts, warehouses, categories, setCategories, getTotalStock, addAudit } = useAppContext();
+  const { products, setProducts, warehouses, categories, setCategories, getTotalStock, addAudit, addStockMovements } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showCatFilter, setShowCatFilter] = useState(false);
@@ -34,6 +34,25 @@ export function ProductsPage() {
 
   const handleSave = (product: Product) => {
     if (editingProduct) {
+      // Registrar ajustes manuales de stock por almacén para el libro de movimientos.
+      const movements = warehouses
+        .map(w => {
+          const before = editingProduct.stockByWarehouse.find(s => s.warehouseId === w.id)?.quantity ?? 0;
+          const after = product.stockByWarehouse.find(s => s.warehouseId === w.id)?.quantity ?? 0;
+          return { warehouseId: w.id, delta: after - before };
+        })
+        .filter(m => m.delta !== 0)
+        .map(m => ({
+          type: 'ajuste_manual' as const,
+          productId: product.id,
+          warehouseId: m.warehouseId,
+          quantity: m.delta,
+          reference: 'Edición de producto',
+          operatorId: 'Admin',
+          operatorName: 'Admin',
+        }));
+      if (movements.length > 0) addStockMovements(movements);
+
       setProducts(prev => reassignProductCodes(prev.map(p => (p.id === product.id ? product : p))));
       addAudit({ user: 'Admin', action: 'Edición Producto', element: product.name, previousValue: '-', newValue: '-' });
     } else {
@@ -279,7 +298,7 @@ export function ProductsPage() {
                             <div>
                               <p className="text-xs text-muted-foreground">Categoría</p>
                               <span className="inline-flex items-center gap-1.5 text-sm mt-0.5">
-                                <CatIcon size={14} className="text-[#3d7a3d]" />
+                                {(() => { const Icon = getCatIcon(product.category); return <Icon size={14} className="text-[#3d7a3d]" />; })()}
                                 {product.category}
                               </span>
                             </div>

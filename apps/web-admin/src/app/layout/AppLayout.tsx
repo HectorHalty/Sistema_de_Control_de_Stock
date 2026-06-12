@@ -21,6 +21,7 @@ import { useAppContext } from '@/app/providers/AppContext';
 import logoFull from '@/assets/baner-chacra.png';
 import logoIcon from '@/assets/logo-LCH.png';
 import { canAccessModule, getBottomNavModules, getInitials, getRoleLabel, getSidebarModules, shouldShowBottomNavigation, type ModuleId } from '@/features/platform/config/modules';
+import { NotificationsMenu } from '@/features/platform/components/NotificationsMenu';
 
 interface AppLayoutProps {
   onLogout: () => void;
@@ -228,7 +229,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
           <button
             onClick={onLogout}
-            className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-[1.05rem] text-red-700 transition-colors hover:bg-red-50"
+            className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-[1.05rem] text-red-700 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-950/40"
           >
             <LogOut size={24} />
             {!collapsed && <span>Cerrar Sesion</span>}
@@ -263,7 +264,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="text-right">
               <p className="text-sm text-foreground" style={{ fontWeight: 600 }}>{getRoleLabel(currentUser.role)}</p>
               <p className="text-xs text-muted-foreground">{currentUser.username}</p>
@@ -273,6 +274,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                 {initials}
               </div>
             </div>
+            <NotificationsMenu />
           </div>
         </header>
 

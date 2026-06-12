@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter, Share2 } from 'lucide-react';
 import type { Order, Product } from '@/app/components/store';
@@ -9,14 +9,15 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
-import { generateConsumptionBasedSuggestions, type SuggestionParams } from '@/features/kitchen/domain';
+import { generateMovementBasedSuggestions, type SuggestionParams } from '@/features/kitchen/domain';
+import { isOrderReceived, sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
 
 type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival';
-type StatusFilter = 'all' | 'Pendiente' | 'Confirmado';
+type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
 
 export function OrdersPage() {
   const ctx = useAppContext();
-  const { orders, setOrders, products, setProducts, addAudit, getTotalStock, warehouses, suppliers, consumptionLogs } = ctx;
+  const { orders, setOrders, products, setProducts, addAudit, addStockMovements, getTotalStock, warehouses, suppliers, stockMovements } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<OrderView>('list');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -38,12 +39,19 @@ export function OrdersPage() {
   }[]>([]);
   const [arrivalDefaultWarehouseId, setArrivalDefaultWarehouseId] = useState<string>('');
 
-  const filteredOrders = statusFilter === 'all'
-    ? orders
-    : orders.filter(o => o.status === statusFilter);
+  const filteredOrders = useMemo(() => {
+    const list = statusFilter === 'all'
+      ? orders
+      : orders.filter(o => o.status === statusFilter);
+    return sortOrdersByDateDesc(list);
+  }, [orders, statusFilter]);
 
   const pendienteCount = orders.filter(o => o.status === 'Pendiente').length;
-  const confirmadoCount = orders.filter(o => o.status === 'Confirmado').length;
+  const recibidoCount = orders.filter(o => o.status === 'Recibido').length;
+  const demandMovementsCount = useMemo(
+    () => stockMovements.filter(m => m.type === 'venta' || m.type === 'consumo').length,
+    [stockMovements],
+  );
 
   const startCreateOrder = () => {
     setDateType('regular');
@@ -55,8 +63,8 @@ export function OrdersPage() {
   // Sync status filter with URL (supports dashboard deep-links)
   useEffect(() => {
     const status = searchParams.get('status');
-    if (status === 'Pendiente' || status === 'Confirmado') {
-      setStatusFilter(status);
+    if (status === 'Pendiente' || status === 'Recibido' || status === 'Confirmado') {
+      setStatusFilter(status === 'Confirmado' ? 'Recibido' : status);
     } else if (status === 'all' || status === null) {
       setStatusFilter('all');
     }
@@ -83,9 +91,9 @@ export function OrdersPage() {
     };
 
     const supplierProductIds = selectedSupplier?.productIds;
-    const suggestions = generateConsumptionBasedSuggestions(
+    const suggestions = generateMovementBasedSuggestions(
       products,
-      consumptionLogs,
+      stockMovements,
       suggestionParams,
       supplierProductIds,
     );
@@ -359,9 +367,11 @@ export function OrdersPage() {
     if (!selectedOrder) return;
     if (arrivalHasErrors) return;
 
+    const receivedAtISO = new Date().toISOString();
     setOrders(prev => prev.map(o => o.id === selectedOrder.id ? {
       ...o,
-      status: 'Confirmado' as const,
+      status: 'Recibido' as const,
+      receivedAtISO,
       items: o.items.map((item, idx) => ({ ...item, quantityReceived: arrivalItems[idx]?.received || 0 }))
     } : o));
 
@@ -373,6 +383,25 @@ export function OrdersPage() {
         addMap.set(key, (addMap.get(key) || 0) + (a.quantity || 0));
       }
     }
+
+    addStockMovements(
+      Array.from(addMap.entries())
+        .map(([key, qty]) => {
+          const [productId, warehouseId] = key.split('__');
+          return { productId, warehouseId, qty };
+        })
+        .filter(a => a.warehouseId && a.qty > 0)
+        .map(a => ({
+          type: 'entrada' as const,
+          productId: a.productId,
+          warehouseId: a.warehouseId,
+          quantity: a.qty,
+          reference: selectedOrder.id,
+          operatorId: 'Admin',
+          operatorName: 'Admin',
+        })),
+      receivedAtISO,
+    );
 
     setProducts(prev => prev.map(p => {
       const additions = Array.from(addMap.entries())
@@ -406,7 +435,7 @@ export function OrdersPage() {
       action: 'Confirmación Arribo ' + selectedOrder.id,
       element: selectedOrder.id,
       previousValue: '-',
-      newValue: `Confirmado · ${auditWhere}`,
+      newValue: `Recibido · ${auditWhere}`,
     });
     setView('list');
     setSelectedOrder(null);
@@ -498,14 +527,14 @@ export function OrdersPage() {
   if (view === 'create-step1') {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-sm text-[#717182]">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <button onClick={() => setView('list')} className="hover:text-[#3d7a3d]">Pedidos</button>
           <ChevronRight size={14} />
-          <span className="text-[#3a3a3a]">Nuevo Pedido - Paso 1</span>
+          <span className="text-foreground">Nuevo Pedido - Paso 1</span>
         </div>
 
         <div className="bg-card rounded-xl border border-border p-6 shadow-sm max-w-xl mx-auto">
-          <h2 className="mb-6 text-[#3a3a3a]">Configurar Pedido</h2>
+          <h2 className="mb-6 text-foreground">Configurar Pedido</h2>
           <div className="space-y-5">
             <div>
               <label className="block text-sm mb-2">Proveedor</label>
@@ -536,17 +565,17 @@ export function OrdersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setDateType('regular')}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'regular' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-[rgba(0,0,0,0.08)]'}`}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'regular' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-border'}`}
                 >
                   <p className="text-sm" style={{ fontWeight: 500 }}>Regular</p>
-                  <p className="text-xs text-[#717182] mt-1">Semana normal de operacion</p>
+                  <p className="text-xs text-muted-foreground mt-1">Semana normal de operacion</p>
                 </button>
                 <button
                   onClick={() => setDateType('after')}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'after' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-[rgba(0,0,0,0.08)]'}`}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'after' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-border'}`}
                 >
                   <p className="text-sm" style={{ fontWeight: 500 }}>After / Especial</p>
-                  <p className="text-xs text-[#717182] mt-1">Evento especial (mayor demanda)</p>
+                  <p className="text-xs text-muted-foreground mt-1">Evento especial (mayor demanda)</p>
                 </button>
               </div>
             </div>
@@ -561,14 +590,14 @@ export function OrdersPage() {
                 <option value={3}>Ultimos 3 meses</option>
                 <option value={6}>Ultimos 6 meses</option>
               </select>
-              {consumptionLogs.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Sin registros de consumo. Las sugerencias usaran estimaciones minimas. Registra consumo primero.
+              {demandMovementsCount === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Sin historial de ventas/consumos todavía. Las sugerencias serán mínimas hasta que se registren ventas.
                 </p>
               )}
-              {consumptionLogs.length > 0 && (
+              {demandMovementsCount > 0 && (
                 <p className="text-xs text-[#3d7a3d] mt-1">
-                  Basado en {consumptionLogs.length} registro(s) de consumo historico.
+                  Basado en {demandMovementsCount} movimiento(s) de ventas y consumos.
                 </p>
               )}
             </div>
@@ -588,7 +617,7 @@ export function OrdersPage() {
               )}
             </div>
             <div className="flex gap-3 justify-end pt-2">
-              <button onClick={() => setView('list')} className="px-4 py-2.5 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Cancelar</button>
+              <button onClick={() => setView('list')} className="px-4 py-2.5 rounded-lg border border-border text-sm">Cancelar</button>
               <button onClick={calculateSuggestions} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
                 Calcular Sugerencias
               </button>
@@ -602,20 +631,20 @@ export function OrdersPage() {
   if (view === 'create-step2') {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-sm text-[#717182]">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <button onClick={() => setView('list')} className="hover:text-[#3d7a3d]">Pedidos</button>
           <ChevronRight size={14} />
-          <span className="text-[#3a3a3a]">Nuevo Pedido - Paso 2</span>
+          <span className="text-foreground">Nuevo Pedido - Paso 2</span>
         </div>
 
         <div className="bg-card rounded-xl border border-border shadow-sm">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div>
-              <h2 className="text-[#3a3a3a]">Productos Sugeridos</h2>
-              <p className="text-sm text-[#717182] mt-1">
+              <h2 className="text-foreground">Productos Sugeridos</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 Modo: {dateType === 'after' ? 'After / Especial' : 'Regular'} | Proveedor: {selectedSupplier?.name || provider || 'General'}
                 {calcDate ? ` | Fecha: ${new Date(calcDate + 'T12:00:00').toLocaleDateString('es-AR')}` : ''}
-                {consumptionLogs.length > 0 && !calcDate ? ` | Consumo historico: ${periodMonths} mes(es)` : ''}
+                {demandMovementsCount > 0 && !calcDate ? ` | Demanda histórica: ${periodMonths} mes(es)` : ''}
               </p>
             </div>
             <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-3 py-1 rounded-full" style={{ fontWeight: 500 }}>
@@ -623,7 +652,7 @@ export function OrdersPage() {
             </span>
           </div>
           {/* Mobile cards */}
-          <div className="block sm:hidden divide-y divide-[rgba(0,0,0,0.04)]">
+          <div className="block sm:hidden divide-y divide-border">
             {orderItems.map((item, idx) => {
               const prod = getProduct(item.productId);
               const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
@@ -642,7 +671,7 @@ export function OrdersPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
-                    <p className="text-xs text-[#717182]">Stock: {item.currentStock} {unitLabel}</p>
+                    <p className="text-xs text-muted-foreground">Stock: {item.currentStock} {unitLabel}</p>
                     {packSize && item.suggested !== item.avgUsage - item.currentStock && (
                       <p className="text-xs text-[#3d7a3d]">Pack x{packSize} → redondeado a {item.suggested}</p>
                     )}
@@ -667,12 +696,12 @@ export function OrdersPage() {
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full min-w-[600px]">
               <thead>
-                <tr className="bg-[#f5f3ef]">
-                  <th className="text-center px-4 py-3 text-xs text-[#717182] uppercase w-12">Incluir</th>
-                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Producto</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Consumo Prom. Diario</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Stock Actual</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Pedida</th>
+                <tr className="bg-muted">
+                  <th className="text-center px-4 py-3 text-xs text-muted-foreground uppercase w-12">Incluir</th>
+                  <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Producto</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Consumo Prom. Diario</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Stock Actual</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Cantidad Pedida</th>
                 </tr>
               </thead>
               <tbody>
@@ -698,7 +727,7 @@ export function OrdersPage() {
                         {getProductName(item.productId)}
                         {packSize && <span className="ml-1 text-xs text-[#3d7a3d]">(pack x{packSize})</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right text-[#717182]">{item.avgUsage} {unitLabel}</td>
+                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">{item.avgUsage} {unitLabel}</td>
                       <td className="px-4 py-3 text-sm text-right">{item.currentStock} {unitLabel}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end">
@@ -726,7 +755,7 @@ export function OrdersPage() {
             </table>
           </div>
           <div className="px-6 py-4 flex flex-col sm:flex-row gap-3 justify-between border-t border-border">
-            <button onClick={() => setView('create-step1')} className="px-4 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Volver</button>
+            <button onClick={() => setView('create-step1')} className="px-4 py-2 rounded-lg border border-border text-sm">Volver</button>
             <button onClick={confirmOrder} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f] flex items-center gap-2">
               <Check size={16} />
               Confirmar Pedido
@@ -744,15 +773,15 @@ export function OrdersPage() {
           <div className="w-16 h-16 bg-[#3d7a3d]/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check size={32} className="text-[#3d7a3d]" />
           </div>
-          <h2 className="text-[#3a3a3a] mb-2">Pedido Creado</h2>
-          <p className="text-sm text-[#717182] mb-6">{successMsg}</p>
+          <h2 className="text-foreground mb-2">Pedido Creado</h2>
+          <p className="text-sm text-muted-foreground mb-6">{successMsg}</p>
           <div className="flex gap-3 justify-center flex-wrap">
             <button onClick={() => setView('list')} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
               Ver Pedidos
             </button>
             <button
               onClick={() => lastCreatedOrder && generatePDF(lastCreatedOrder)}
-              className="px-6 py-2.5 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm flex items-center gap-2 hover:bg-muted transition-colors"
+              className="px-6 py-2.5 rounded-lg border border-border text-sm flex items-center gap-2 hover:bg-muted transition-colors"
             >
               <Download size={16} />
               Descargar PDF
@@ -773,16 +802,16 @@ export function OrdersPage() {
   if (view === 'confirm-arrival' && selectedOrder) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-sm text-[#717182]">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="hover:text-[#3d7a3d]">Pedidos</button>
           <ChevronRight size={14} />
-          <span className="text-[#3a3a3a]">Confirmar Arribo - {selectedOrder.id}</span>
+          <span className="text-foreground">Confirmar Arribo - {selectedOrder.id}</span>
         </div>
 
         <div className="bg-card rounded-xl border border-border shadow-sm">
           <div className="px-6 py-4 border-b border-border">
-            <h2 className="text-[#3a3a3a]">Confirmar Llegada</h2>
-            <p className="text-sm text-[#717182] mt-1">
+            <h2 className="text-foreground">Confirmar Llegada</h2>
+            <p className="text-sm text-muted-foreground mt-1">
               Pedido {selectedOrder.id} | Proveedor: {selectedOrder.provider} | Fecha: {selectedOrder.date}
             </p>
           </div>
@@ -817,7 +846,7 @@ export function OrdersPage() {
           </div>
 
           {/* Mobile cards */}
-          <div className="block sm:hidden divide-y divide-[rgba(0,0,0,0.04)]">
+          <div className="block sm:hidden divide-y divide-border">
             {arrivalItems.map((item, idx) => {
               const diff = item.received - item.ordered;
               const prod = getProduct(item.productId);
@@ -827,7 +856,7 @@ export function OrdersPage() {
                 <div key={item.productId} className="px-4 py-3">
                   <p className="text-sm mb-2" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-[#717182] flex-1">Pedido: {item.ordered} {unitLabel}</span>
+                    <span className="text-xs text-muted-foreground flex-1">Pedido: {item.ordered} {unitLabel}</span>
                     <input
                       type="number"
                       value={item.received}
@@ -837,7 +866,7 @@ export function OrdersPage() {
                       className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
                       min={0}
                     />
-                    <span className={`text-xs w-10 text-right ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-[#3d7a3d]' : 'text-[#717182]'}`}>
+                    <span className={`text-xs w-10 text-right ${diff < 0 ? 'text-red-600 dark:text-red-400' : diff > 0 ? 'text-[#3d7a3d]' : 'text-muted-foreground'}`}>
                       {diff > 0 ? '+' : ''}{diff}
                     </span>
                   </div>
@@ -864,7 +893,7 @@ export function OrdersPage() {
                         {item.allocations.length > 1 && (
                           <button
                             onClick={() => removeAllocationRow(idx, aIdx)}
-                            className="px-2 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-xs text-[#717182] hover:bg-muted"
+                            className="px-2 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted"
                             title="Quitar"
                           >
                             ✕
@@ -878,7 +907,7 @@ export function OrdersPage() {
                     >
                       + Agregar almacén
                     </button>
-                    {err && <p className="text-xs text-red-600">{err}</p>}
+                    {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
                   </div>
                 </div>
               );
@@ -888,12 +917,12 @@ export function OrdersPage() {
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full min-w-[550px]">
               <thead>
-                <tr className="bg-[#f5f3ef]">
-                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Producto</th>
-                  <th className="text-left px-4 py-3 text-xs text-[#717182] uppercase">Almacén</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Pedida</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Cantidad Recibida</th>
-                  <th className="text-right px-4 py-3 text-xs text-[#717182] uppercase">Diferencia</th>
+                <tr className="bg-muted">
+                  <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Producto</th>
+                  <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Almacén</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Cantidad Pedida</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Cantidad Recibida</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Diferencia</th>
                 </tr>
               </thead>
               <tbody>
@@ -928,7 +957,7 @@ export function OrdersPage() {
                               {item.allocations.length > 1 && (
                                 <button
                                   onClick={() => removeAllocationRow(idx, aIdx)}
-                                  className="px-2.5 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-xs text-[#717182] hover:bg-muted"
+                                  className="px-2.5 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted"
                                   title="Quitar"
                                 >
                                   ✕
@@ -942,10 +971,10 @@ export function OrdersPage() {
                           >
                             + Agregar almacén
                           </button>
-                          {err && <p className="text-xs text-red-600">{err}</p>}
+                          {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-right text-[#717182]">{item.ordered} {unitLabel}</td>
+                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">{item.ordered} {unitLabel}</td>
                       <td className="px-4 py-3 text-right">
                         <input
                           type="number"
@@ -957,7 +986,7 @@ export function OrdersPage() {
                           min={0}
                         />
                       </td>
-                      <td className={'px-4 py-3 text-sm text-right ' + (diff < 0 ? 'text-red-600' : diff > 0 ? 'text-[#3d7a3d]' : 'text-[#717182]')}>
+                      <td className={'px-4 py-3 text-sm text-right ' + (diff < 0 ? 'text-red-600 dark:text-red-400' : diff > 0 ? 'text-[#3d7a3d]' : 'text-muted-foreground')}>
                         {diff > 0 ? '+' : ''}{diff}
                       </td>
                     </tr>
@@ -967,12 +996,12 @@ export function OrdersPage() {
             </table>
           </div>
           <div className="px-6 py-4 flex gap-3 justify-end border-t border-border">
-            <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="px-4 py-2 rounded-lg border border-[rgba(0,0,0,0.1)] text-sm">Cancelar</button>
+            <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
             <button
               onClick={confirmArrival}
               disabled={arrivalHasErrors}
               className={`px-6 py-2.5 rounded-lg text-white text-sm flex items-center gap-2 ${
-                arrivalHasErrors ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#3d7a3d] hover:bg-[#2f5f2f]'
+                arrivalHasErrors ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#3d7a3d] hover:bg-[#2f5f2f]'
               }`}
               title={arrivalHasErrors ? 'Revisá la distribución por almacén (la suma debe coincidir con recibido).' : 'Confirmar llegada'}
             >
@@ -1013,17 +1042,17 @@ export function OrdersPage() {
         </button>
         <button
           onClick={() => setStatusFilterAndUrl('Pendiente')}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-white border-amber-500' : 'bg-card text-amber-700 border-amber-200 hover:bg-amber-50'}`}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Pendiente' ? 'bg-amber-500 text-white border-amber-500' : 'bg-card text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/40'}`}
         >
           <Clock size={14} />
           Pendientes ({pendienteCount})
         </button>
         <button
-          onClick={() => setStatusFilterAndUrl('Confirmado')}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Confirmado' ? 'bg-green-600 text-white border-green-600' : 'bg-card text-green-700 border-green-200 hover:bg-green-50'}`}
+          onClick={() => setStatusFilterAndUrl('Recibido')}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${statusFilter === 'Recibido' ? 'bg-green-600 text-white border-green-600' : 'bg-card text-green-700 dark:text-green-300 border-green-200 dark:border-green-900 hover:bg-green-50 dark:hover:bg-green-950/40'}`}
         >
           <Check size={14} />
-          Confirmados ({confirmadoCount})
+          Recibidos ({recibidoCount})
         </button>
       </div>
 
@@ -1037,12 +1066,12 @@ export function OrdersPage() {
                 <p className="text-xs text-muted-foreground mt-0.5">{order.provider}</p>
                 <p className="text-xs text-muted-foreground">{order.date} · {order.items.length} productos</p>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${order.status === 'Confirmado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${isOrderReceived(order.status) ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
                 }`} style={{ fontWeight: 500 }}>
                 {order.status}
               </span>
             </div>
-            <div className="flex items-center gap-2 pt-2 border-t border-[rgba(0,0,0,0.05)]">
+            <div className="flex items-center gap-2 pt-2 border-t border-border">
               <button
                 onClick={() => generatePDF(order)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors border border-border/60"
@@ -1088,7 +1117,7 @@ export function OrdersPage() {
                   <td className="px-4 py-3 text-sm text-muted-foreground">{order.date}</td>
                   <td className="px-4 py-3 text-sm">{order.provider}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2.5 py-1 rounded-full ${order.status === 'Confirmado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    <span className={`text-xs px-2.5 py-1 rounded-full ${isOrderReceived(order.status) ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
                       }`} style={{ fontWeight: 500 }}>
                       {order.status}
                     </span>
@@ -1119,7 +1148,7 @@ export function OrdersPage() {
           </table>
         </div>
         {filteredOrders.length === 0 && (
-          <div className="text-center py-12 text-[#717182]">No hay pedidos</div>
+          <div className="text-center py-12 text-muted-foreground">No hay pedidos</div>
         )}
       </div>
     </div>

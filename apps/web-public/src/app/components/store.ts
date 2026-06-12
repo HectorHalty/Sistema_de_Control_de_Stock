@@ -53,7 +53,7 @@ export interface Order {
   id: string;
   date: string;
   provider: string;
-  status: 'Pendiente' | 'Confirmado';
+  status: 'Pendiente' | 'Recibido';
   items: { productId: string; quantityOrdered: number; quantityReceived?: number }[];
 }
 

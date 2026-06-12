@@ -197,7 +197,7 @@ export function FutbolModule() {
 
       {/* API availability indicator */}
       {mediaApi.apiAvailable === false && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 flex items-center gap-2">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
           <WifiOff size={14} />
           <span>Modo offline — multimedia se guarda localmente.</span>
         </div>
@@ -394,7 +394,7 @@ export function FutbolModule() {
             <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4">
               <h4 className="text-foreground" style={{ fontWeight: 600 }}>{editingMedia ? 'Editar Item' : 'Nuevo Item Multimedia'}</h4>
               {mediaErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 space-y-1">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300 space-y-1">
                   {mediaErrors.map((err, i) => <p key={i}>⚠ {err}</p>)}
                 </div>
               )}
@@ -438,8 +438,8 @@ export function FutbolModule() {
                     <div className="flex flex-col items-center gap-1"><Video size={24} className="text-muted-foreground" /><span className="text-[10px] text-muted-foreground">Video</span></div>
                   )}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
-                    <button onClick={() => openMediaForm(item)} className="p-1.5 bg-white rounded-full text-blue-600"><Edit size={12} /></button>
-                    <button onClick={() => deleteMedia(item.id)} className="p-1.5 bg-white rounded-full text-red-600"><Trash2 size={12} /></button>
+                    <button onClick={() => openMediaForm(item)} className="p-1.5 bg-white dark:bg-gray-800 rounded-full text-blue-600 dark:text-blue-400"><Edit size={12} /></button>
+                    <button onClick={() => deleteMedia(item.id)} className="p-1.5 bg-white dark:bg-gray-800 rounded-full text-red-600 dark:text-red-400"><Trash2 size={12} /></button>
                   </div>
                 </div>
                 <div className="p-2">

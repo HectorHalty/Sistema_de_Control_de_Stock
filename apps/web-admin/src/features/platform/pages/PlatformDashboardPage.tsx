@@ -29,11 +29,11 @@ export function PlatformDashboardPage() {
               <h3 className="text-foreground">Alertas de Stock Bajo</h3>
             </header>
             {lowStockProducts.length === 0 ? (
-              <p className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">Sin alertas criticas. Inventario en rango saludable.</p>
+              <p className="rounded-xl bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm text-green-700 dark:text-green-300">Sin alertas criticas. Inventario en rango saludable.</p>
             ) : (
               <div className="space-y-2">
                 {lowStockProducts.map(product => (
-                  <div key={product.id} className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                  <div key={product.id} className="flex items-center justify-between rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm">
                     <span className="text-foreground">{product.name}</span>
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">{getTotalStock(product)} uds</span>
                   </div>
@@ -49,7 +49,7 @@ export function PlatformDashboardPage() {
               <BarChart3 size={18} className="text-blue-700" />
               <h3 className="text-foreground">Ventas Fisicas Recientes</h3>
             </header>
-            <div className="flex h-36 items-end gap-2 rounded-xl bg-slate-50 p-3">
+            <div className="flex h-36 items-end gap-2 rounded-xl bg-slate-50 dark:bg-muted p-3">
               {[38, 52, 43, 61, 58, 72, 64].map((value, index) => (
                 <div key={value + index} className="flex-1 rounded-t-md bg-blue-500/80" style={{ height: `${value}%` }} />
               ))}
@@ -81,7 +81,7 @@ export function PlatformDashboardPage() {
             <ShoppingCart size={18} className="text-[#3d7a3d]" />
             <h3 className="text-foreground">Stock y Compras</h3>
           </header>
-          <p className="rounded-xl bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#2f5f2f]">
+          <p className="rounded-xl bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#2f5f2f] dark:text-[#8bc48b]">
             {pendingOrders > 0
               ? `Hay ${pendingOrders} pedido(s) pendiente(s) en el modulo de stock.`
               : 'No hay pedidos pendientes en stock.'}

@@ -13,6 +13,10 @@ export type {
   EmployeeConsumptionEntry,
   AuditEntry,
   AuditModule,
+  StockMovement,
+  StockMovementType,
+  StockCountEntry,
+  StockCountSession,
 } from '@/features/inventory/types';
 
 export {

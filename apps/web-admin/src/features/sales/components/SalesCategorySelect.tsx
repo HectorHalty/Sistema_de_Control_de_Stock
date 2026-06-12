@@ -61,11 +61,11 @@ export function SalesCategorySelect({
 
   return (
     <div>
-      <label className="text-sm text-gray-600 mb-1 block">Categoría</label>
+      <label className="text-sm text-muted-foreground mb-1 block">Categoría</label>
       <select
         value={showNewForm ? NEW_CATEGORY_VALUE : value}
         onChange={(e) => handleSelectChange(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
       >
         {categories.map((category) => (
           <option key={category} value={category}>
@@ -76,8 +76,8 @@ export function SalesCategorySelect({
       </select>
 
       {showNewForm && (
-        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+        <div className="mt-2 rounded-lg border border-border bg-muted p-3 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Plus className="h-4 w-4 text-emerald-600" />
             Nueva categoría
           </div>
@@ -93,7 +93,7 @@ export function SalesCategorySelect({
                 setError('');
               }}
               placeholder="Nombre de la categoría..."
-              className="min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg bg-white"
+              className="min-w-0 flex-1 px-3 py-2 border border-border rounded-lg bg-input-background"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -103,12 +103,12 @@ export function SalesCategorySelect({
               }}
             />
           </div>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 justify-end">
             <button
               type="button"
               onClick={resetNewForm}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent rounded-lg"
             >
               Cancelar
             </button>

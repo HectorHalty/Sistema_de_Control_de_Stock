@@ -30,6 +30,15 @@ async function isApiReachable(): Promise<boolean> {
   }
 }
 
+/**
+ * The admin panel works primarily on localStorage and does not hold an API JWT.
+ * When the API rejects a request for auth reasons (401/403), we treat it as
+ * "API unavailable" so the caller falls back to the local flow instead of failing.
+ */
+function isAuthError(e: unknown): boolean {
+  return e instanceof ApiError && (e.status === 401 || e.status === 403);
+}
+
 // ==================== Sales Adapter ====================
 
 export function useSalesApiAdapter() {
@@ -52,6 +61,10 @@ export function useSalesApiAdapter() {
       const result = await salesApi.checkout(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
+      if (isAuthError(e)) {
+        // La API requiere autenticación que el panel no tiene: usar modo local.
+        return { ok: false, apiUnavailable: true } as const;
+      }
       const msg = e instanceof ApiError ? e.message : 'Checkout failed';
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
@@ -70,6 +83,9 @@ export function useSalesApiAdapter() {
       const result = await salesApi.returnSale(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
+      if (isAuthError(e)) {
+        return { ok: false, apiUnavailable: true } as const;
+      }
       const msg = e instanceof ApiError ? e.message : 'Return failed';
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
@@ -88,6 +104,9 @@ export function useSalesApiAdapter() {
       const result = await salesApi.tickets.void(ticketId, operatorId, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
+      if (isAuthError(e)) {
+        return { ok: false, apiUnavailable: true } as const;
+      }
       const msg = e instanceof ApiError ? e.message : 'Void failed';
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;

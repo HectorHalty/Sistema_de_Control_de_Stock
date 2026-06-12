@@ -1,4 +1,5 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import {
@@ -9,7 +10,7 @@ import {
   initialSuppliers,
   initialWarehouses,
 } from './seeds';
-import type { AuditEntry, AuditModule, Category, ConsumptionLog, EmployeeConsumptionEntry, Order, Product, Supplier, Warehouse } from './types';
+import type { AuditEntry, AuditModule, Category, ConsumptionLog, EmployeeConsumptionEntry, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -36,10 +37,34 @@ export function useInventoryState() {
     [],
   );
   const [suppliers, setSuppliers] = useLocalStorage<Supplier[]>(storageKeys.inventory.suppliers, initialSuppliers);
+  const [stockMovements, setStockMovements] = useLocalStorage<StockMovement[]>(storageKeys.inventory.movements, []);
+  const [stockCountSessions, setStockCountSessions] = useLocalStorage<StockCountSession[]>(storageKeys.inventory.countSessions, []);
+
+  useEffect(() => {
+    setOrders(prev => {
+      const migrated = migrateOrderStatuses(prev);
+      return migrated.some((o, i) => o.status !== prev[i].status) ? migrated : prev;
+    });
+  }, [setOrders]);
 
   const addStockAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
     appendAudit(setAuditLog, 'stock', entry);
   }, [setAuditLog]);
+
+  const addStockMovements = useCallback(
+    (entries: Omit<StockMovement, 'id' | 'createdAtISO'>[], createdAtISO?: string) => {
+      const filtered = entries.filter(e => e.quantity !== 0);
+      if (filtered.length === 0) return;
+      const ts = createdAtISO ?? new Date().toISOString();
+      const movements: StockMovement[] = filtered.map((e, i) => ({
+        ...e,
+        id: `mov-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+        createdAtISO: ts,
+      }));
+      setStockMovements(prev => [...movements, ...prev]);
+    },
+    [setStockMovements],
+  );
 
   const getTotalStock = useCallback((product: Product) => {
     return product.stockByWarehouse.reduce((sum, s) => sum + s.quantity, 0);
@@ -72,7 +97,12 @@ export function useInventoryState() {
     setEmployeeConsumptionLogs,
     suppliers,
     setSuppliers,
+    stockMovements,
+    setStockMovements,
+    stockCountSessions,
+    setStockCountSessions,
     addStockAudit,
+    addStockMovements,
     getTotalStock,
     getWarehouseTotalProducts,
   };

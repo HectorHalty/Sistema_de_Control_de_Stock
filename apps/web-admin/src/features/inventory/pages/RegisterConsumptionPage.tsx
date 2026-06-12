@@ -23,9 +23,11 @@ export function RegisterConsumptionPage() {
     setEmployeeConsumptionLogs,
     getTotalStock,
     addAudit,
+    addStockMovements,
   } = useAppContext();
 
   const [search, setSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [warehouseId, setWarehouseId] = useState('');
@@ -44,6 +46,17 @@ export function RegisterConsumptionPage() {
         .sort((a, b) => a.name.localeCompare(b.name, 'es')),
     [products, search, getTotalStock],
   );
+
+  const filteredHistory = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return employeeConsumptionLogs;
+    return employeeConsumptionLogs.filter(
+      e =>
+        e.productName.toLowerCase().includes(q) ||
+        (e.productCode ?? '').toLowerCase().includes(q) ||
+        (e.warehouseName ?? '').toLowerCase().includes(q),
+    );
+  }, [employeeConsumptionLogs, historySearch]);
 
   const selectedProduct = selectedProductId
     ? products.find(p => p.id === selectedProductId) ?? null
@@ -117,6 +130,20 @@ export function RegisterConsumptionPage() {
     );
 
     setEmployeeConsumptionLogs(prev => [entry, ...prev]);
+    addStockMovements(
+      [
+        {
+          type: 'consumo',
+          productId: selectedProduct.id,
+          warehouseId,
+          quantity: -qty,
+          reference: entry.id,
+          operatorId: currentUser.username,
+          operatorName: currentUser.username,
+        },
+      ],
+      entry.createdAtISO,
+    );
     addAudit({
       user: currentUser.username,
       action: 'Registro de consumo',
@@ -296,14 +323,27 @@ export function RegisterConsumptionPage() {
       )}
 
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/50">
-          <History size={18} className="text-[#3d7a3d]" />
-          <p className="text-sm" style={{ fontWeight: 600 }}>
-            Historial de consumos ({employeeConsumptionLogs.length})
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 border-b border-border bg-muted/50">
+          <div className="flex items-center gap-2">
+            <History size={18} className="text-[#3d7a3d]" />
+            <p className="text-sm" style={{ fontWeight: 600 }}>
+              Historial de consumos ({filteredHistory.length})
+            </p>
+          </div>
+          <div className="relative sm:ml-auto w-full sm:w-64">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              placeholder="Buscar en historial..."
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
+            />
+          </div>
         </div>
         {employeeConsumptionLogs.length === 0 ? (
           <p className="text-center py-10 text-sm text-muted-foreground">Aún no hay consumos registrados</p>
+        ) : filteredHistory.length === 0 ? (
+          <p className="text-center py-10 text-sm text-muted-foreground">No se encontraron consumos para "{historySearch}"</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px]">
@@ -317,7 +357,7 @@ export function RegisterConsumptionPage() {
                 </tr>
               </thead>
               <tbody>
-                {employeeConsumptionLogs.slice(0, 50).map(entry => (
+                {filteredHistory.slice(0, 50).map(entry => (
                   <tr key={entry.id} className="border-t border-border/50 hover:bg-muted/30">
                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{entry.date}</td>
                     <td className="px-4 py-2.5 text-sm">

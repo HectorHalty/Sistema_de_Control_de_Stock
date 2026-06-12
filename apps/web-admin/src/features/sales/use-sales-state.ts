@@ -49,6 +49,14 @@ export function useSalesState() {
     storageKeys.sales.ticketTemplate,
     DEFAULT_TICKET_TEMPLATE,
   );
+  const [validateStockOnSale, setValidateStockOnSale] = useLocalStorage<boolean>(
+    storageKeys.sales.validateStockOnSale,
+    true,
+  );
+  const [raceConditionProtection, setRaceConditionProtection] = useLocalStorage<boolean>(
+    storageKeys.sales.raceConditionProtection,
+    true,
+  );
 
   const addSalesAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
     appendAudit(setSalesAuditLog, 'ventas', entry);
@@ -146,6 +154,10 @@ export function useSalesState() {
     ticketTemplate,
     setTicketTemplate,
     updateTicketTemplate,
+    validateStockOnSale,
+    setValidateStockOnSale,
+    raceConditionProtection,
+    setRaceConditionProtection,
   };
 }
 

@@ -118,26 +118,26 @@ export function EditableOrderModal({
 
   const statusClass =
     ticket.status === "anulado"
-      ? "bg-red-100 text-red-700"
+      ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
       : ticket.kind === "devolucion"
-        ? "bg-amber-100 text-amber-800"
-        : "bg-emerald-100 text-emerald-800";
+        ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300"
+        : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4">
+      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-card shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <ShoppingBag className="h-5 w-5 shrink-0 text-emerald-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
+              <ShoppingBag className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-lg font-semibold text-foreground">
                 Pedido #{ticket.number}
               </h2>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass}`}>
                 {statusLabel}
               </span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {ticket.createdAt} · {ticket.operator} · {ticket.source}
               {ticket.context ? ` · ${ticket.context}` : ""}
             </p>
@@ -145,7 +145,7 @@ export function EditableOrderModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
             aria-label="Cerrar"
           >
             <X className="h-5 w-5" />
@@ -153,12 +153,12 @@ export function EditableOrderModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Productos
           </p>
 
           {items.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               {editable ? "Agregá productos al pedido" : "Sin ítems"}
             </p>
           ) : (
@@ -169,25 +169,25 @@ export function EditableOrderModal({
                 return (
                   <li
                     key={item.productId}
-                    className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3"
+                    className="flex items-center gap-3 rounded-xl border border-border bg-muted p-3"
                   >
                     <span className="w-8 shrink-0 text-center text-xl">{emoji}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-gray-900">{item.name}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="truncate font-medium text-foreground">{item.name}</p>
+                      <p className="text-sm text-muted-foreground">
                         ${item.price.toLocaleString("es-AR")} c/u
                       </p>
                     </div>
                     {editable ? (
                       <div className="flex shrink-0 flex-col items-end gap-1">
-                        <p className="text-sm font-semibold text-emerald-600">
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                           ${(item.price * item.qty).toLocaleString("es-AR")}
                         </p>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={() => updateQty(item.productId, -1)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card"
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
@@ -197,14 +197,14 @@ export function EditableOrderModal({
                           <button
                             type="button"
                             onClick={() => updateQty(item.productId, 1)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card"
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => removeItem(item.productId)}
-                            className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600"
+                            className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -212,8 +212,8 @@ export function EditableOrderModal({
                       </div>
                     ) : (
                       <div className="shrink-0 text-right">
-                        <p className="font-semibold text-gray-900">×{item.qty}</p>
-                        <p className="text-sm text-emerald-600">
+                        <p className="font-semibold text-foreground">×{item.qty}</p>
+                        <p className="text-sm text-emerald-600 dark:text-emerald-400">
                           ${(item.price * item.qty).toLocaleString("es-AR")}
                         </p>
                       </div>
@@ -225,12 +225,12 @@ export function EditableOrderModal({
           )}
 
           {editable && (
-            <div className="mt-3 border-t border-gray-100 pt-3">
+            <div className="mt-3 border-t border-border pt-3">
               {!showAddProduct ? (
                 <button
                   type="button"
                   onClick={() => setShowAddProduct(true)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 py-2 text-sm text-gray-500 transition hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-emerald-700"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-sm text-muted-foreground transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-300"
                 >
                   <Plus className="h-4 w-4" />
                   Agregar producto
@@ -238,13 +238,13 @@ export function EditableOrderModal({
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-gray-500">
+                    <span className="text-xs font-medium text-muted-foreground">
                       Agregar al pedido
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowAddProduct(false)}
-                      className="text-xs text-gray-400 underline hover:text-gray-600"
+                      className="text-xs text-muted-foreground underline hover:text-foreground"
                     >
                       Ocultar
                     </button>
@@ -260,12 +260,12 @@ export function EditableOrderModal({
           )}
         </div>
 
-        <div className="border-t border-gray-200 bg-gray-50 px-4 py-4">
+        <div className="border-t border-border bg-muted px-4 py-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-gray-600">Total</span>
+            <span className="text-muted-foreground">Total</span>
             <span
               className={`text-xl font-bold ${
-                ticket.kind === "devolucion" ? "text-red-600" : "text-emerald-600"
+                ticket.kind === "devolucion" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
               }`}
             >
               {ticket.kind === "devolucion" ? "-" : ""}$
@@ -278,7 +278,7 @@ export function EditableOrderModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                className="flex-1 rounded-xl border border-border bg-card py-3 text-sm font-medium text-foreground transition hover:bg-accent"
               >
                 Cerrar
               </button>
@@ -287,7 +287,7 @@ export function EditableOrderModal({
                   type="button"
                   onClick={handleVoid}
                   disabled={voiding}
-                  className="flex-1 rounded-xl border border-red-200 bg-white py-3 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-red-200 dark:border-red-900 bg-card py-3 text-sm font-medium text-red-700 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
                 >
                   <span className="inline-flex items-center justify-center gap-1.5">
                     <Ban className="h-4 w-4" />
@@ -301,7 +301,7 @@ export function EditableOrderModal({
                 type="button"
                 onClick={handleSave}
                 disabled={saving || items.length === 0}
-                className="ml-auto shrink-0 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:bg-gray-300"
+                className="ml-auto shrink-0 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-600"
               >
                 <span className="inline-flex items-center justify-center gap-2">
                   <Save className="h-4 w-4" />

@@ -9,10 +9,10 @@ import { Product, Station, stations } from "./mockData";
 import { useStore } from "./VentasPosContext";
 
 const stationStyle: Record<Station, string> = {
-  Parrilla: "bg-orange-100 text-orange-700",
-  Barra: "bg-sky-100 text-sky-700",
-  Cervecería: "bg-amber-100 text-amber-700",
-  Cocina: "bg-emerald-100 text-emerald-700",
+  Parrilla: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300",
+  Barra: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300",
+  Cervecería: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
+  Cocina: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
 };
 
 export function ProductsModule() {
@@ -56,13 +56,13 @@ export function ProductsModule() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex bg-gray-100 rounded-lg p-1 mb-4 w-fit overflow-x-auto max-w-full">
+      <div className="flex bg-muted rounded-lg p-1 mb-4 w-fit overflow-x-auto max-w-full">
         {(["productos", "cocinas"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-1.5 rounded text-sm whitespace-nowrap capitalize ${
-              tab === t ? "bg-white shadow" : "text-gray-600"
+              tab === t ? "bg-card shadow" : "text-muted-foreground"
             }`}
           >
             {t}
@@ -75,7 +75,7 @@ export function ProductsModule() {
       {tab === "productos" && (
       <>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-gray-900">Productos ({products.length})</h3>
+        <h3 className="text-foreground">Productos ({products.length})</h3>
         <button
           onClick={() => setCreating(true)}
           className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
@@ -91,31 +91,31 @@ export function ProductsModule() {
             <section key={cat}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xl">{getSalesCategoryEmoji(cat, salesCategoryEmojis)}</span>
-                <h4 className="text-gray-900">{cat}</h4>
-                <span className="text-xs text-gray-500">({list.length})</span>
+                <h4 className="text-foreground">{cat}</h4>
+                <span className="text-xs text-muted-foreground">({list.length})</span>
               </div>
               {list.length === 0 ? (
-                <div className="text-sm text-gray-400 italic px-2">Sin productos</div>
+                <div className="text-sm text-muted-foreground italic px-2">Sin productos</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                   {list.map((p) => (
                     <div
                       key={p.id}
-                      className="bg-white rounded-xl border border-gray-200 p-3 flex items-center gap-3"
+                      className="bg-card rounded-xl border border-border p-3 flex items-center gap-3"
                     >
                       <span className="text-3xl">{p.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-gray-900 truncate">{p.name}</div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                        <div className="text-foreground truncate">{p.name}</div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
                           <span className={`px-1.5 py-0.5 rounded ${stationStyle[p.station]}`}>
                             {p.station}
                           </span>
-                          <span className="text-emerald-600">${p.price.toLocaleString()}</span>
-                          <span className={p.stock < 10 ? "text-red-500" : "text-gray-500"}>
+                          <span className="text-emerald-600 dark:text-emerald-400">${p.price.toLocaleString()}</span>
+                          <span className={p.stock < 10 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}>
                             · disp. {p.stock}
                           </span>
                           {p.recipe && p.recipe.length > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-emerald-700">
+                            <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300">
                               <ChefHat className="w-3 h-3" /> {p.recipe.length}
                             </span>
                           )}
@@ -123,15 +123,15 @@ export function ProductsModule() {
                       </div>
                       <button
                         onClick={() => setEditing(p)}
-                        className="p-2 hover:bg-gray-100 rounded"
+                        className="p-2 hover:bg-accent rounded"
                       >
-                        <Edit2 className="w-4 h-4 text-gray-600" />
+                        <Edit2 className="w-4 h-4 text-muted-foreground" />
                       </button>
                       <button
                         onClick={() => deleteProduct(p.id)}
-                        className="p-2 hover:bg-red-50 rounded"
+                        className="p-2 hover:bg-red-50 dark:hover:bg-red-950/40 rounded"
                       >
-                        <Trash2 className="w-4 h-4 text-red-500" />
+                        <Trash2 className="w-4 h-4 text-red-500 dark:text-red-400" />
                       </button>
                     </div>
                   ))}
@@ -166,20 +166,20 @@ function StationsTab({ products }: { products: Product[] }) {
       {stations.map((s) => {
         const list = products.filter((p) => p.station === s);
         return (
-          <div key={s} className="bg-white rounded-xl border border-gray-200 p-4">
+          <div key={s} className="bg-card rounded-xl border border-border p-4">
             <div className="flex items-center justify-between mb-3">
               <span className={`px-2 py-0.5 rounded ${stationStyle[s]}`}>{s}</span>
-              <span className="text-xs text-gray-500">{list.length} productos</span>
+              <span className="text-xs text-muted-foreground">{list.length} productos</span>
             </div>
             {list.length === 0 ? (
-              <div className="text-sm text-gray-400 italic">Sin productos asignados</div>
+              <div className="text-sm text-muted-foreground italic">Sin productos asignados</div>
             ) : (
               <ul className="space-y-1">
                 {list.map((p) => (
-                  <li key={p.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <li key={p.id} className="flex items-center gap-2 text-sm text-foreground">
                     <span>{p.emoji}</span>
                     <span className="flex-1 truncate">{p.name}</span>
-                    <span className="text-xs text-gray-400">{p.category}</span>
+                    <span className="text-xs text-muted-foreground">{p.category}</span>
                   </li>
                 ))}
               </ul>
@@ -217,8 +217,8 @@ function ProductEditor({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-5 border-b border-gray-200">
+      <div className="bg-card rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-5 border-b border-border">
           <h3>{isNew ? "Nuevo producto" : `Editar ${product.name}`}</h3>
           <button onClick={onClose}>
             <X className="w-5 h-5" />
@@ -228,7 +228,7 @@ function ProductEditor({
         <div className="overflow-y-auto p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-sm text-gray-600 mb-1 block">Nombre</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Nombre</label>
               <div className="flex gap-2">
                 <ProductEmojiPicker
                   value={draft.emoji}
@@ -237,29 +237,29 @@ function ProductEditor({
                 <input
                   value={draft.name}
                   onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  className="min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg"
+                  className="min-w-0 flex-1 px-3 py-2 border border-border rounded-lg bg-input-background"
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">Precio</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Precio</label>
               <input
                 type="number"
                 value={draft.price}
                 onChange={(e) => setDraft({ ...draft, price: +e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">Disponible</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Disponible</label>
               <div
-                className={`w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 ${
-                  calculatedStock < 10 ? "text-red-600" : "text-gray-900"
+                className={`w-full px-3 py-2 border border-border rounded-lg bg-muted ${
+                  calculatedStock < 10 ? "text-red-600 dark:text-red-400" : "text-foreground"
                 }`}
               >
                 {(draft.recipe?.length ?? 0) > 0 ? calculatedStock : "—"}
               </div>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Calculado según inventario y receta
               </p>
             </div>
@@ -277,11 +277,11 @@ function ProductEditor({
               onAddCategory={addSalesCategory}
             />
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">Cocina / Sector</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Cocina / Sector</label>
               <select
                 value={draft.station}
                 onChange={(e) => setDraft({ ...draft, station: e.target.value as Station })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
               >
                 {stations.map((s) => (
                   <option key={s} value={s}>
@@ -292,12 +292,12 @@ function ProductEditor({
             </div>
           </div>
 
-          <div className="border-t border-gray-200 pt-4">
+          <div className="border-t border-border pt-4">
             <div className="flex items-center gap-2 mb-3">
-              <ChefHat className="w-5 h-5 text-emerald-600" />
-              <h4 className="text-gray-900">Receta — descuento de stock</h4>
+              <ChefHat className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <h4 className="text-foreground">Receta — descuento de stock</h4>
             </div>
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Productos del inventario que se descontarán al vender 1 unidad de este producto.
             </p>
 
@@ -308,8 +308,8 @@ function ProductEditor({
           </div>
         </div>
 
-        <div className="border-t border-gray-200 p-4 flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700">
+        <div className="border-t border-border p-4 flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-foreground">
             Cancelar
           </button>
           <button

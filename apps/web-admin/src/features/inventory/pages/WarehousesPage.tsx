@@ -3,17 +3,9 @@ import { useAppContext } from '@/app/providers/AppContext';
 import { getUnitLabel } from '@/app/components/store';
 import type { Product } from '@/app/components/store';
 import { getCategoryIcon } from '@/features/inventory/lib/category-icons';
-import { Plus, Edit, Trash2, X, Warehouse, Package, ChevronDown, ChevronUp, Beer, Coffee, UtensilsCrossed, Refrigerator, Archive, ShoppingCart, Flame, Sandwich, Box, Star, Zap, Droplets, Search } from 'lucide-react';
+import { WAREHOUSE_ICONS, getWarehouseIcon } from '@/features/inventory/lib/warehouse-icons';
+import { Plus, Edit, Trash2, X, Package, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import type { Warehouse as WarehouseType, Category } from '@/app/components/store';
-
-const WAREHOUSE_ICONS: Record<string, React.ComponentType<any>> = {
-  Warehouse, Package, Beer, Coffee, UtensilsCrossed, Refrigerator,
-  Archive, ShoppingCart, Flame, Sandwich, Box, Star, Zap, Droplets,
-};
-
-function getWarehouseIcon(iconName?: string): React.ComponentType<any> {
-  return (iconName && WAREHOUSE_ICONS[iconName]) ? WAREHOUSE_ICONS[iconName] : Warehouse;
-}
 
 export function WarehousesPage() {
   const { warehouses, setWarehouses, products, categories, getWarehouseTotalProducts, addAudit } = useAppContext();

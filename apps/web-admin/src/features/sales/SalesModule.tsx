@@ -62,7 +62,7 @@ function VentasPosShell() {
   return (
     <div className="h-full min-h-[calc(100vh-12rem)]">
       {toast && (
-        <div className="fixed top-20 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm text-white shadow-lg">
+        <div className="fixed top-20 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-xl bg-popover px-4 py-2.5 text-sm text-popover-foreground shadow-lg">
           {toast}
         </div>
       )}

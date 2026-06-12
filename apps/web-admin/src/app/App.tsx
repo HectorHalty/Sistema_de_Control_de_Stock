@@ -10,7 +10,7 @@ const AuthenticatedApp = lazy(() => import('@/app/AuthenticatedApp'));
 
 function AppLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#faf8f5] text-[#3a3a3a]">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
       Cargando…
     </div>
   );

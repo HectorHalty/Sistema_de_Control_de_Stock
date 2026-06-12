@@ -426,7 +426,7 @@ export function OnlineModule() {
 
       {/* API availability indicator */}
       {(mediaApi.apiAvailable === false || sponsorsApi.apiAvailable === false || catalogApi.apiAvailable === false) && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 flex items-center gap-2">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
           <WifiOff size={14} />
           <span>Modo offline — los cambios se guardan localmente.</span>
         </div>
@@ -622,7 +622,7 @@ export function OnlineModule() {
                         {product.active ? <Eye size={14} /> : <EyeOff size={14} />}
                       </button>
                       <button onClick={() => openProductForm(product)} className="p-1.5 rounded text-blue-600 hover:bg-blue-50"><Edit size={14} /></button>
-                      <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
+                      <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </article>
@@ -647,7 +647,7 @@ export function OnlineModule() {
             <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4">
               <h4 className="text-foreground" style={{ fontWeight: 600 }}>{editingSponsor ? 'Editar Sponsor' : 'Nuevo Sponsor'}</h4>
               {sponsorErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 space-y-1">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300 space-y-1">
                   {sponsorErrors.map((err, i) => <p key={i}>⚠ {err}</p>)}
                 </div>
               )}
@@ -704,11 +704,11 @@ export function OnlineModule() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setSponsors(prev => prev.map(s => s.id === sponsor.id ? { ...s, active: !s.active } : s))} className={`px-2 py-1 rounded text-xs ${sponsor.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    <button onClick={() => setSponsors(prev => prev.map(s => s.id === sponsor.id ? { ...s, active: !s.active } : s))} className={`px-2 py-1 rounded text-xs ${sponsor.active ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                       {sponsor.active ? 'Activo' : 'Inactivo'}
                     </button>
                     <button onClick={() => openSponsorForm(sponsor)} className="p-1.5 rounded text-blue-600 hover:bg-blue-50"><Edit size={14} /></button>
-                    <button onClick={() => deleteSponsor(sponsor.id)} className="p-1.5 rounded text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
+                    <button onClick={() => deleteSponsor(sponsor.id)} className="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"><Trash2 size={14} /></button>
                   </div>
                 </div>
               </article>
@@ -745,7 +745,7 @@ export function OnlineModule() {
             <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4">
               <h4 className="text-foreground" style={{ fontWeight: 600 }}>{editingMedia ? 'Editar Item' : 'Nuevo Item Multimedia'}</h4>
               {mediaErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 space-y-1">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg px-3 py-2 text-xs text-red-700 dark:text-red-300 space-y-1">
                   {mediaErrors.map((err, i) => <p key={i}>⚠ {err}</p>)}
                 </div>
               )}
@@ -796,8 +796,8 @@ export function OnlineModule() {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
-                    <button onClick={() => openMediaForm(item)} className="p-1.5 bg-white rounded-full text-blue-600"><Edit size={12} /></button>
-                    <button onClick={() => deleteMedia(item.id)} className="p-1.5 bg-white rounded-full text-red-600"><Trash2 size={12} /></button>
+                    <button onClick={() => openMediaForm(item)} className="p-1.5 bg-white dark:bg-gray-800 rounded-full text-blue-600 dark:text-blue-400"><Edit size={12} /></button>
+                    <button onClick={() => deleteMedia(item.id)} className="p-1.5 bg-white dark:bg-gray-800 rounded-full text-red-600 dark:text-red-400"><Trash2 size={12} /></button>
                   </div>
                 </div>
                 <div className="p-2">

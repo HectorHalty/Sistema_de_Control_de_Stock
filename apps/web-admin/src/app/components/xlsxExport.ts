@@ -85,6 +85,68 @@ export function buildMultiSheetConsumptionReportXlsx(options: {
   });
 }
 
+export type ReconciliationReportRow = {
+  product: string;
+  initial: number;
+  entradas: number;
+  ventas: number;
+  consumos: number;
+  expected: number;
+  counted: number;
+  difference: number;
+};
+
+export function buildReconciliationXlsx(options: {
+  title: string;
+  rows: ReconciliationReportRow[];
+}): Blob {
+  const { title, rows } = options;
+
+  const aoa: (string | number)[][] = [
+    [title, '', '', '', '', '', '', ''],
+    [
+      'Producto',
+      'Inicial',
+      'Entradas',
+      'Ventas',
+      'Consumos',
+      'Esperado',
+      'Contado',
+      'Diferencia',
+    ],
+    ...rows.map(r => [
+      r.product,
+      r.initial,
+      r.entradas,
+      r.ventas,
+      r.consumos,
+      r.expected,
+      r.counted,
+      r.difference,
+    ]),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  ws['!cols'] = [
+    { wch: 36 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 12 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Control de Stock');
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([out], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
 export function buildOrderXlsx(options: {
   day: string; // YYYY-MM-DD
   orderId: string;

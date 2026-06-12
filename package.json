@@ -6,7 +6,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:infra": "docker compose up -d",
+    "dev:infra": "docker compose up -d postgres redis minio minio-init",
+    "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:admin": "npm run dev --workspace=apps/web-admin",
     "stop:admin": "npx --yes kill-port 5173",

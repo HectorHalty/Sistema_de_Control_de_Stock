@@ -27,8 +27,58 @@ export interface Order {
   id: string;
   date: string;
   provider: string;
-  status: 'Pendiente' | 'Confirmado';
+  status: 'Pendiente' | 'Recibido';
+  receivedAtISO?: string;
   items: { productId: string; quantityOrdered: number; quantityReceived?: number }[];
+}
+
+/**
+ * Tipo de movimiento de stock. La cantidad del movimiento es SIGNADA respecto al
+ * efecto sobre el stock: las salidas son negativas y las entradas positivas.
+ */
+export type StockMovementType =
+  | 'venta'
+  | 'venta_anulada'
+  | 'devolucion'
+  | 'consumo'
+  | 'entrada'
+  | 'ajuste_manual';
+
+/** Asiento del libro de movimientos de stock (fuente para la conciliación). */
+export interface StockMovement {
+  id: string;
+  createdAtISO: string;
+  type: StockMovementType;
+  productId: string;
+  warehouseId?: string;
+  /** Cantidad signada: salida negativa, entrada positiva. */
+  quantity: number;
+  /** Referencia al documento de origen (ticket, pedido, consumo, etc.). */
+  reference?: string;
+  operatorId?: string;
+  operatorName?: string;
+}
+
+/** Conteo físico de un producto dentro de una sesión de control de stock. */
+export interface StockCountEntry {
+  productId: string;
+  productName: string;
+  unit: 'unidades' | 'kg';
+  /** Stock que el sistema esperaba (suma por almacenes) al momento del conteo. */
+  expected: number;
+  /** Stock contado físicamente (suma por almacenes). */
+  counted: number;
+}
+
+/** Sesión de control de stock: foto completa de lo contado vs lo esperado. */
+export interface StockCountSession {
+  id: string;
+  createdAtISO: string;
+  date: string;
+  dateType: 'regular' | 'after';
+  operatorId?: string;
+  operatorName?: string;
+  entries: StockCountEntry[];
 }
 
 export interface Supplier {

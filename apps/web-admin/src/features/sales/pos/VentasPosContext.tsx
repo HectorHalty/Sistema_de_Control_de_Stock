@@ -9,12 +9,15 @@ import {
 import { useAppContext } from '@/app/providers/AppContext';
 import { useSalesApiAdapter } from '@/app/api/adapters';
 import {
+  buildRequiredStockFromCart,
   deductStockForSale,
   getMaxSellableUnits,
   getTotalStockQuantity,
   restoreStockForTicket,
   validateStockForCart,
 } from '../stock-link';
+import type { SalesCartLine } from '../stock-link';
+import type { StockMovement } from '@/app/components/store';
 import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
 import type { SalesTicket as ApiSalesTicket } from '@/app/api/client';
@@ -178,6 +181,29 @@ function ticketToPos(ticket: SalesTicket, operatorName: string): PosTicket {
   };
 }
 
+/**
+ * Construye los asientos del libro de movimientos a partir de líneas de venta.
+ * `direction` = -1 para salidas (venta) y +1 para reposiciones (anulación/devolución).
+ */
+function buildStockMovementsFromCart(
+  cartLines: SalesCartLine[],
+  salesProducts: SalesProduct[],
+  type: StockMovement['type'],
+  direction: 1 | -1,
+  reference: string,
+  operator: { id: string; name: string },
+): Omit<StockMovement, 'id' | 'createdAtISO'>[] {
+  const required = buildRequiredStockFromCart(cartLines, salesProducts);
+  return Object.entries(required).map(([productId, qty]) => ({
+    type,
+    productId,
+    quantity: direction * Math.abs(qty),
+    reference,
+    operatorId: operator.id,
+    operatorName: operator.name,
+  }));
+}
+
 export function VentasPosProvider({ children }: { children: ReactNode }) {
   const ctx = useAppContext();
   const salesApi = useSalesApiAdapter();
@@ -257,6 +283,17 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     (ticket: SalesTicket, cart: ReturnType<typeof enrichCartKitchens>) => {
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
       ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+      ctx.addStockMovements(
+        buildStockMovementsFromCart(
+          cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          ctx.salesProducts,
+          'venta',
+          -1,
+          ticket.id,
+          currentUser,
+        ),
+        ticket.createdAtISO,
+      );
       ctx.setSalesTickets(prev => [ticket, ...prev]);
       if (table) {
         ctx.setSalesTables(prev =>
@@ -387,6 +424,17 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         );
       }
 
+      ctx.addStockMovements(
+        buildStockMovementsFromCart(
+          ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          ctx.salesProducts,
+          'venta_anulada',
+          1,
+          ticket.id,
+          currentUser,
+        ),
+      );
+
       const historyEntry: SalesHistoryEntry = {
         id: `h-${Date.now()}`,
         timestampISO: new Date().toISOString(),
@@ -434,6 +482,16 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       };
 
       ctx.setProducts(prev => restoreStockForTicket(prev, pseudoTicket, ctx.salesProducts));
+      ctx.addStockMovements(
+        buildStockMovementsFromCart(
+          cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          ctx.salesProducts,
+          'devolucion',
+          1,
+          pseudoTicket.id,
+          currentUser,
+        ),
+      );
 
       const nextCounter = ctx.salesTicketCounter + 1;
       const devTicket: SalesTicket = {
@@ -483,6 +541,24 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       }
 
       ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+      ctx.addStockMovements([
+        ...buildStockMovementsFromCart(
+          old.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          ctx.salesProducts,
+          'venta_anulada',
+          1,
+          old.id,
+          currentUser,
+        ),
+        ...buildStockMovementsFromCart(
+          cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          ctx.salesProducts,
+          'venta',
+          -1,
+          old.id,
+          currentUser,
+        ),
+      ]);
       const total = items.reduce((s, i) => s + i.price * i.qty, 0);
       let updated: SalesTicket | null = null;
       ctx.setSalesTickets(prev =>

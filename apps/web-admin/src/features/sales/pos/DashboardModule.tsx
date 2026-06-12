@@ -37,10 +37,10 @@ function ChartTooltip({
   const ventas = payload[0]?.value ?? 0;
   const tickets = payload[0]?.payload?.tickets ?? 0;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
-      <p className="text-xs font-medium capitalize text-gray-500">{label}</p>
-      <p className="text-base font-semibold text-emerald-600">{formatMoney(ventas)}</p>
-      <p className="text-xs text-gray-400">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
+    <div className="rounded-xl border border-gray-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95">
+      <p className="text-xs font-medium capitalize text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatMoney(ventas)}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
     </div>
   );
 }
@@ -56,9 +56,9 @@ function KitchenBarTooltip({
   const row = payload[0]?.payload;
   if (!row) return null;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg">
-      <p className="max-w-[10rem] truncate text-sm font-medium text-gray-900">{row.name}</p>
-      <p className="text-sm text-emerald-600">{row.value} u. · {formatMoney(row.revenue)}</p>
+    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+      <p className="max-w-[10rem] truncate text-sm font-medium text-gray-900 dark:text-gray-100">{row.name}</p>
+      <p className="text-sm text-emerald-600 dark:text-emerald-400">{row.value} u. · {formatMoney(row.revenue)}</p>
     </div>
   );
 }
@@ -228,12 +228,12 @@ export function DashboardModule() {
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100">
                   Empleados del día
                 </h4>
-                <span className="ml-auto text-xs text-gray-400">
+                <span className="ml-auto text-xs text-muted-foreground">
                   {format(new Date(), "dd/MM/yyyy")}
                 </span>
               </div>
               {metrics.employeesToday.length === 0 ? (
-                <p className="py-10 text-center text-sm text-gray-400">
+                <p className="py-10 text-center text-sm text-muted-foreground">
                   Sin ventas registradas hoy
                 </p>
               ) : (
@@ -246,8 +246,8 @@ export function DashboardModule() {
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                           idx === 0
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-blue-100 text-blue-800"
+                            ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
+                            : "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300"
                         }`}
                       >
                         {initials(emp.name)}
@@ -257,7 +257,7 @@ export function DashboardModule() {
                           <p className="truncate font-medium text-gray-900 dark:text-gray-100">
                             {emp.name}
                             {idx === 0 && (
-                              <span className="ml-2 text-[10px] font-normal text-amber-600">
+                              <span className="ml-2 text-[10px] font-normal text-amber-600 dark:text-amber-400">
                                 Top del día
                               </span>
                             )}
@@ -274,7 +274,7 @@ export function DashboardModule() {
                             }}
                           />
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {emp.tickets} ticket{emp.tickets !== 1 ? "s" : ""} · {emp.unitsSold} unidades
                         </p>
                       </div>
@@ -293,7 +293,7 @@ export function DashboardModule() {
                 </h4>
               </div>
               {metrics.topProductsByKitchen.length === 0 ? (
-                <p className="py-10 text-center text-sm text-gray-400">Sin datos por cocina</p>
+                <p className="py-10 text-center text-sm text-muted-foreground">Sin datos por cocina</p>
               ) : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -368,7 +368,7 @@ export function DashboardModule() {
             </div>
 
             {!selectedKitchen || selectedKitchen.products.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">
+              <p className="py-8 text-center text-sm text-muted-foreground">
                 Sin productos vendidos en el período
               </p>
             ) : (
@@ -420,7 +420,7 @@ export function DashboardModule() {
                         <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                           {p.name}
                         </p>
-                        <p className="text-xs text-gray-500">{formatMoney(p.revenue)}</p>
+                        <p className="text-xs text-muted-foreground">{formatMoney(p.revenue)}</p>
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         {p.value} u.

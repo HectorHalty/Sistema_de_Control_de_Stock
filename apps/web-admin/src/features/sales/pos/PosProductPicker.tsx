@@ -19,13 +19,13 @@ type KitchenFilter = (typeof kitchenFilters)[number];
 
 const stationBadge: Record<Station, string> = {
 
-  Parrilla: "bg-orange-100 text-orange-700",
+  Parrilla: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300",
 
-  Barra: "bg-sky-100 text-sky-700",
+  Barra: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300",
 
-  Cervecería: "bg-amber-100 text-amber-700",
+  Cervecería: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
 
-  Cocina: "bg-emerald-100 text-emerald-700",
+  Cocina: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
 
 };
 
@@ -43,7 +43,7 @@ const pillClass = (active: boolean, favoritos = false) =>
 
         : "border-emerald-600 bg-emerald-600 text-white"
 
-      : "border-gray-200 bg-white text-gray-700"
+      : "border-border bg-card text-foreground"
 
   }`;
 
@@ -116,7 +116,7 @@ export function PosProductPicker({
 
         <div className="relative min-w-0 flex-1">
 
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
           <input
 
@@ -126,7 +126,7 @@ export function PosProductPicker({
 
             placeholder="Buscar producto..."
 
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg border border-border bg-input-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
 
           />
 
@@ -138,7 +138,7 @@ export function PosProductPicker({
 
           onChange={(e) => setCategory(e.target.value)}
 
-          className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 min-w-[9.5rem]"
+          className="shrink-0 rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 min-w-[9.5rem]"
 
           aria-label="Categoría"
 
@@ -200,7 +200,7 @@ export function PosProductPicker({
 
         {filtered.length === 0 ? (
 
-          <p className="py-6 text-center text-sm text-gray-400">
+          <p className="py-6 text-center text-sm text-muted-foreground">
 
             {kitchen === "Favoritos"
 
@@ -218,7 +218,7 @@ export function PosProductPicker({
 
               key={p.id}
 
-              className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white transition hover:border-emerald-500 hover:shadow-sm"
+              className="flex items-center gap-1 rounded-xl border border-border bg-card transition hover:border-emerald-500 hover:shadow-sm"
 
             >
 
@@ -234,7 +234,7 @@ export function PosProductPicker({
 
                 }}
 
-                className="shrink-0 rounded-l-xl p-2.5 text-amber-500 hover:bg-amber-50"
+                className="shrink-0 rounded-l-xl p-2.5 text-amber-500 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
 
                 title={isFavorite(p.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
 
@@ -264,9 +264,9 @@ export function PosProductPicker({
 
                 <div className="min-w-0 flex-1">
 
-                  <div className="truncate text-gray-900">{p.name}</div>
+                  <div className="truncate text-foreground">{p.name}</div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
 
                     <span>{p.category}</span>
 
@@ -286,9 +286,9 @@ export function PosProductPicker({
 
                 <div className="shrink-0 text-right">
 
-                  <div className="text-emerald-600">${p.price.toLocaleString("es-AR")}</div>
+                  <div className="text-emerald-600 dark:text-emerald-400">${p.price.toLocaleString("es-AR")}</div>
 
-                  <div className={`text-xs ${p.stock < 10 ? "text-red-500" : "text-gray-400"}`}>
+                  <div className={`text-xs ${p.stock < 10 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}`}>
 
                     Disp.: {p.stock}
 
@@ -296,7 +296,7 @@ export function PosProductPicker({
 
                 </div>
 
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
 
                   <Plus className="h-4 w-4" />
 

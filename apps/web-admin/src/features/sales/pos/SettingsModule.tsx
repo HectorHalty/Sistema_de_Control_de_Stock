@@ -13,7 +13,6 @@ import {
   Moon,
   Bell,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { useStore, type Printer, type Ticket } from './VentasPosContext';
 import { TicketPreview } from "./TicketPreview";
 import { UsersModule } from "./UsersModule";
@@ -55,12 +54,26 @@ export function SettingsModule() {
 }
 
 function GeneralTab() {
-  const { theme, setTheme } = useTheme();
+  const [darkMode, setDarkMode] = useState(
+    () =>
+      typeof document !== "undefined" &&
+      document.documentElement.classList.contains("dark"),
+  );
   const [notifications, setNotifications] = useState(true);
   const [soundAlerts, setSoundAlerts] = useState(true);
 
+  const toggleDarkMode = (value: boolean) => {
+    setDarkMode(value);
+    document.documentElement.classList.toggle("dark", value);
+    try {
+      localStorage.setItem("stock-darkmode", JSON.stringify(value));
+    } catch {
+      // localStorage no disponible — el cambio visual se aplica igualmente
+    }
+  };
+
   const opts: { key: string; label: string; desc: string; icon: React.ComponentType<{ className?: string }>; value: boolean; setter: (v: boolean) => void }[] = [
-    { key: "dark", label: "Modo oscuro", desc: "Cambia la apariencia de la aplicación", icon: Moon, value: theme === "dark", setter: (v: boolean) => setTheme(v ? "dark" : "light") },
+    { key: "dark", label: "Modo oscuro", desc: "Cambia la apariencia de la aplicación", icon: Moon, value: darkMode, setter: toggleDarkMode },
     { key: "notif", label: "Notificaciones", desc: "Avisos de pedidos y stock bajo", icon: Bell, value: notifications, setter: setNotifications },
     { key: "sound", label: "Alertas sonoras", desc: "Sonido al imprimir tickets", icon: Bell, value: soundAlerts, setter: setSoundAlerts },
   ];
@@ -82,11 +95,11 @@ function GeneralTab() {
           <button
             onClick={() => o.setter(!o.value)}
             className={`w-11 h-6 rounded-full transition relative shrink-0 ${
-              o.value ? "bg-emerald-600" : "bg-gray-300"
+              o.value ? "bg-emerald-600" : "bg-secondary"
             }`}
           >
             <span
-              className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition ${
+              className={`absolute top-0.5 w-5 h-5 bg-card rounded-full transition ${
                 o.value ? "left-5" : "left-0.5"
               }`}
             />
@@ -114,7 +127,7 @@ function PrintersTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
-        <h3 className="text-gray-900">Impresoras configuradas ({printers.length})</h3>
+        <h3 className="text-foreground">Impresoras configuradas ({printers.length})</h3>
         <button
           onClick={() => setShowAdd(true)}
           className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
@@ -125,31 +138,31 @@ function PrintersTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {printers.map((p) => (
-          <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4">
+          <div key={p.id} className="bg-card rounded-xl border border-border p-4">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    p.connected ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                    p.connected ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"
                   }`}
                 >
                   <PrinterIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-gray-900 flex items-center gap-1">
+                  <div className="text-foreground flex items-center gap-1">
                     {p.name}
                     {p.isDefault && (
                       <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">{p.type}</div>
+                  <div className="text-xs text-muted-foreground">{p.type}</div>
                 </div>
               </div>
               <span
                 className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
                   p.connected
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-red-50 text-red-700"
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                    : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300"
                 }`}
               >
                 {p.connected ? (
@@ -164,7 +177,7 @@ function PrintersTab() {
               </span>
             </div>
 
-            <div className="text-sm text-gray-600 space-y-1 mb-3">
+            <div className="text-sm text-muted-foreground space-y-1 mb-3">
               <div className="flex justify-between">
                 <span>IP</span>
                 <span className="font-mono">{p.ip}</span>
@@ -183,20 +196,20 @@ function PrintersTab() {
               <button
                 onClick={() => testConnection(p.id)}
                 disabled={scanning === p.id}
-                className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm flex items-center gap-1"
+                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm flex items-center gap-1"
               >
                 {scanning === p.id ? "Conectando..." : "Probar conexión"}
               </button>
               <button
                 onClick={() => togglePrinter(p.id)}
-                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm"
+                className="px-3 py-1.5 bg-muted text-foreground rounded-lg text-sm"
               >
                 {p.connected ? "Desconectar" : "Conectar"}
               </button>
               {!p.isDefault && (
                 <button
                   onClick={() => setDefaultPrinter(p.id)}
-                  className="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-sm flex items-center gap-1"
+                  className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-lg text-sm flex items-center gap-1"
                 >
                   <Star className="w-3 h-3" /> Predeterminada
                 </button>
@@ -205,7 +218,7 @@ function PrintersTab() {
                 onClick={() => {
                   if (confirm(`¿Eliminar ${p.name}?`)) removePrinter(p.id);
                 }}
-                className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-1 ml-auto"
+                className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-1 ml-auto"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -246,7 +259,7 @@ function AddPrinterModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-md p-5">
+      <div className="bg-card rounded-xl w-full max-w-md p-5">
         <div className="flex justify-between items-center mb-4">
           <h3>Agregar impresora</h3>
           <button onClick={onClose}>
@@ -256,21 +269,21 @@ function AddPrinterModal({
 
         <div className="space-y-3">
           <div>
-            <label className="text-sm text-gray-600 mb-1 block">Nombre</label>
+            <label className="text-sm text-muted-foreground mb-1 block">Nombre</label>
             <input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Ej: Comandera Cocina 2"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
             />
           </div>
 
           <div>
-            <label className="text-sm text-gray-600 mb-1 block">Tipo</label>
+            <label className="text-sm text-muted-foreground mb-1 block">Tipo</label>
             <select
               value={draft.type}
               onChange={(e) => setDraft({ ...draft, type: e.target.value as Printer["type"] })}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
             >
               <option>Comandera Cocina</option>
               <option>Mostrador</option>
@@ -280,34 +293,34 @@ function AddPrinterModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">IP</label>
+              <label className="text-sm text-muted-foreground mb-1 block">IP</label>
               <input
                 value={draft.ip}
                 onChange={(e) => setDraft({ ...draft, ip: e.target.value })}
                 placeholder="192.168.1.50"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg font-mono"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background font-mono"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">Puerto</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Puerto</label>
               <input
                 type="number"
                 min={1}
                 max={65535}
                 value={draft.port}
                 onChange={(e) => setDraft({ ...draft, port: +e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg font-mono"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background font-mono"
               />
             </div>
           </div>
           <div>
-              <label className="text-sm text-gray-600 mb-1 block">Ancho papel</label>
+              <label className="text-sm text-muted-foreground mb-1 block">Ancho papel</label>
               <select
                 value={draft.paperWidth}
                 onChange={(e) =>
                   setDraft({ ...draft, paperWidth: +e.target.value as 58 | 80 })
                 }
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
               >
                 <option value={58}>58 mm</option>
                 <option value={80}>80 mm</option>
@@ -316,13 +329,13 @@ function AddPrinterModal({
         </div>
 
         <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700">
+          <button onClick={onClose} className="px-4 py-2 text-foreground">
             Cancelar
           </button>
           <button
             onClick={() => draft.name && onAdd(draft)}
             disabled={!draft.name}
-            className="px-4 py-2 bg-emerald-600 disabled:bg-gray-300 text-white rounded-lg"
+            className="px-4 py-2 bg-emerald-600 disabled:bg-secondary text-white rounded-lg"
           >
             Agregar
           </button>
@@ -352,46 +365,46 @@ function TemplateTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-        <h3 className="text-gray-900 mb-2">Configurar plantilla</h3>
+      <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+        <h3 className="text-foreground mb-2">Configurar plantilla</h3>
 
         <div>
-          <label className="text-sm text-gray-600 mb-1 block">Encabezado</label>
+          <label className="text-sm text-muted-foreground mb-1 block">Encabezado</label>
           <input
             value={template.header}
             onChange={(e) => updateTemplate({ header: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
           />
         </div>
 
         <div>
-          <label className="text-sm text-gray-600 mb-1 block">Subtítulo (dirección, CUIT)</label>
+          <label className="text-sm text-muted-foreground mb-1 block">Subtítulo (dirección, CUIT)</label>
           <input
             value={template.subheader}
             onChange={(e) => updateTemplate({ subheader: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
           />
         </div>
 
         <div>
-          <label className="text-sm text-gray-600 mb-1 block">Pie de ticket</label>
+          <label className="text-sm text-muted-foreground mb-1 block">Pie de ticket</label>
           <textarea
             value={template.footer}
             onChange={(e) => updateTemplate({ footer: e.target.value })}
             rows={2}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-input-background resize-none"
           />
         </div>
 
         <div>
-          <label className="text-sm text-gray-600 mb-1 block">Tamaño de fuente</label>
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          <label className="text-sm text-muted-foreground mb-1 block">Tamaño de fuente</label>
+          <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
             {(["sm", "md", "lg"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => updateTemplate({ fontSize: s })}
                 className={`px-3 py-1.5 rounded text-sm ${
-                  template.fontSize === s ? "bg-white shadow" : "text-gray-600"
+                  template.fontSize === s ? "bg-card shadow" : "text-muted-foreground"
                 }`}
               >
                 {s === "sm" ? "Pequeño" : s === "md" ? "Mediano" : "Grande"}
@@ -400,7 +413,7 @@ function TemplateTab() {
           </div>
         </div>
 
-        <div className="space-y-2 pt-2 border-t border-gray-100">
+        <div className="space-y-2 pt-2 border-t border-border">
           {[
             { k: "showLogo", l: "Mostrar logo" },
             { k: "showDate", l: "Mostrar fecha y hora" },
@@ -408,7 +421,7 @@ function TemplateTab() {
             { k: "showItemDetails", l: "Mostrar precio unitario" },
           ].map((o) => (
             <label key={o.k} className="flex items-center justify-between cursor-pointer">
-              <span className="text-gray-700">{o.l}</span>
+              <span className="text-foreground">{o.l}</span>
               <input
                 type="checkbox"
                 checked={template[o.k as keyof typeof template] as boolean}
@@ -420,8 +433,8 @@ function TemplateTab() {
         </div>
       </div>
 
-      <div className="bg-gray-100 rounded-xl border border-gray-200 p-4">
-        <div className="text-sm text-gray-600 mb-3">Vista previa</div>
+      <div className="bg-muted rounded-xl border border-border p-4">
+        <div className="text-sm text-muted-foreground mb-3">Vista previa</div>
         <TicketPreview ticket={sampleTicket} template={template} />
       </div>
     </div>

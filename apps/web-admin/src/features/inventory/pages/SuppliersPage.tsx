@@ -231,22 +231,17 @@ export function SuppliersPage() {
         {filteredSuppliers.map(supplier => (
           <div key={supplier.id} className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
+              <button
+                onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}
+                className="w-full flex items-start justify-between gap-2 text-left"
+              >
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                  {expandedSupplier === supplier.id ? <ChevronUp size={14} className="text-[#3d7a3d] flex-shrink-0" /> : <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />}
                   <p className="text-sm truncate" style={{ fontWeight: 600 }}>{supplier.name}</p>
                 </div>
                 <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-2.5 py-1 rounded-full flex-shrink-0" style={{ fontWeight: 500 }}>
                   {supplier.productIds.length} productos
                 </span>
-              </div>
-
-              {/* Expand products */}
-              <button
-                onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}
-                className="text-xs text-[#3d7a3d] mt-2 flex items-center gap-1 hover:underline"
-              >
-                {expandedSupplier === supplier.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                Ver productos
               </button>
 
               {expandedSupplier === supplier.id && (
@@ -279,7 +274,7 @@ export function SuppliersPage() {
               ) : (
                 <button
                   onClick={() => setDeleteConfirm(supplier.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors border border-red-200"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors border border-red-200 dark:border-red-900"
                 >
                   <Trash2 size={13} /> Eliminar
                 </button>
@@ -307,13 +302,20 @@ export function SuppliersPage() {
             </thead>
             <tbody>
               {filteredSuppliers.map(supplier => (
-                <tr key={supplier.id} className="border-b border-border/40 hover:bg-muted/50">
+                <tr
+                  key={supplier.id}
+                  onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}
+                  className="border-b border-border/40 hover:bg-muted/50 cursor-pointer"
+                >
                   <td className="px-4 py-3">
-                    <p className="text-sm" style={{ fontWeight: 500 }}>{supplier.name}</p>
+                    <p className="text-sm flex items-center gap-1.5" style={{ fontWeight: 500 }}>
+                      {expandedSupplier === supplier.id ? <ChevronUp size={14} className="text-[#3d7a3d]" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                      {supplier.name}
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
-                      onClick={() => setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id)}
+                      onClick={e => { e.stopPropagation(); setExpandedSupplier(expandedSupplier === supplier.id ? null : supplier.id); }}
                       className="inline-flex items-center gap-1 text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-2.5 py-1 rounded-full hover:bg-[#3d7a3d]/20 transition-colors"
                       style={{ fontWeight: 500 }}
                     >
@@ -336,7 +338,7 @@ export function SuppliersPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => openEdit(supplier)}
+                        onClick={e => { e.stopPropagation(); openEdit(supplier); }}
                         className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#3d7a3d] transition-colors"
                         title="Editar"
                       >
@@ -344,13 +346,13 @@ export function SuppliersPage() {
                       </button>
                       {deleteConfirm === supplier.id ? (
                         <div className="flex items-center gap-1.5">
-                          <button onClick={() => handleDelete(supplier.id)} className="text-xs bg-red-500 text-white px-2.5 py-1.5 rounded-lg hover:bg-red-600">Sí</button>
-                          <button onClick={() => setDeleteConfirm(null)} className="text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted">No</button>
+                          <button onClick={e => { e.stopPropagation(); handleDelete(supplier.id); }} className="text-xs bg-red-500 text-white px-2.5 py-1.5 rounded-lg hover:bg-red-600">Sí</button>
+                          <button onClick={e => { e.stopPropagation(); setDeleteConfirm(null); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted">No</button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => setDeleteConfirm(supplier.id)}
-                          className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                          onClick={e => { e.stopPropagation(); setDeleteConfirm(supplier.id); }}
+                          className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-muted-foreground hover:text-red-600 transition-colors"
                           title="Eliminar"
                         >
                           <Trash2 size={16} />
