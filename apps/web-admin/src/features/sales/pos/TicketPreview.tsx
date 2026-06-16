@@ -31,8 +31,12 @@ export function TicketPreview({
       )}
 
       {template.showLogo && (
-        <div className="flex justify-center mb-1">
-          <img src={logo} alt="La Chacra Fútbol" className="h-10 object-contain" />
+        <div className="mb-1 text-center">
+          <img
+            src={logo}
+            alt="La Chacra Fútbol"
+            className="mx-auto block h-10 max-w-full object-contain"
+          />
         </div>
       )}
       <div className="text-center uppercase">{template.header}</div>
