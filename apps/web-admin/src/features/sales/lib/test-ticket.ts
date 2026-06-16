@@ -29,5 +29,6 @@ export function buildTestTicketPayload(
     showDate: true,
     showOperator: false,
     showItemDetails: false,
+    showLogo: template.showLogo,
   };
 }

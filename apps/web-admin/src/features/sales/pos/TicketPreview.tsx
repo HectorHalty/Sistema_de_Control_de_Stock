@@ -1,4 +1,5 @@
 import { Ticket, TicketTemplate } from "./VentasPosContext";
+import logo from "@/assets/baner-chacra.png";
 
 const sizes = { sm: "text-[11px]", md: "text-xs", lg: "text-sm" } as const;
 
@@ -29,7 +30,11 @@ export function TicketPreview({
         </div>
       )}
 
-      {template.showLogo && <div className="text-center mb-1">🏟️</div>}
+      {template.showLogo && (
+        <div className="flex justify-center mb-1">
+          <img src={logo} alt="La Chacra Fútbol" className="h-10 object-contain" />
+        </div>
+      )}
       <div className="text-center uppercase">{template.header}</div>
       {isReturn && (
         <div className="text-center bg-amber-100 text-amber-800 my-1 py-0.5 rounded uppercase">
@@ -78,6 +83,11 @@ export function TicketPreview({
                 ${(i.qty * i.price).toLocaleString()}
               </span>
             </div>
+            {i.station && (
+              <div className="text-[10px] uppercase tracking-wide text-gray-600 pl-3">
+                Retirar en: {i.station}
+              </div>
+            )}
             {template.showItemDetails && (
               <div className="text-[10px] text-gray-500 pl-3">
                 @ ${i.price.toLocaleString()} c/u

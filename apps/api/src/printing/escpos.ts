@@ -13,6 +13,7 @@ export interface PrintItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  station?: string;
 }
 
 export interface BuildTicketOptions {
@@ -30,6 +31,8 @@ export interface BuildTicketOptions {
   total: number;
   note?: string;
   kind?: 'venta' | 'devolucion';
+  /** Pre-built ESC/POS raster command (GS v 0) for the brand logo. */
+  logoRaster?: Buffer | null;
 }
 
 /** Remove diacritics so the printer's default codepage renders cleanly. */
@@ -66,6 +69,12 @@ class EscPosBuilder {
 
   raw(...bytes: number[]): this {
     this.chunks.push(...bytes);
+    return this;
+  }
+
+  /** Append a raw byte buffer without spreading (safe for large rasters). */
+  rawBuffer(buf: Buffer): this {
+    for (let i = 0; i < buf.length; i++) this.chunks.push(buf[i]);
     return this;
   }
 
@@ -122,6 +131,10 @@ export function buildTicketBuffer(opts: BuildTicketOptions): Buffer {
 
   b.init();
 
+  if (opts.logoRaster && opts.logoRaster.length > 0) {
+    b.align('center').rawBuffer(opts.logoRaster).feed(1);
+  }
+
   if (opts.header) {
     b.align('center').bold(true).size(1, 1).line(opts.header).size(0, 0).bold(false);
   }
@@ -159,6 +172,9 @@ export function buildTicketBuffer(opts: BuildTicketOptions): Buffer {
       .line(twoColumns(qtyName, lineTotal, itemWidth))
       .size(0, 0)
       .bold(false);
+    if (item.station) {
+      b.line(`   Retirar en: ${item.station}`);
+    }
     if (opts.showItemDetails !== false && item.quantity > 1) {
       b.line(`   ${formatMoney(item.unitPrice)} c/u`);
     }

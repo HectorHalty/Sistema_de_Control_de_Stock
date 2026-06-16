@@ -172,7 +172,7 @@ function mapApiTicketToLocal(
   };
 }
 
-function ticketToPos(ticket: SalesTicket, operatorName: string): PosTicket {
+function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitchen[]): PosTicket {
   const isReturn = ticket.status === 'devuelto';
   return {
     id: ticket.id,
@@ -184,6 +184,7 @@ function ticketToPos(ticket: SalesTicket, operatorName: string): PosTicket {
       name: item.name,
       price: item.unitPrice,
       qty: item.quantity,
+      station: kitchens.find(k => k.id === item.kitchenId)?.name || '',
     })),
     total: ticket.total,
     status: ticket.status === 'anulado' ? 'anulado' : 'emitido',
@@ -271,8 +272,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const tickets = useMemo(
-    () => ctx.salesTickets.map(t => ticketToPos(t, currentUser.name)),
-    [ctx.salesTickets, currentUser.name],
+    () => ctx.salesTickets.map(t => ticketToPos(t, currentUser.name, ctx.kitchens)),
+    [ctx.salesTickets, currentUser.name, ctx.kitchens],
   );
 
   const enrichCartKitchens = useCallback(
@@ -351,7 +352,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         newValue: `${cart.length} item(s)`,
       });
       setSelectedTableId(null);
-      return ticketToPos(ticket, currentUser.name);
+      return ticketToPos(ticket, currentUser.name, ctx.kitchens);
     },
     [ctx, currentUser, selectedTableId],
   );
@@ -480,7 +481,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         newValue: reason,
       });
 
-      const pos = ticketToPos({ ...ticket, status: 'anulado' }, currentUser.name);
+      const pos = ticketToPos({ ...ticket, status: 'anulado' }, currentUser.name, ctx.kitchens);
       return { ...pos, voidReason: reason, voidedAt: new Date().toLocaleString('es-AR') };
     },
     [ctx, currentUser, salesApi],
@@ -548,7 +549,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         newValue: `${cart.length} item(s)`,
       });
 
-      return ticketToPos(devTicket, currentUser.name);
+      return ticketToPos(devTicket, currentUser.name, ctx.kitchens);
     },
     [ctx, currentUser, enrichCartKitchens],
   );
@@ -605,7 +606,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           return updated;
         }),
       );
-      return updated ? ticketToPos(updated, currentUser.name) : null;
+      return updated ? ticketToPos(updated, currentUser.name, ctx.kitchens) : null;
     },
     [ctx, currentUser, enrichCartKitchens],
   );
@@ -750,6 +751,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           name: i.name,
           quantity: i.qty,
           unitPrice: i.price,
+          station: i.station,
         })),
         total: ticket.total,
         header: template.header,
@@ -761,6 +763,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         showDate: template.showDate,
         showOperator: template.showOperator,
         showItemDetails: template.showItemDetails,
+        showLogo: template.showLogo,
       });
     },
     [printingApi, ctx.ticketTemplate],

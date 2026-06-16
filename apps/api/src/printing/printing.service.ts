@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'net';
 import { buildTicketBuffer } from './escpos';
+import { getLogoRaster } from './logo';
 import { PrintTicketDto, TestPrinterDto } from './dto';
 
 const CONNECT_TIMEOUT_MS = 4000;
@@ -23,7 +24,8 @@ export class PrintingService {
   }
 
   /** Formats the ticket as ESC/POS and streams it to the printer over TCP. */
-  printTicket(dto: PrintTicketDto): Promise<PrintResult> {
+  async printTicket(dto: PrintTicketDto): Promise<PrintResult> {
+    const logoRaster = dto.showLogo ? await getLogoRaster(dto.paperWidth) : null;
     const buffer = buildTicketBuffer({
       paperWidth: dto.paperWidth,
       header: dto.header,
@@ -39,6 +41,7 @@ export class PrintingService {
       total: dto.total,
       note: dto.note,
       kind: dto.kind,
+      logoRaster,
     });
     return this.withSocket(dto.ip, dto.port, () => buffer, false);
   }

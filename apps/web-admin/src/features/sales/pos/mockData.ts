@@ -25,6 +25,7 @@ export type OrderItem = {
   name: string;
   price: number;
   qty: number;
+  station?: string;
 };
 
 export type TeamAccount = {

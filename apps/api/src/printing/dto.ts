@@ -15,6 +15,10 @@ export class PrintItemDto {
   @IsNumber()
   @Min(0)
   unitPrice: number;
+
+  @IsOptional()
+  @IsString()
+  station?: string;
 }
 
 export class TestPrinterDto {
@@ -88,4 +92,8 @@ export class PrintTicketDto {
   @IsOptional()
   @IsBoolean()
   showItemDetails?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showLogo?: boolean;
 }

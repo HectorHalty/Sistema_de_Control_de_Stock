@@ -482,6 +482,7 @@ export interface PrintTicketItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  station?: string;
 }
 
 export interface PrintTicketPayload {
@@ -501,6 +502,7 @@ export interface PrintTicketPayload {
   showDate?: boolean;
   showOperator?: boolean;
   showItemDetails?: boolean;
+  showLogo?: boolean;
 }
 
 export interface PrintResult {
