@@ -4,11 +4,10 @@ import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { filterTicketsByDateRange } from "../sales-metrics";
-import { Station, stations } from "./mockData";
 import { useStore } from "./VentasPosContext";
 
 type StationReport = {
-  station: Station;
+  station: string;
   products: {
     name: string;
     quantity: number;
@@ -29,19 +28,25 @@ export function SalesExportReport() {
     const validTickets = filterTicketsByDateRange(salesTickets, dateFrom, dateTo);
 
     const stationData = new Map<
-      Station,
+      string,
       Map<string, { name: string; quantity: number; unitPrice: number; total: number }>
     >();
 
-    stations.forEach((station) => stationData.set(station, new Map()));
+    const stationList = Array.from(
+      new Set(products.map((p) => p.station).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "es"));
+    stationList.forEach((station) => stationData.set(station, new Map()));
 
     validTickets.forEach((ticket) => {
       ticket.items.forEach((item) => {
         const product = products.find((p) => p.id === item.salesProductId);
         if (!product) return;
 
-        const stationMap = stationData.get(product.station);
-        if (!stationMap) return;
+        let stationMap = stationData.get(product.station);
+        if (!stationMap) {
+          stationMap = new Map();
+          stationData.set(product.station, stationMap);
+        }
 
         const existing = stationMap.get(item.salesProductId) || {
           name: item.name,
@@ -59,7 +64,7 @@ export function SalesExportReport() {
       });
     });
 
-    const reports: StationReport[] = stations.map((station) => {
+    const reports: StationReport[] = Array.from(stationData.keys()).map((station) => {
       const productsMap = stationData.get(station)!;
       const stationProducts = Array.from(productsMap.values()).sort((a, b) =>
         a.name.localeCompare(b.name, "es"),

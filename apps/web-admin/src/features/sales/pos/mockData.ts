@@ -1,4 +1,4 @@
-export type Station = "Parrilla" | "Barra" | "Cervecería" | "Cocina";
+export type Station = string;
 
 export const stations: Station[] = ["Parrilla", "Barra", "Cervecería", "Cocina"];
 

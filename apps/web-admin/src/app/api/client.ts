@@ -11,13 +11,29 @@ export interface ApiOptions {
 }
 
 /**
+ * Module-level access token. Set once after login (see setAccessToken) so every
+ * request is authenticated without threading the token through each call site.
+ * A per-call `token` option still takes precedence when provided.
+ */
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+/**
  * Low-level fetch wrapper with auth header and JSON serialization.
  */
 async function apiFetch<T>(path: string, options?: RequestInit & { token?: string }): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  const token = options?.token || accessToken;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options?.headers as Record<string, string>),
   };
 
@@ -82,11 +98,19 @@ export const stockApi = {
     list: () => apiFetch<Warehouse[]>('/stock/warehouses'),
     create: (data: { name: string; location: string; icon?: string }, token: string) =>
       apiFetch<Warehouse>('/stock/warehouses', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; location?: string; icon?: string }, token: string) =>
+      apiFetch<Warehouse>(`/stock/warehouses/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/stock/warehouses/${id}`, { method: 'DELETE', token }),
   },
   categories: {
     list: () => apiFetch<Category[]>('/stock/categories'),
     create: (data: { name: string; icon?: string }, token: string) =>
       apiFetch<Category>('/stock/categories', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; icon?: string }, token: string) =>
+      apiFetch<Category>(`/stock/categories/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/stock/categories/${id}`, { method: 'DELETE', token }),
   },
 };
 
@@ -121,6 +145,10 @@ export const salesApi = {
     list: () => apiFetch<Kitchen[]>('/sales/kitchens'),
     create: (data: { name: string; emoji?: string }, token: string) =>
       apiFetch<Kitchen>('/sales/kitchens', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; emoji?: string; active?: boolean }, token: string) =>
+      apiFetch<Kitchen>(`/sales/kitchens/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/sales/kitchens/${id}`, { method: 'DELETE', token }),
   },
 };
 

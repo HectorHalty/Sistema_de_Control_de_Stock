@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Param, Body, Query,
+  Controller, Get, Post, Put, Delete, Param, Body, Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -82,5 +82,17 @@ export class SalesController {
   @Roles('Admin', 'SuperAdmin')
   createKitchen(@Body() body: { name: string; emoji?: string }) {
     return this.salesService.createKitchen(body);
+  }
+
+  @Put('kitchens/:id')
+  @Roles('Admin', 'SuperAdmin')
+  updateKitchen(@Param('id') id: string, @Body() body: { name?: string; emoji?: string; active?: boolean }) {
+    return this.salesService.updateKitchen(id, body);
+  }
+
+  @Delete('kitchens/:id')
+  @Roles('Admin', 'SuperAdmin')
+  removeKitchen(@Param('id') id: string) {
+    return this.salesService.deleteKitchen(id);
   }
 }

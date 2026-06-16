@@ -1,65 +1,61 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import type { CurrentUser } from '@/app/components/store';
-import { getInitials, getRoleLabel } from '@/features/platform/config/modules';
+import { authApi, ApiError } from '@/app/api/client';
+import { clearAllAppData } from '@/shared/storage/clear-app-data';
 
 import logo from '@/assets/logo-chacra.png';
 
 interface LoginPageProps {
-  onLogin: (user: CurrentUser) => void;
+  onLogin: (user: CurrentUser, token: string) => void;
 }
-
-interface RoleOption {
-  username: string;
-  role: CurrentUser['role'];
-  label: string;
-  initials: string;
-}
-
-const roleOptions: RoleOption[] = [
-  { username: 'superadmin', role: 'SuperAdmin', label: 'Super Admin LCH', initials: 'SA' },
-  { username: 'gerente.operaciones', role: 'Gerente_Operaciones', label: 'Gerente de Operaciones', initials: 'GO' },
-  { username: 'encargado.stock', role: 'Encargado_Stock', label: 'Encargado de Stock', initials: 'ES' },
-  { username: 'encargado.futbol', role: 'Encargado_Futbol', label: 'Encargado de Futbol', initials: 'EF' },
-];
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [cacheCleared, setCacheCleared] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('reset')) {
+      clearAllAppData();
+      setCacheCleared(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !password) {
       setError('Por favor completá ambos campos.');
       return;
     }
 
-    const normalizedUser = user.trim().toLowerCase();
-    const normalizedPassword = password.trim().toLowerCase();
-
-    if ((normalizedUser === 'superadmin' && normalizedPassword === 'superadmin') || (normalizedUser === 'admin' && normalizedPassword === 'admin')) {
-      onLogin({ username: 'superadmin', role: 'SuperAdmin' });
-      return;
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authApi.login(user.trim(), password);
+      onLogin(
+        { id: res.user.id, username: res.user.username, role: res.user.role as CurrentUser['role'] },
+        res.access_token,
+      );
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          setError('Demasiados intentos. Esperá unos segundos y volvé a probar.');
+        } else if (err.message === 'Invalid credentials') {
+          setError('Usuario o contraseña incorrectos.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('No se pudo conectar con el servidor. Verificá que la API esté corriendo en http://localhost:3001');
+      }
+    } finally {
+      setLoading(false);
     }
-
-    if (normalizedUser === 'gerente' && normalizedPassword === 'gerente') {
-      onLogin({ username: 'gerente.operaciones', role: 'Gerente_Operaciones' });
-      return;
-    }
-
-    if (normalizedUser === 'stock' && normalizedPassword === 'stock') {
-      onLogin({ username: 'encargado.stock', role: 'Encargado_Stock' });
-      return;
-    }
-
-    if (normalizedUser === 'futbol' && normalizedPassword === 'futbol') {
-      onLogin({ username: 'encargado.futbol', role: 'Encargado_Futbol' });
-      return;
-    }
-
-    onLogin({ username: user, role: 'Gerente_Operaciones' });
   };
 
   return (
@@ -75,6 +71,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             {error && (
               <div className="bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg border border-red-200 dark:border-red-900 text-sm">
                 {error}
+              </div>
+            )}
+            {cacheCleared && (
+              <div className="bg-[#3d7a3d]/10 text-[#3d7a3d] px-4 py-3 rounded-lg border border-[#3d7a3d]/30 text-sm">
+                Datos locales borrados. La base se reinició: podés cargar todo desde cero.
               </div>
             )}
 
@@ -111,9 +112,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
             <button
               type="submit"
-              className="w-full bg-[#3d7a3d] hover:bg-[#2f5f2f] text-white py-3 rounded-lg transition-colors shadow-sm"
+              disabled={loading}
+              className="w-full bg-[#3d7a3d] hover:bg-[#2f5f2f] disabled:opacity-60 disabled:cursor-not-allowed text-white py-3 rounded-lg transition-colors shadow-sm"
             >
-              Ingresar
+              {loading ? 'Ingresando…' : 'Ingresar'}
             </button>
 
             <div className="text-center">
@@ -124,30 +126,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </form>
         </div>
 
-        {/* Role quick-select cards */}
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          {roleOptions.map(option => (
-            <button
-              key={option.username}
-              onClick={() => {
-                setUser(option.username);
-                setPassword(option.username.split('.')[0]);
-              }}
-              className="flex items-center gap-3 bg-card rounded-xl border border-border p-3 hover:border-[#3d7a3d] transition-colors text-left"
-            >
-              <div className="h-8 w-8 rounded-full bg-[#3d7a3d] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {option.initials}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-foreground truncate" style={{ fontWeight: 600 }}>{option.label}</p>
-                <p className="text-[10px] text-muted-foreground">{option.username}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-
         <p className="text-center text-xs text-muted-foreground mt-4">
-          Demo: superadmin/superadmin · gerente/gerente · stock/stock · futbol/futbol
+          Usuario inicial: <span style={{ fontWeight: 600 }}>admin</span> / <span style={{ fontWeight: 600 }}>admin123</span>
         </p>
       </div>
     </div>

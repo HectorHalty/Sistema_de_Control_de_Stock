@@ -88,8 +88,11 @@ type VentasPosStore = {
   salesCategories: string[];
   salesCategoryEmojis: Record<string, string>;
   addSalesCategory: (name: string, emoji?: string) => string | null;
-  saveProduct: (p: PosProduct) => void;
-  deleteProduct: (id: string) => void;
+  saveProduct: (p: PosProduct) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  createKitchen: (input: { name: string; emoji?: string }) => Promise<void>;
+  updateKitchen: (id: string, patch: { name?: string; emoji?: string; active?: boolean }) => Promise<void>;
+  deleteKitchen: (id: string) => Promise<void>;
   saveIngredient: (i: PosIngredient) => void;
   printers: Printer[];
   addPrinter: (printer: Omit<Printer, 'id'>) => void;
@@ -113,13 +116,11 @@ type VentasPosStore = {
 const VentasPosContext = createContext<VentasPosStore | null>(null);
 
 function stationFromKitchen(kitchen: Kitchen | undefined): Station {
-  const name = kitchen?.name ?? 'Cocina';
-  if (stations.includes(name as Station)) return name as Station;
-  return 'Cocina';
+  return kitchen?.name ?? 'Cocina';
 }
 
 function mapCategory(category: string): string {
-  return category.trim() || 'Comidas';
+  return category.trim();
 }
 
 function mapApiTicketToLocal(
@@ -215,7 +216,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
 
   const currentUser = useMemo(
     () => ({
-      id: ctx.currentUser.username,
+      id: ctx.currentUser.id ?? ctx.currentUser.username,
       name: ctx.currentUser.username,
       role: ctx.currentUser.role,
     }),
@@ -280,9 +281,17 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const finishSaleLocal = useCallback(
-    (ticket: SalesTicket, cart: ReturnType<typeof enrichCartKitchens>) => {
+    (
+      ticket: SalesTicket,
+      cart: ReturnType<typeof enrichCartKitchens>,
+      deductLocally = true,
+    ) => {
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
-      ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+      // Si la venta se confirmó contra la API, el stock ya se descontó server-side;
+      // evitamos el doble descuento local y re-hidratamos el stock más abajo.
+      if (deductLocally) {
+        ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+      }
       ctx.addStockMovements(
         buildStockMovementsFromCart(
           cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
@@ -363,7 +372,10 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             ctx.salesProducts,
           );
           ctx.setSalesTicketCounter(ticket.number);
-          return finishSaleLocal(ticket, cart);
+          const pos = finishSaleLocal(ticket, cart, false);
+          // El stock real lo descontó la API: refrescamos el caché local desde el server.
+          void ctx.refreshStockProducts().catch(() => undefined);
+          return pos;
         }
         if (!apiResult.apiUnavailable && 'error' in apiResult) {
           setToast(`Error en venta: ${apiResult.error}`);
@@ -404,7 +416,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         const apiResult = await salesApi.voidTicket(id, currentUser.id);
         if (apiResult.ok && 'result' in apiResult) {
           const synced = mapApiTicketToLocal(apiResult.result, currentUser.name, ctx.salesProducts);
-          ctx.setProducts(prev => restoreStockForTicket(prev, ticket, ctx.salesProducts));
+          // La API ya restauró el stock server-side: re-hidratamos en vez de restaurar local.
+          void ctx.refreshStockProducts().catch(() => undefined);
           ctx.setSalesTickets(prev =>
             prev.map(t => (t.id === id ? { ...synced, status: 'anulado' as const } : t)),
           );
@@ -584,8 +597,9 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const saveProduct = useCallback(
-    (p: PosProduct) => {
+    async (p: PosProduct) => {
       const kitchen = ctx.kitchens.find(k => k.name === p.station) || ctx.kitchens[0];
+      const exists = ctx.salesProducts.some(x => x.id === p.id);
       const salesProduct: SalesProduct = {
         id: p.id,
         name: p.name,
@@ -599,18 +613,26 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           quantity: r.qty,
         })),
       };
-      ctx.setSalesProducts(prev =>
-        prev.find(x => x.id === p.id)
-          ? prev.map(x => (x.id === p.id ? salesProduct : x))
-          : [...prev, salesProduct],
-      );
+      try {
+        if (exists) {
+          await ctx.updateSalesProduct(salesProduct);
+        } else {
+          await ctx.createSalesProduct(salesProduct);
+        }
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : 'No se pudo guardar el producto');
+      }
     },
     [ctx],
   );
 
   const deleteProduct = useCallback(
-    (id: string) => {
-      ctx.setSalesProducts(prev => prev.filter(p => p.id !== id));
+    async (id: string) => {
+      try {
+        await ctx.deleteSalesProduct(id);
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : 'No se pudo eliminar el producto');
+      }
     },
     [ctx],
   );
@@ -661,6 +683,9 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     addSalesCategory: ctx.addSalesCategory,
     saveProduct,
     deleteProduct,
+    createKitchen: ctx.createKitchen,
+    updateKitchen: ctx.updateKitchen,
+    deleteKitchen: ctx.deleteKitchen,
     saveIngredient,
     printers: ctx.salesPrinters,
     addPrinter: ctx.addPrinter,

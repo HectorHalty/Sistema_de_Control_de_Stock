@@ -10,10 +10,4 @@ export const SALES_PRODUCT_EMOJIS = [
   '🔥', '🍳', '🥃', '🧊', '🫗', '🍴', '🥢', '🫙',
 ] as const;
 
-export const SALES_CATEGORY_DEFAULT_EMOJI: Record<string, string> = {
-  Comidas: '🍔',
-  Bebidas: '🥤',
-  Snacks: '🍟',
-  Postres: '🍦',
-  Promos: '🎯',
-};
+export const SALES_CATEGORY_DEFAULT_EMOJI: Record<string, string> = {};

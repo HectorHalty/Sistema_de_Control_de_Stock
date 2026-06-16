@@ -1,6 +1,6 @@
 ﻿import type { Product, Category } from '@/app/components/store';
 import { getUnitLabel } from '@/app/components/store';
-import { previewNextProductCode, reassignProductCodes } from '@/features/inventory/product-codes';
+import { previewNextProductCode } from '@/features/inventory/product-codes';
 import { useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { Plus, Search, Edit, Trash2, X, Package, ChevronDown, ChevronUp } from 'lucide-react';
@@ -10,7 +10,18 @@ import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inven
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
 
 export function ProductsPage() {
-  const { products, setProducts, warehouses, categories, setCategories, getTotalStock, addAudit, addStockMovements } = useAppContext();
+  const {
+    products,
+    warehouses,
+    categories,
+    getTotalStock,
+    addAudit,
+    addStockMovements,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    createCategory,
+  } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showCatFilter, setShowCatFilter] = useState(false);
@@ -25,14 +36,19 @@ export function ProductsPage() {
     return matchSearch && matchCat;
   }).sort((a, b) => a.category.localeCompare(b.category, 'es') || a.name.localeCompare(b.name, 'es'));
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const product = products.find(p => p.id === id);
-    setProducts(prev => reassignProductCodes(prev.filter(p => p.id !== id)));
+    try {
+      await deleteProduct(id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo eliminar el producto');
+      return;
+    }
     addAudit({ user: 'Admin', action: 'Eliminación Producto', element: product?.name || '', previousValue: '-', newValue: '-' });
     setDeleteConfirm(null);
   };
 
-  const handleSave = (product: Product) => {
+  const handleSave = async (product: Product) => {
     if (editingProduct) {
       // Registrar ajustes manuales de stock por almacén para el libro de movimientos.
       const movements = warehouses
@@ -51,12 +67,22 @@ export function ProductsPage() {
           operatorId: 'Admin',
           operatorName: 'Admin',
         }));
-      if (movements.length > 0) addStockMovements(movements);
 
-      setProducts(prev => reassignProductCodes(prev.map(p => (p.id === product.id ? product : p))));
+      try {
+        await updateProduct(product, editingProduct);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'No se pudo guardar el producto');
+        return;
+      }
+      if (movements.length > 0) addStockMovements(movements);
       addAudit({ user: 'Admin', action: 'Edición Producto', element: product.name, previousValue: '-', newValue: '-' });
     } else {
-      setProducts(prev => reassignProductCodes([...prev, { ...product, id: `p${Date.now()}`, code: '' }]));
+      try {
+        await createProduct(product);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'No se pudo crear el producto');
+        return;
+      }
       addAudit({ user: 'Admin', action: 'Alta Producto', element: product.name, previousValue: '-', newValue: '-' });
     }
     setShowModal(false);
@@ -360,7 +386,11 @@ export function ProductsPage() {
           allProducts={products}
           warehouses={warehouses}
           categories={categories}
-          onAddCategory={(cat: Category) => setCategories(prev => [...prev, cat])}
+          onAddCategory={(cat: Category) => {
+            void createCategory({ name: cat.name, icon: cat.icon }).catch(e =>
+              window.alert(e instanceof Error ? e.message : 'No se pudo crear la categoría'),
+            );
+          }}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditingProduct(null); }}
         />

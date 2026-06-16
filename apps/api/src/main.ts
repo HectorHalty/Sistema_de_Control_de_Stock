@@ -31,27 +31,28 @@ async function bootstrap() {
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 20, // 20 login attempts per window
-    message: { error: 'Too many login attempts, please try again later' },
+    message: { message: 'Too many login attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
   });
 
-  // Rate limiting - general API
+  // Rate limiting - general API (skip health checks used by the panel on every load)
   const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
-    message: { error: 'Too many requests, please try again later' },
+    message: { message: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path === '/health',
   });
 
   // Relax limits in dev mode
   const isDev = process.env.NODE_ENV !== 'production';
   if (isDev) {
     (authLimiter as any).windowMs = 60 * 1000;
-    (authLimiter as any).max = 100;
+    (authLimiter as any).max = 200;
     (generalLimiter as any).windowMs = 60 * 1000;
-    (generalLimiter as any).max = 500;
+    (generalLimiter as any).max = 2000;
   }
 
   app.use('/auth', authLimiter);

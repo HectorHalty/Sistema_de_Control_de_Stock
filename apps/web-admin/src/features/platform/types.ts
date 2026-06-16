@@ -8,6 +8,8 @@ export type UserRole =
   | 'Encargado_Futbol';
 
 export interface CurrentUser {
+  /** Backend user id (UUID). Opcional para compatibilidad con sesiones locales previas. */
+  id?: string;
   username: string;
   role: UserRole;
 }

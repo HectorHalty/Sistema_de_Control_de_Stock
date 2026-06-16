@@ -5,19 +5,14 @@ import { ProductEmojiPicker } from "@/features/sales/components/ProductEmojiPick
 import { RecipeIngredientsEditor } from "@/features/sales/components/RecipeIngredientsEditor";
 import { SalesCategorySelect } from "@/features/sales/components/SalesCategorySelect";
 import { getSalesCategoryEmoji, mergeSalesCategories } from "@/features/sales/lib/sales-categories";
-import { Product, Station, stations } from "./mockData";
+import { Product } from "./mockData";
+import { getStationStyle } from "./station-styles";
 import { useStore } from "./VentasPosContext";
-
-const stationStyle: Record<Station, string> = {
-  Parrilla: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300",
-  Barra: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300",
-  Cervecería: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
-  Cocina: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
-};
 
 export function ProductsModule() {
   const {
     products,
+    kitchens,
     salesCategories,
     salesCategoryEmojis,
     addSalesCategory,
@@ -47,8 +42,8 @@ export function ProductsModule() {
     id: `p${Date.now()}`,
     name: "",
     price: 0,
-    category: "Comidas",
-    station: "Cocina",
+    category: "",
+    station: kitchens[0]?.name ?? "",
     stock: 0,
     emoji: "🍽️",
     recipe: [],
@@ -70,7 +65,7 @@ export function ProductsModule() {
         ))}
       </div>
 
-      {tab === "cocinas" && <StationsTab products={products} />}
+      {tab === "cocinas" && <KitchensManager />}
 
       {tab === "productos" && (
       <>
@@ -85,7 +80,12 @@ export function ProductsModule() {
       </div>
 
       <div className="space-y-5 pb-20">
-        {categoryList.map((cat) => {
+        {categoryList.length === 0 ? (
+          <p className="text-sm text-muted-foreground px-2">
+            No hay categorías todavía. Creá la primera al agregar un producto con &quot;+ Nueva categoría&quot;.
+          </p>
+        ) : (
+        categoryList.map((cat) => {
           const list = products.filter((p) => p.category === cat);
           return (
             <section key={cat}>
@@ -107,7 +107,7 @@ export function ProductsModule() {
                       <div className="flex-1 min-w-0">
                         <div className="text-foreground truncate">{p.name}</div>
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                          <span className={`px-1.5 py-0.5 rounded ${stationStyle[p.station]}`}>
+                          <span className={`px-1.5 py-0.5 rounded ${getStationStyle(p.station)}`}>
                             {p.station}
                           </span>
                           <span className="text-emerald-600 dark:text-emerald-400">${p.price.toLocaleString()}</span>
@@ -139,7 +139,8 @@ export function ProductsModule() {
               )}
             </section>
           );
-        })}
+        })
+        )}
       </div>
 
       {(editing || creating) && (
@@ -160,33 +161,164 @@ export function ProductsModule() {
   );
 }
 
-function StationsTab({ products }: { products: Product[] }) {
+function KitchensManager() {
+  const { kitchens, products, createKitchen, updateKitchen, deleteKitchen, setToast } = useStore();
+  const [editing, setEditing] = useState<{ id: string; name: string; emoji: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("🍽️");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const productCountByKitchen = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      counts.set(p.station, (counts.get(p.station) ?? 0) + 1);
+    }
+    return counts;
+  }, [products]);
+
+  const startCreate = () => {
+    setCreating(true);
+    setEditing(null);
+    setName("");
+    setEmoji("🍽️");
+  };
+
+  const startEdit = (k: { id: string; name: string; emoji: string }) => {
+    setEditing(k);
+    setCreating(false);
+    setName(k.name);
+    setEmoji(k.emoji || "🍽️");
+  };
+
+  const closeForm = () => {
+    setCreating(false);
+    setEditing(null);
+    setName("");
+    setEmoji("🍽️");
+  };
+
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setToast("Ingresá un nombre para la cocina.");
+      return;
+    }
+    try {
+      if (editing) {
+        await updateKitchen(editing.id, { name: trimmed, emoji });
+      } else {
+        await createKitchen({ name: trimmed, emoji });
+      }
+      closeForm();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "No se pudo guardar la cocina");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteKitchen(id);
+      setConfirmDelete(null);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "No se pudo eliminar la cocina");
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {stations.map((s) => {
-        const list = products.filter((p) => p.station === s);
-        return (
-          <div key={s} className="bg-card rounded-xl border border-border p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`px-2 py-0.5 rounded ${stationStyle[s]}`}>{s}</span>
-              <span className="text-xs text-muted-foreground">{list.length} productos</span>
-            </div>
-            {list.length === 0 ? (
-              <div className="text-sm text-muted-foreground italic">Sin productos asignados</div>
-            ) : (
-              <ul className="space-y-1">
-                {list.map((p) => (
-                  <li key={p.id} className="flex items-center gap-2 text-sm text-foreground">
-                    <span>{p.emoji}</span>
-                    <span className="flex-1 truncate">{p.name}</span>
-                    <span className="text-xs text-muted-foreground">{p.category}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+    <div className="space-y-4 pb-20">
+      <div className="flex justify-between items-center">
+        <h3 className="text-foreground">Cocinas / Sectores ({kitchens.length})</h3>
+        <button
+          onClick={startCreate}
+          className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
+        >
+          <Plus className="w-4 h-4" /> Nueva
+        </button>
+      </div>
+
+      {(creating || editing) && (
+        <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <ChefHat className="w-4 h-4 text-emerald-600" />
+            {editing ? "Editar cocina" : "Nueva cocina"}
           </div>
-        );
-      })}
+          <div className="flex gap-2">
+            <ProductEmojiPicker value={emoji} onChange={setEmoji} />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre de la cocina..."
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleSave();
+                }
+              }}
+              className="min-w-0 flex-1 px-3 py-2 border border-border rounded-lg bg-input-background"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={closeForm} className="px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent rounded-lg">
+              Cancelar
+            </button>
+            <button onClick={() => void handleSave()} className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              {editing ? "Guardar" : "Crear"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {kitchens.length === 0 ? (
+        <p className="text-sm text-muted-foreground px-2">No hay cocinas. Creá la primera con &quot;Nueva&quot;.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {kitchens.map((k) => {
+            const count = productCountByKitchen.get(k.name) ?? 0;
+            return (
+              <div key={k.id} className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
+                <span className="text-2xl">{k.emoji || "🍽️"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-foreground truncate">{k.name}</div>
+                  <div className="text-xs text-muted-foreground">{count} producto(s)</div>
+                </div>
+                <button
+                  onClick={() => startEdit({ id: k.id, name: k.name, emoji: k.emoji || "🍽️" })}
+                  className="p-2 hover:bg-accent rounded"
+                  title="Editar"
+                >
+                  <Edit2 className="w-4 h-4 text-muted-foreground" />
+                </button>
+                {confirmDelete === k.id ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => void handleDelete(k.id)}
+                      className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+                    >
+                      Eliminar
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="px-2 py-1 text-xs text-muted-foreground hover:bg-accent rounded"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(k.id)}
+                    className="p-2 hover:bg-red-50 dark:hover:bg-red-950/40 rounded"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-500 dark:text-red-400" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -204,8 +336,9 @@ function ProductEditor({
   onSave: (p: Product) => void;
   onClose: () => void;
 }) {
-  const { addSalesCategory, salesCategoryEmojis, ingredients } = useStore();
+  const { addSalesCategory, salesCategoryEmojis, ingredients, kitchens } = useStore();
   const [draft, setDraft] = useState<Product>({ ...product, recipe: product.recipe || [] });
+  const [saveError, setSaveError] = useState('');
 
   const calculatedStock = useMemo(() => {
     const availability = new Map(ingredients.map(i => [i.id, i.stock]));
@@ -280,12 +413,13 @@ function ProductEditor({
               <label className="text-sm text-muted-foreground mb-1 block">Cocina / Sector</label>
               <select
                 value={draft.station}
-                onChange={(e) => setDraft({ ...draft, station: e.target.value as Station })}
+                onChange={(e) => setDraft({ ...draft, station: e.target.value })}
                 className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
               >
-                {stations.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                {kitchens.length === 0 && <option value="">Sin cocinas</option>}
+                {kitchens.map((k) => (
+                  <option key={k.id} value={k.name}>
+                    {k.emoji ? `${k.emoji} ` : ""}{k.name}
                   </option>
                 ))}
               </select>
@@ -308,16 +442,30 @@ function ProductEditor({
           </div>
         </div>
 
-        <div className="border-t border-border p-4 flex gap-2 justify-end">
+        <div className="border-t border-border p-4 flex flex-col gap-2 items-end">
+          {saveError && <p className="text-sm text-red-600 dark:text-red-400 w-full">{saveError}</p>}
+          <div className="flex gap-2">
           <button onClick={onClose} className="px-4 py-2 text-foreground">
             Cancelar
           </button>
           <button
-            onClick={() => onSave(draft)}
+            onClick={() => {
+              if (!draft.name.trim()) {
+                setSaveError('Ingresá un nombre para el producto.');
+                return;
+              }
+              if (!draft.category.trim()) {
+                setSaveError('Seleccioná o creá una categoría.');
+                return;
+              }
+              setSaveError('');
+              onSave(draft);
+            }}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg"
           >
             Guardar
           </button>
+          </div>
         </div>
       </div>
     </div>

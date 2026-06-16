@@ -2,32 +2,11 @@ import { useMemo, useState } from "react";
 
 import { Plus, Search, Star } from "lucide-react";
 
-import { stations, type Station } from "./mockData";
-
 import type { PosProduct } from "./VentasPosContext";
 
+import { getStationStyle } from "./station-styles";
 import { mergeSalesCategories } from "@/features/sales/lib/sales-categories";
 import { useFavoriteProductIds } from "./sales-favorites";
-
-
-
-const kitchenFilters = ["Todas", "Favoritos", ...stations] as const;
-
-type KitchenFilter = (typeof kitchenFilters)[number];
-
-
-
-const stationBadge: Record<Station, string> = {
-
-  Parrilla: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300",
-
-  Barra: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300",
-
-  Cervecería: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
-
-  Cocina: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
-
-};
 
 
 
@@ -75,7 +54,7 @@ export function PosProductPicker({
 
   const [category, setCategory] = useState("Todos");
 
-  const [kitchen, setKitchen] = useState<KitchenFilter>("Todas");
+  const [kitchen, setKitchen] = useState<string>("Todas");
 
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteProductIds();
 
@@ -83,6 +62,12 @@ export function PosProductPicker({
     () => ["Todos", ...mergeSalesCategories([], products.map((p) => p.category))],
     [products],
   );
+
+  const kitchenFilters = useMemo(() => {
+    const names = Array.from(new Set(products.map((p) => p.station).filter(Boolean)));
+    names.sort((a, b) => a.localeCompare(b, "es"));
+    return ["Todas", "Favoritos", ...names];
+  }, [products]);
 
   const filtered = useMemo(
 
@@ -272,7 +257,7 @@ export function PosProductPicker({
 
                     <span
 
-                      className={`rounded px-1.5 py-0.5 text-[10px] ${stationBadge[p.station]}`}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${getStationStyle(p.station)}`}
 
                     >
 

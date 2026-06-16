@@ -1,4 +1,5 @@
-export const DEFAULT_SALES_CATEGORIES = [
+/** Categorías mock que venían precargadas; se eliminan al migrar sesiones viejas. */
+export const LEGACY_MOCK_SALES_CATEGORIES = [
   'Comidas',
   'Bebidas',
   'Snacks',
@@ -6,13 +7,10 @@ export const DEFAULT_SALES_CATEGORIES = [
   'Promos',
 ] as const;
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  Comidas: '🍔',
-  Bebidas: '🥤',
-  Snacks: '🍟',
-  Postres: '🍦',
-  Promos: '🎯',
-};
+/** Sin categorías por defecto: el operador las crea al cargar el catálogo. */
+export const DEFAULT_SALES_CATEGORIES: readonly string[] = [];
+
+const CATEGORY_EMOJI: Record<string, string> = {};
 
 export function getSalesCategoryEmoji(
   category: string,

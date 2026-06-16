@@ -66,7 +66,7 @@ export class SalesService {
         SELECT sl.*, p.name as "productName"
         FROM "StockLevel" sl
         JOIN "Product" p ON p.id = sl."productId"
-        WHERE sl."productId" = ANY(${stockProductIds}::uuid[])
+        WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
         FOR UPDATE
       ` as Array<{ productId: string; quantity: number; warehouseId: string; productName: string }>;
 
@@ -104,7 +104,7 @@ export class SalesService {
         // Use raw query for reliable composite key update
         await tx.$executeRaw`
           UPDATE "StockLevel" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
-          WHERE "productId" = ${level.productId} AND "warehouseId" = ${level.warehouseId}
+          WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
         `;
       }
 
@@ -241,7 +241,7 @@ export class SalesService {
         if (levels.length > 0) {
           await tx.$executeRaw`
             UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
-            WHERE id = ${levels[0].id}
+            WHERE id::text = ${levels[0].id}
           `;
         }
       }
@@ -378,7 +378,7 @@ export class SalesService {
         });
         if (levels.length > 0) {
           await tx.$executeRaw`
-            UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW() WHERE id = ${levels[0].id}
+            UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW() WHERE id::text = ${levels[0].id}
           `;
         }
       }
@@ -399,6 +399,31 @@ export class SalesService {
 
   async createKitchen(data: { name: string; emoji?: string }) {
     return this.prisma.kitchen.create({ data });
+  }
+
+  async updateKitchen(id: string, data: { name?: string; emoji?: string; active?: boolean }) {
+    const existing = await this.prisma.kitchen.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Kitchen ${id} not found`);
+    return this.prisma.kitchen.update({ where: { id }, data });
+  }
+
+  async deleteKitchen(id: string) {
+    const existing = await this.prisma.kitchen.findUnique({
+      where: { id },
+      include: { _count: { select: { salesProducts: true, orders: true } } },
+    });
+    if (!existing) throw new NotFoundException(`Kitchen ${id} not found`);
+    if (existing._count.salesProducts > 0) {
+      throw new ConflictException(
+        `No se puede eliminar la cocina: tiene ${existing._count.salesProducts} producto(s) asignado(s).`,
+      );
+    }
+    if (existing._count.orders > 0) {
+      throw new ConflictException(
+        'No se puede eliminar la cocina: tiene comandas asociadas. Desactivala en su lugar.',
+      );
+    }
+    return this.prisma.kitchen.delete({ where: { id } });
   }
 
   // ============ Tables ============

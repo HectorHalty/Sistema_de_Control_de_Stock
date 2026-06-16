@@ -67,6 +67,18 @@ export class StockController {
     return this.stockService.createWarehouse(dto);
   }
 
+  @Put('warehouses/:id')
+  @Roles('Admin', 'SuperAdmin')
+  updateWarehouse(@Param('id') id: string, @Body() dto: { name?: string; location?: string; icon?: string }) {
+    return this.stockService.updateWarehouse(id, dto);
+  }
+
+  @Delete('warehouses/:id')
+  @Roles('Admin', 'SuperAdmin')
+  removeWarehouse(@Param('id') id: string) {
+    return this.stockService.deleteWarehouse(id);
+  }
+
   // Categories
   @Get('categories')
   findAllCategories() {
@@ -77,5 +89,17 @@ export class StockController {
   @Roles('Admin', 'SuperAdmin')
   createCategory(@Body() dto: { name: string; icon?: string }) {
     return this.stockService.createCategory(dto);
+  }
+
+  @Put('categories/:id')
+  @Roles('Admin', 'SuperAdmin')
+  updateCategory(@Param('id') id: string, @Body() dto: { name?: string; icon?: string }) {
+    return this.stockService.updateCategory(id, dto);
+  }
+
+  @Delete('categories/:id')
+  @Roles('Admin', 'SuperAdmin')
+  removeCategory(@Param('id') id: string) {
+    return this.stockService.deleteCategory(id);
   }
 }

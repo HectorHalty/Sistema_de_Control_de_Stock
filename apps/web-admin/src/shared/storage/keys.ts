@@ -1,5 +1,9 @@
 /** Claves de localStorage — no renombrar sin migración de datos en clientes. */
 export const storageKeys = {
+  auth: {
+    accessToken: 'lch-auth-token',
+    user: 'lch-auth-user',
+  },
   inventory: {
     products: 'stock-products',
     warehouses: 'stock-warehouses',

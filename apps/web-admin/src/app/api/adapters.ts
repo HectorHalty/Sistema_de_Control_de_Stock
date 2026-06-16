@@ -18,7 +18,7 @@ import type {
 /**
  * Check if the API is reachable.
  */
-async function isApiReachable(): Promise<boolean> {
+export async function isApiReachable(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
@@ -31,12 +31,18 @@ async function isApiReachable(): Promise<boolean> {
 }
 
 /**
- * The admin panel works primarily on localStorage and does not hold an API JWT.
- * When the API rejects a request for auth reasons (401/403), we treat it as
- * "API unavailable" so the caller falls back to the local flow instead of failing.
+ * Fase 2 completa: el catálogo (stock + ventas + recetas) vive en la API con UUIDs
+ * reales, así que un error del servidor en checkout/void/return es un error real
+ * (validación 400, autorización 401/403, stock insuficiente 409, etc.) y NO debe
+ * degradar silenciosamente a una venta local —eso crearía un ticket que el servidor
+ * nunca registra (stock no descontado server-side, datos divergentes)—.
+ *
+ * El modo 100% local solo aplica cuando la API está caída (health check en `false`),
+ * caso que se maneja antes de llegar acá (apiAvailable). Por eso nunca degradamos
+ * ante un `ApiError`: surfaceamos el mensaje al operador para que reintente.
  */
-function isAuthError(e: unknown): boolean {
-  return e instanceof ApiError && (e.status === 401 || e.status === 403);
+function shouldFallbackToLocal(_e: unknown): boolean {
+  return false;
 }
 
 // ==================== Sales Adapter ====================
@@ -61,8 +67,8 @@ export function useSalesApiAdapter() {
       const result = await salesApi.checkout(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
-        // La API requiere autenticación que el panel no tiene: usar modo local.
+      if (shouldFallbackToLocal(e)) {
+        // Catálogo aún no migrado a la API: completar la venta en modo local.
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Checkout failed';
@@ -83,7 +89,7 @@ export function useSalesApiAdapter() {
       const result = await salesApi.returnSale(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
+      if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Return failed';
@@ -104,7 +110,7 @@ export function useSalesApiAdapter() {
       const result = await salesApi.tickets.void(ticketId, operatorId, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (isAuthError(e)) {
+      if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Void failed';

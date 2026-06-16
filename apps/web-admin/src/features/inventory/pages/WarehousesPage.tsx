@@ -8,7 +8,16 @@ import { Plus, Edit, Trash2, X, Package, ChevronDown, ChevronUp, Search } from '
 import type { Warehouse as WarehouseType, Category } from '@/app/components/store';
 
 export function WarehousesPage() {
-  const { warehouses, setWarehouses, products, categories, getWarehouseTotalProducts, addAudit } = useAppContext();
+  const {
+    warehouses,
+    products,
+    categories,
+    getWarehouseTotalProducts,
+    addAudit,
+    createWarehouse,
+    updateWarehouse,
+    deleteWarehouse,
+  } = useAppContext();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<WarehouseType | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -23,21 +32,31 @@ export function WarehousesPage() {
     setShowCatFilter(false);
   }, [expandedId]);
 
-  const handleSave = (wh: WarehouseType) => {
-    if (editing) {
-      setWarehouses(prev => prev.map(w => w.id === wh.id ? wh : w));
-      addAudit({ user: 'Admin', action: 'Edición Almacén', element: wh.name });
-    } else {
-      setWarehouses(prev => [...prev, { ...wh, id: `w${Date.now()}` }]);
-      addAudit({ user: 'Admin', action: 'Alta Almacén', element: wh.name });
+  const handleSave = async (wh: WarehouseType) => {
+    try {
+      if (editing) {
+        await updateWarehouse(wh);
+        addAudit({ user: 'Admin', action: 'Edición Almacén', element: wh.name });
+      } else {
+        await createWarehouse({ name: wh.name, location: wh.location, icon: wh.icon });
+        addAudit({ user: 'Admin', action: 'Alta Almacén', element: wh.name });
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo guardar el almacén');
+      return;
     }
     setShowModal(false);
     setEditing(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const wh = warehouses.find(w => w.id === id);
-    setWarehouses(prev => prev.filter(w => w.id !== id));
+    try {
+      await deleteWarehouse(id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo eliminar el almacén');
+      return;
+    }
     addAudit({ user: 'Admin', action: 'Eliminación Almacén', element: wh?.name || '' });
     setDeleteConfirm(null);
   };
