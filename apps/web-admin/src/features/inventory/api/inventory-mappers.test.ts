@@ -4,6 +4,8 @@ import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
   mapApiCategoryToLocal,
+  mapApiSupplierToLocal,
+  mapApiPurchaseOrderToLocal,
   nextProductCode,
 } from '@/features/inventory/api/inventory-mappers';
 import { formatProductCode, getCategoryCodePrefix } from '@/features/inventory/product-codes';
@@ -93,5 +95,37 @@ describe('nextProductCode', () => {
 
   it('arranca en 001 para una categoría nueva', () => {
     expect(nextProductCode(products, 'Carnes', getCategoryCodePrefix, formatProductCode)).toBe('CAR-001');
+  });
+});
+
+describe('mapApiSupplierToLocal / mapApiPurchaseOrderToLocal', () => {
+  it('mapea proveedor con productIds', () => {
+    expect(mapApiSupplierToLocal({
+      id: 'sup-1',
+      name: 'Distribuidora Norte',
+      products: [{ id: 'sp1', supplierId: 'sup-1', productId: 'p1' }],
+    })).toEqual({
+      id: 'sup-1',
+      name: 'Distribuidora Norte',
+      productIds: ['p1'],
+    });
+  });
+
+  it('mapea pedido usando orderNumber como id local', () => {
+    expect(mapApiPurchaseOrderToLocal({
+      id: 'uuid-order',
+      orderNumber: 'PED-001',
+      date: '2026-06-16',
+      provider: 'Proveedor X',
+      status: 'Pendiente',
+      createdAt: '2026-06-16T12:00:00Z',
+      items: [{ id: 'i1', purchaseOrderId: 'uuid-order', productId: 'p1', quantityOrdered: 10 }],
+    })).toEqual({
+      id: 'PED-001',
+      date: '2026-06-16',
+      provider: 'Proveedor X',
+      status: 'Pendiente',
+      items: [{ productId: 'p1', quantityOrdered: 10, quantityReceived: undefined }],
+    });
   });
 });

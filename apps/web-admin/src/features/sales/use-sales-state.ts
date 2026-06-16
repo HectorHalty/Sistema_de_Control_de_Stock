@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
 import { salesApi } from '@/app/api/client';
 import { isApiReachable } from '@/app/api/adapters';
-import { mapApiSalesProductToLocal, mapApiKitchenToLocal } from './api/sales-mappers';
+import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
 import { initialKitchens, initialSalesProducts, initialTables } from './seeds';
 import type {
@@ -40,6 +40,8 @@ export function useSalesState() {
     storageKeys.sales.categoryEmojis,
     {},
   );
+  const salesCategoriesRef = useRef(salesCategories);
+  salesCategoriesRef.current = salesCategories;
   const [kitchens, setKitchens] = useLocalStorage<Kitchen[]>(storageKeys.sales.kitchens, initialKitchens);
   const [salesProducts, setSalesProducts] = useLocalStorage<SalesProduct[]>(storageKeys.sales.products, initialSalesProducts);
   const [salesTickets, setSalesTickets] = useLocalStorage<SalesTicket[]>(storageKeys.sales.tickets, []);
@@ -83,24 +85,49 @@ export function useSalesState() {
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(null);
+  const mountHydrationGen = useRef(0);
+
+  const invalidateMountHydration = useCallback(() => {
+    mountHydrationGen.current += 1;
+  }, []);
+
+  const applyHydration = useCallback((mountGen: number | undefined, apply: () => void) => {
+    if (mountGen === undefined || mountGen === mountHydrationGen.current) apply();
+  }, []);
+
+  const markApiSynced = useCallback(() => {
+    invalidateMountHydration();
+    setSalesApiAvailable(prev => (prev === false ? false : true));
+  }, [invalidateMountHydration]);
 
   // ============ API-first: hidratación y CRUD del catálogo de ventas ============
   // Productos de venta (con receta) y cocinas viven en la API. Al montar, si la API
   // responde, sobrescribimos el caché local con lo del servidor; si no, seguimos
   // operando contra localStorage.
 
-  const hydrateKitchens = useCallback(async () => {
+  const hydrateKitchens = useCallback(async (mountGen?: number) => {
     const ks = await salesApi.kitchens.list();
-    setKitchens(ks.map(mapApiKitchenToLocal));
-  }, [setKitchens]);
+    applyHydration(mountGen, () => setKitchens(ks.map(mapApiKitchenToLocal)));
+  }, [setKitchens, applyHydration]);
 
-  const hydrateSalesProducts = useCallback(async () => {
+  const hydrateSalesProducts = useCallback(async (mountGen?: number): Promise<SalesProduct[]> => {
     const ps = await salesApi.products.list();
-    setSalesProducts(ps.map(mapApiSalesProductToLocal));
-  }, [setSalesProducts]);
+    const local = ps.map(mapApiSalesProductToLocal);
+    applyHydration(mountGen, () => setSalesProducts(local));
+    return local;
+  }, [setSalesProducts, applyHydration]);
+
+  const hydrateTickets = useCallback(
+    async (products: SalesProduct[], mountGen?: number) => {
+      const ts = await salesApi.tickets.list();
+      applyHydration(mountGen, () => setSalesTickets(ts.map(t => mapApiTicketToLocal(t, products))));
+    },
+    [setSalesTickets, applyHydration],
+  );
 
   useEffect(() => {
     let cancelled = false;
+    const mountGen = mountHydrationGen.current;
     isApiReachable().then(async ok => {
       if (cancelled) return;
       if (!ok) {
@@ -108,20 +135,29 @@ export function useSalesState() {
         return;
       }
       try {
-        await Promise.all([hydrateKitchens(), hydrateSalesProducts()]);
-        if (!cancelled) setSalesApiAvailable(true);
+        const [, products] = await Promise.all([hydrateKitchens(mountGen), hydrateSalesProducts(mountGen)]);
+        await hydrateTickets(products, mountGen);
+        if (!cancelled && mountGen === mountHydrationGen.current) {
+          setSalesApiAvailable(true);
+        }
       } catch {
-        if (!cancelled) setSalesApiAvailable(false);
+        if (!cancelled && mountGen === mountHydrationGen.current) {
+          setSalesApiAvailable(false);
+        }
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrateKitchens, hydrateSalesProducts]);
+  }, [hydrateKitchens, hydrateSalesProducts, hydrateTickets]);
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      if (salesApiAvailable) {
+      if (salesApiAvailable === false) {
+        setSalesProducts(prev => [...prev, { ...input, id: `p${Date.now()}` }]);
+        return;
+      }
+      try {
         await salesApi.products.create(
           {
             name: input.name,
@@ -133,17 +169,24 @@ export function useSalesState() {
           },
           '',
         );
+        markApiSynced();
         await hydrateSalesProducts();
         return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setSalesProducts(prev => [...prev, { ...input, id: `p${Date.now()}` }]);
       }
-      setSalesProducts(prev => [...prev, { ...input, id: `p${Date.now()}` }]);
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts],
+    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      if (salesApiAvailable) {
+      if (salesApiAvailable === false) {
+        setSalesProducts(prev => prev.map(p => (p.id === input.id ? input : p)));
+        return;
+      }
+      try {
         await salesApi.products.update(
           input.id,
           {
@@ -157,61 +200,91 @@ export function useSalesState() {
           },
           '',
         );
+        markApiSynced();
         await hydrateSalesProducts();
         return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setSalesProducts(prev => prev.map(p => (p.id === input.id ? input : p)));
       }
-      setSalesProducts(prev => prev.map(p => (p.id === input.id ? input : p)));
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts],
+    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
-  // La API no expone DELETE de productos de venta: se desactivan (active: false).
   const deleteSalesProduct = useCallback(
     async (id: string): Promise<void> => {
-      if (salesApiAvailable) {
-        await salesApi.products.update(id, { active: false }, '');
-        await hydrateSalesProducts();
+      if (salesApiAvailable === false) {
+        setSalesProducts(prev => prev.filter(p => p.id !== id));
         return;
       }
-      setSalesProducts(prev => prev.filter(p => p.id !== id));
+      try {
+        await salesApi.products.update(id, { active: false }, '');
+        markApiSynced();
+        await hydrateSalesProducts();
+        return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setSalesProducts(prev => prev.filter(p => p.id !== id));
+      }
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts],
+    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const createKitchen = useCallback(
     async (input: { name: string; emoji?: string }): Promise<void> => {
-      if (salesApiAvailable) {
-        await salesApi.kitchens.create({ name: input.name, emoji: input.emoji || undefined }, '');
-        await hydrateKitchens();
+      if (salesApiAvailable === false) {
+        setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: input.name, emoji: input.emoji || '🍽️', active: true }]);
         return;
       }
-      setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: input.name, emoji: input.emoji || '🍽️', active: true }]);
+      try {
+        await salesApi.kitchens.create({ name: input.name, emoji: input.emoji || undefined }, '');
+        markApiSynced();
+        await hydrateKitchens();
+        return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: input.name, emoji: input.emoji || '🍽️', active: true }]);
+      }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens],
+    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const updateKitchen = useCallback(
     async (id: string, patch: { name?: string; emoji?: string; active?: boolean }): Promise<void> => {
-      if (salesApiAvailable) {
-        await salesApi.kitchens.update(id, patch, '');
-        await hydrateKitchens();
+      if (salesApiAvailable === false) {
+        setKitchens(prev => prev.map(k => (k.id === id ? { ...k, ...patch } : k)));
         return;
       }
-      setKitchens(prev => prev.map(k => (k.id === id ? { ...k, ...patch } : k)));
+      try {
+        await salesApi.kitchens.update(id, patch, '');
+        markApiSynced();
+        await hydrateKitchens();
+        return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setKitchens(prev => prev.map(k => (k.id === id ? { ...k, ...patch } : k)));
+      }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens],
+    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const deleteKitchen = useCallback(
     async (id: string): Promise<void> => {
-      if (salesApiAvailable) {
-        await salesApi.kitchens.remove(id, '');
-        await hydrateKitchens();
+      if (salesApiAvailable === false) {
+        setKitchens(prev => prev.filter(k => k.id !== id));
         return;
       }
-      setKitchens(prev => prev.filter(k => k.id !== id));
+      try {
+        await salesApi.kitchens.remove(id, '');
+        markApiSynced();
+        await hydrateKitchens();
+        return;
+      } catch (e) {
+        if (salesApiAvailable === true) throw e;
+        setKitchens(prev => prev.filter(k => k.id !== id));
+      }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens],
+    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const addSalesAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
@@ -221,20 +294,17 @@ export function useSalesState() {
   const addSalesCategory = useCallback((name: string, emoji = '🍽️'): string | null => {
     const normalized = normalizeCategoryName(name);
     if (!normalized) return null;
-    let result: string | null = null;
-    setSalesCategories(prev => {
-      const existing = prev.find(c => c.toLowerCase() === normalized.toLowerCase());
-      if (existing) {
-        result = existing;
-        return prev;
-      }
-      result = normalized;
-      return [...prev, normalized];
-    });
-    if (result === normalized) {
-      setSalesCategoryEmojis(prev => ({ ...prev, [normalized]: emoji }));
+
+    const prev = salesCategoriesRef.current;
+    const existing = prev.find(c => c.toLowerCase() === normalized.toLowerCase());
+    const key = existing ?? normalized;
+
+    if (!existing) {
+      setSalesCategories(current => [...current, normalized]);
     }
-    return result;
+    setSalesCategoryEmojis(current => ({ ...current, [key]: emoji }));
+
+    return key;
   }, [setSalesCategories, setSalesCategoryEmojis]);
 
   const addPrinter = useCallback((printer: Omit<SalesPrinter, 'id'>) => {
@@ -294,6 +364,7 @@ export function useSalesState() {
     setSalesProducts,
     salesApiAvailable,
     hydrateSalesProducts,
+    hydrateTickets,
     createSalesProduct,
     updateSalesProduct,
     deleteSalesProduct,

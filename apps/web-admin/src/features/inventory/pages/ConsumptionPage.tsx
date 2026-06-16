@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { stockApi } from '@/app/api/client';
+import { useEffect, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { getWarehouseIcon } from '@/features/inventory/lib/warehouse-icons';
@@ -18,7 +19,11 @@ interface StockEdit {
 }
 
 export function ConsumptionPage() {
-  const { products, warehouses, categories, setProducts, consumptionLogs, setConsumptionLogs, setStockCountSessions, currentUser, addAudit } = useAppContext();
+  const {
+    products, warehouses, categories, setProducts, consumptionLogs, setConsumptionLogs,
+    saveStockCountSession, inventoryApiAvailable, refreshStockProducts, refreshOperations,
+    currentUser, addAudit,
+  } = useAppContext();
   const [dateType, setDateType] = useState<DateType>('regular');
   const [expandedWarehouse, setExpandedWarehouse] = useState<string | null>(null);
   const [warehouseSearch, setWarehouseSearch] = useState('');
@@ -60,7 +65,7 @@ export function ConsumptionPage() {
 
   const hasChanges = edits.some(e => e.newStock !== e.previousStock);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const now = new Date();
     const today = now.toLocaleDateString('es-AR');
     const day = now.toISOString().slice(0, 10);
@@ -91,23 +96,6 @@ export function ConsumptionPage() {
       entries,
     };
 
-    // Update products with new stock values
-    setProducts(prev => prev.map(p => {
-      const changed = changedEdits.filter(e => e.productId === p.id);
-      if (changed.length === 0) return p;
-      return {
-        ...p,
-        stockByWarehouse: p.stockByWarehouse.map(s => {
-          const edit = changed.find(e => e.warehouseId === s.warehouseId);
-          return edit ? { ...s, quantity: edit.newStock } : s;
-        }),
-      };
-    }));
-
-    // Save consumption log
-    setConsumptionLogs(prev => [newLog, ...prev]);
-
-    // Save full stock-count session (esperado vs contado, todos los productos).
     const productAgg = new Map<string, { expected: number; counted: number }>();
     for (const e of edits) {
       const agg = productAgg.get(e.productId) ?? { expected: 0, counted: 0 };
@@ -115,13 +103,14 @@ export function ConsumptionPage() {
       agg.counted += e.newStock;
       productAgg.set(e.productId, agg);
     }
+
     const countSession: StockCountSession = {
       id: `count-${Date.now()}`,
       createdAtISO: now.toISOString(),
       date: newLog.date,
       dateType,
-      operatorId: currentUser?.username,
-      operatorName: currentUser?.username,
+      operatorId: currentUser?.id,
+      operatorName: currentUser?.name,
       entries: Array.from(productAgg.entries()).map(([productId, agg]) => {
         const product = products.find(p => p.id === productId);
         return {
@@ -133,7 +122,43 @@ export function ConsumptionPage() {
         };
       }),
     };
-    setStockCountSessions(prev => [countSession, ...prev]);
+
+    if (inventoryApiAvailable) {
+      try {
+        for (const e of changedEdits) {
+          const delta = e.newStock - e.previousStock;
+          if (delta !== 0) {
+            await stockApi.products.adjustStock(e.productId, e.warehouseId, delta, '', {
+              reference: 'control-stock',
+              operatorId: currentUser?.id,
+              operatorName: currentUser?.name,
+            });
+          }
+        }
+        await saveStockCountSession(countSession);
+        await refreshStockProducts();
+        await refreshOperations();
+      } catch {
+        return;
+      }
+    } else {
+      // Update products with new stock values (modo local)
+      setProducts(prev => prev.map(p => {
+        const changed = changedEdits.filter(e => e.productId === p.id);
+        if (changed.length === 0) return p;
+        return {
+          ...p,
+          stockByWarehouse: p.stockByWarehouse.map(s => {
+            const edit = changed.find(e => e.warehouseId === s.warehouseId);
+            return edit ? { ...s, quantity: edit.newStock } : s;
+          }),
+        };
+      }));
+      await saveStockCountSession(countSession);
+    }
+
+    // Save consumption log (local; usado por historial legacy)
+    setConsumptionLogs(prev => [newLog, ...prev]);
 
     // Audit
     addAudit({

@@ -17,6 +17,10 @@ export function getSalesCategoryEmoji(
   customEmojis: Record<string, string> = {},
 ): string {
   if (customEmojis[category]) return customEmojis[category];
+  const matchKey = Object.keys(customEmojis).find(
+    k => k.toLowerCase() === category.toLowerCase(),
+  );
+  if (matchKey) return customEmojis[matchKey];
   return CATEGORY_EMOJI[category] ?? '🍽️';
 }
 

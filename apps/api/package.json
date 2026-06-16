@@ -10,6 +10,7 @@
     "start:prod": "node dist/main",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:deep": "vitest run test/integration/platform-migration-deep.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",

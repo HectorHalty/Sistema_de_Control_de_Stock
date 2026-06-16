@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
+    "test:deep": "vitest run src/features/inventory/platform-migration-deep.test.ts",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder --win --x64",
     "cap:sync": "npx cap sync",

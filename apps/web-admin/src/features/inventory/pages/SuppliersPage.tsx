@@ -7,7 +7,7 @@ type ViewMode = 'list' | 'create' | 'edit';
 
 export function SuppliersPage() {
   const ctx = useAppContext();
-  const { suppliers, setSuppliers, products, addAudit } = ctx;
+  const { suppliers, products, addAudit, createSupplier, updateSupplier, deleteSupplier } = ctx;
 
   const [view, setView] = useState<ViewMode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,28 +56,25 @@ export function SuppliersPage() {
     p.code.toLowerCase().includes(productSearch.toLowerCase())
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) return;
 
     if (view === 'create') {
-      const newSupplier: Supplier = {
-        id: 'sup' + Date.now(),
-        name: formName.trim(),
-        productIds: formProductIds,
-      };
-      setSuppliers(prev => [...prev, newSupplier]);
+      await createSupplier({ name: formName.trim(), productIds: formProductIds });
       addAudit({
         user: 'Admin',
         action: 'Alta Proveedor',
-        element: newSupplier.name,
+        element: formName.trim(),
         newValue: `${formProductIds.length} productos asignados`,
       });
     } else if (view === 'edit' && editingId) {
-      setSuppliers(prev => prev.map(s => s.id === editingId ? {
-        ...s,
+      const existing = suppliers.find(s => s.id === editingId);
+      if (!existing) return;
+      await updateSupplier({
+        ...existing,
         name: formName.trim(),
         productIds: formProductIds,
-      } : s));
+      });
       addAudit({
         user: 'Admin',
         action: 'Edición Proveedor',
@@ -91,9 +88,9 @@ export function SuppliersPage() {
     setView('list');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const supplier = suppliers.find(s => s.id === id);
-    setSuppliers(prev => prev.filter(s => s.id !== id));
+    await deleteSupplier(id);
     if (supplier) {
       addAudit({
         user: 'Admin',

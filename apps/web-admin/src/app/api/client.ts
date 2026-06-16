@@ -25,6 +25,46 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+type ApiErrorBody = {
+  message?: unknown;
+  missing?: Array<{ stockProductId: string; required: number; available: number }>;
+  statusCode?: number;
+};
+
+/** Mensaje legible para el operador a partir de la respuesta de error de la API. */
+export function formatApiErrorMessage(status: number, body: ApiErrorBody): string {
+  if (status === 409 && body.message === 'Insufficient stock for checkout') {
+    if (body.missing?.length) {
+      const parts = body.missing.map(
+        m => `faltan ${m.required} u., hay ${m.available} en servidor`,
+      );
+      return `Stock insuficiente (${parts.join('; ')}). Revisá el inventario.`;
+    }
+    return 'Stock insuficiente en el servidor. Revisá el inventario.';
+  }
+
+  if (status === 404 && typeof body.message === 'string' && body.message.includes('Sales products')) {
+    return 'Producto de venta no encontrado en el servidor. Recargá la página o recrealo en Ventas → Productos.';
+  }
+
+  if (status === 400 && Array.isArray(body.message)) {
+    const msgs = body.message.filter((m): m is string => typeof m === 'string');
+    if (msgs.some(m => m.includes('operatorId'))) {
+      return 'Sesión inválida. Cerrá sesión y volvé a ingresar.';
+    }
+    if (msgs.some(m => m.includes('salesProductId'))) {
+      return 'Productos de venta no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.';
+    }
+    return msgs.join(' ');
+  }
+
+  if (typeof body.message === 'string') return body.message;
+  if (Array.isArray(body.message)) {
+    return body.message.filter((m): m is string => typeof m === 'string').join(' ');
+  }
+  return 'Error en la solicitud';
+}
+
 /**
  * Low-level fetch wrapper with auth header and JSON serialization.
  */
@@ -44,11 +84,21 @@ async function apiFetch<T>(path: string, options?: RequestInit & { token?: strin
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new ApiError(response.status, error.message || 'Request failed', error);
+    const error = await response.json().catch(() => ({ message: response.statusText })) as ApiErrorBody;
+    const message = formatApiErrorMessage(response.status, error);
+    throw new ApiError(response.status, message, error);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 export class ApiError extends Error {
@@ -89,9 +139,75 @@ export const stockApi = {
       apiFetch<StockProduct>(`/stock/products/${id}`, { method: 'PUT', token, body: data }),
     remove: (id: string, token: string) =>
       apiFetch<void>(`/stock/products/${id}`, { method: 'DELETE', token }),
-    adjustStock: (id: string, warehouseId: string, quantity: number, token: string) =>
+    adjustStock: (
+      id: string,
+      warehouseId: string,
+      quantity: number,
+      token: string,
+      meta?: { reference?: string; operatorId?: string; operatorName?: string },
+    ) =>
       apiFetch<StockLevel>(`/stock/products/${id}/stock/adjust`, {
-        method: 'POST', token, body: { warehouseId, quantity },
+        method: 'POST',
+        token,
+        body: { warehouseId, quantity, ...meta },
+      }),
+  },
+  movements: {
+    list: (params?: { productId?: string; type?: string; from?: string; to?: string; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.productId) q.set('productId', params.productId);
+      if (params?.type) q.set('type', params.type);
+      if (params?.from) q.set('from', params.from);
+      if (params?.to) q.set('to', params.to);
+      if (params?.limit) q.set('limit', String(params.limit));
+      const qs = q.toString();
+      return apiFetch<ApiStockMovement[]>(`/stock/movements${qs ? `?${qs}` : ''}`);
+    },
+  },
+  employeeConsumptions: {
+    list: (limit?: number) => {
+      const q = limit ? `?limit=${limit}` : '';
+      return apiFetch<ApiEmployeeConsumption[]>(`/stock/employee-consumptions${q}`);
+    },
+    create: (
+      data: {
+        productId: string;
+        warehouseId: string;
+        quantity: number;
+        note?: string;
+        operatorId?: string;
+        operatorName?: string;
+        operatorRole?: string;
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiEmployeeConsumption>('/stock/employee-consumptions', {
+        method: 'POST', token, body: data,
+      }),
+  },
+  countSessions: {
+    list: (limit?: number) => {
+      const q = limit ? `?limit=${limit}` : '';
+      return apiFetch<ApiStockCountSession[]>(`/stock/count-sessions${q}`);
+    },
+    create: (
+      data: {
+        date: string;
+        dateType?: 'regular' | 'after';
+        operatorId?: string;
+        operatorName?: string;
+        entries: {
+          productId: string;
+          productName: string;
+          unit: string;
+          expected: number;
+          counted: number;
+        }[];
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiStockCountSession>('/stock/count-sessions', {
+        method: 'POST', token, body: data,
       }),
   },
   warehouses: {
@@ -111,6 +227,47 @@ export const stockApi = {
       apiFetch<Category>(`/stock/categories/${id}`, { method: 'PUT', token, body: data }),
     remove: (id: string, token: string) =>
       apiFetch<void>(`/stock/categories/${id}`, { method: 'DELETE', token }),
+  },
+  suppliers: {
+    list: () => apiFetch<ApiSupplier[]>('/stock/suppliers'),
+    create: (data: { name: string; productIds?: string[] }, token: string) =>
+      apiFetch<ApiSupplier>('/stock/suppliers', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; productIds?: string[] }, token: string) =>
+      apiFetch<ApiSupplier>(`/stock/suppliers/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/stock/suppliers/${id}`, { method: 'DELETE', token }),
+  },
+  purchaseOrders: {
+    list: (status?: string) => {
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      return apiFetch<ApiPurchaseOrder[]>(`/stock/purchase-orders${q}`);
+    },
+    get: (id: string) => apiFetch<ApiPurchaseOrder>(`/stock/purchase-orders/${encodeURIComponent(id)}`),
+    create: (
+      data: {
+        supplierId?: string;
+        provider: string;
+        items: { productId: string; quantityOrdered: number }[];
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiPurchaseOrder>('/stock/purchase-orders', { method: 'POST', token, body: data }),
+    receive: (
+      id: string,
+      data: {
+        items: {
+          productId: string;
+          quantityReceived: number;
+          allocations: { warehouseId: string; quantity: number }[];
+        }[];
+        operatorId?: string;
+        operatorName?: string;
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiPurchaseOrder>(`/stock/purchase-orders/${encodeURIComponent(id)}/receive`, {
+        method: 'POST', token, body: data,
+      }),
   },
 };
 
@@ -306,6 +463,83 @@ export interface Category {
   icon?: string;
 }
 
+export interface ApiStockMovement {
+  id: string;
+  createdAt: string;
+  type: string;
+  productId: string;
+  warehouseId?: string | null;
+  quantity: number | string;
+  reference?: string | null;
+  operatorId?: string | null;
+  operatorName?: string | null;
+}
+
+export interface ApiEmployeeConsumption {
+  id: string;
+  day: string;
+  createdAt: string;
+  productId: string;
+  productName: string;
+  productCode?: string | null;
+  warehouseId: string;
+  warehouseName: string;
+  quantity: number | string;
+  unit: string;
+  previousStock: number | string;
+  newStock: number | string;
+  operatorId?: string | null;
+  operatorName?: string | null;
+  operatorRole?: string | null;
+  note?: string | null;
+}
+
+export interface ApiStockCountEntry {
+  id: string;
+  sessionId: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  expected: number | string;
+  counted: number | string;
+}
+
+export interface ApiStockCountSession {
+  id: string;
+  createdAt: string;
+  date: string;
+  dateType: string;
+  operatorId?: string | null;
+  operatorName?: string | null;
+  entries: ApiStockCountEntry[];
+}
+
+export interface ApiSupplier {
+  id: string;
+  name: string;
+  products: { id: string; supplierId: string; productId: string }[];
+}
+
+export interface ApiPurchaseOrderItem {
+  id: string;
+  purchaseOrderId: string;
+  productId: string;
+  quantityOrdered: number | string;
+  quantityReceived?: number | string | null;
+}
+
+export interface ApiPurchaseOrder {
+  id: string;
+  orderNumber: string;
+  date: string;
+  provider: string;
+  supplierId?: string | null;
+  status: string;
+  receivedAt?: string | null;
+  createdAt: string;
+  items: ApiPurchaseOrderItem[];
+}
+
 export interface SalesProduct {
   id: string;
   name: string;
@@ -325,6 +559,7 @@ export interface SalesTicket {
   total: number;
   operatorId: string;
   note?: string;
+  operator?: { username: string };
   items: { id: string; salesProductId: string; name: string; unitPrice: number; quantity: number }[];
   kitchenOrders?: KitchenOrder[];
 }

@@ -1,9 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { ProductEmojiPicker } from '@/features/sales/components/ProductEmojiPicker';
 import { getSalesCategoryEmoji } from '@/features/sales/lib/sales-categories';
-
-const NEW_CATEGORY_VALUE = '__new_category__';
 
 type SalesCategorySelectProps = {
   value: string;
@@ -20,23 +18,37 @@ export function SalesCategorySelect({
   onChange,
   onAddCategory,
 }: SalesCategorySelectProps) {
+  const [open, setOpen] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryEmoji, setNewCategoryEmoji] = useState('🍽️');
   const [error, setError] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const emojiFor = (category: string) => getSalesCategoryEmoji(category, categoryEmojis);
 
-  const handleSelectChange = (next: string) => {
-    if (next === NEW_CATEGORY_VALUE) {
-      setShowNewForm(true);
-      setNewCategoryName('');
-      setNewCategoryEmoji('🍽️');
-      setError('');
-      return;
-    }
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
+  const pickCategory = (category: string) => {
     setShowNewForm(false);
-    onChange(next);
+    onChange(category);
+    setOpen(false);
+  };
+
+  const openNewForm = () => {
+    setShowNewForm(true);
+    setOpen(false);
+    setNewCategoryName('');
+    setNewCategoryEmoji('🍽️');
+    setError('');
   };
 
   const handleCreateCategory = () => {
@@ -59,21 +71,50 @@ export function SalesCategorySelect({
     setError('');
   };
 
+  const displayValue = showNewForm
+    ? '+ Nueva categoría'
+    : value
+      ? `${emojiFor(value)} ${value}`
+      : '';
+
   return (
-    <div>
+    <div ref={rootRef} className="relative">
       <label className="text-sm text-muted-foreground mb-1 block">Categoría</label>
-      <select
-        value={showNewForm ? NEW_CATEGORY_VALUE : value}
-        onChange={(e) => handleSelectChange(e.target.value)}
-        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background"
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="w-full px-3 py-2 border border-border rounded-lg bg-input-background text-left text-foreground"
       >
-        {categories.map((category) => (
-          <option key={category} value={category}>
-            {emojiFor(category)} {category}
-          </option>
-        ))}
-        <option value={NEW_CATEGORY_VALUE}>+ Nueva categoría</option>
-      </select>
+        <span className={`block truncate ${!displayValue ? 'text-muted-foreground' : ''}`}>
+          {displayValue || (categories[0] ? `${emojiFor(categories[0])} ${categories[0]}` : 'Seleccionar categoría...')}
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute z-[100] top-full left-0 right-0 mt-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+            <div className="max-h-48 overflow-y-auto">
+              {categories.map(category => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => pickCategory(category)}
+                  className={`w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors ${!showNewForm && value === category ? 'bg-muted' : 'text-foreground'}`}
+                >
+                  {emojiFor(category)} {category}
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-border">
+              <button
+                type="button"
+                onClick={openNewForm}
+                className="w-full px-3 py-2 text-sm text-left text-foreground hover:bg-muted transition-colors"
+              >
+                + Nueva categoría
+              </button>
+            </div>
+          </div>
+      )}
 
       {showNewForm && (
         <div className="mt-2 rounded-lg border border-border bg-muted p-3 space-y-3">

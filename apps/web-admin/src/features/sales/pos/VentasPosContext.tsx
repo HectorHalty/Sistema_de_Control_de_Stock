@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { useSalesApiAdapter, usePrintingApiAdapter } from '@/app/api/adapters';
+import { getSessionUserId, isUuid } from '@/shared/auth/session';
 import {
   buildRequiredStockFromCart,
   deductStockForSale,
@@ -23,7 +24,7 @@ import type { StockMovement } from '@/app/components/store';
 import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
 import { buildTestTicketPayload } from '../lib/test-ticket';
-import type { SalesTicket as ApiSalesTicket } from '@/app/api/client';
+import { mapApiTicketToLocal } from '../api/sales-mappers';
 import type { Kitchen, Product as StoreProduct, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
 import { OrderItem, Station, stations } from './mockData';
@@ -136,42 +137,6 @@ function mapCategory(category: string): string {
   return category.trim();
 }
 
-function mapApiTicketToLocal(
-  api: ApiSalesTicket,
-  operatorName: string,
-  salesProducts: SalesProduct[],
-): SalesTicket {
-  const createdAtISO =
-    typeof api.createdAt === 'string'
-      ? api.createdAt.includes('T')
-        ? api.createdAt
-        : new Date(api.createdAt).toISOString()
-      : new Date().toISOString();
-
-  const status =
-    api.status === 'anulado' || api.status === 'devuelto' || api.status === 'emitido'
-      ? api.status
-      : 'emitido';
-
-  return {
-    id: api.id,
-    number: api.number,
-    createdAtISO,
-    status,
-    items: api.items.map(i => ({
-      salesProductId: i.salesProductId,
-      name: i.name,
-      unitPrice: Number(i.unitPrice),
-      quantity: i.quantity,
-      kitchenId: salesProducts.find(sp => sp.id === i.salesProductId)?.kitchenId || '',
-    })),
-    total: Number(api.total),
-    operatorId: api.operatorId,
-    operatorName,
-    note: api.note,
-  };
-}
-
 function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitchen[]): PosTicket {
   const isReturn = ticket.status === 'devuelto';
   return {
@@ -229,14 +194,16 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
-  const currentUser = useMemo(
-    () => ({
-      id: ctx.currentUser.id ?? ctx.currentUser.username,
+  const currentUser = useMemo(() => {
+    const id =
+      getSessionUserId() ??
+      (ctx.currentUser.id && isUuid(ctx.currentUser.id) ? ctx.currentUser.id : '');
+    return {
+      id,
       name: ctx.currentUser.username,
       role: ctx.currentUser.role,
-    }),
-    [ctx.currentUser],
-  );
+    };
+  }, [ctx.currentUser]);
 
   const posProducts = useMemo(
     () =>
@@ -306,18 +273,18 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       // evitamos el doble descuento local y re-hidratamos el stock más abajo.
       if (deductLocally) {
         ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+        ctx.addStockMovements(
+          buildStockMovementsFromCart(
+            cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+            ctx.salesProducts,
+            'venta',
+            -1,
+            ticket.id,
+            currentUser,
+          ),
+          ticket.createdAtISO,
+        );
       }
-      ctx.addStockMovements(
-        buildStockMovementsFromCart(
-          cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-          ctx.salesProducts,
-          'venta',
-          -1,
-          ticket.id,
-          currentUser,
-        ),
-        ticket.createdAtISO,
-      );
       ctx.setSalesTickets(prev => [ticket, ...prev]);
       if (table) {
         ctx.setSalesTables(prev =>
@@ -362,20 +329,47 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       const cart = enrichCartKitchens(t.items);
       if (cart.length === 0) return null;
 
-      const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
-      if (!validation.ok) {
-        setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
-        return null;
-      }
-
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
       const note = t.context || (table ? `Mesa: ${table.name}` : undefined);
 
-      if (salesApi.apiAvailable) {
+      if (salesApi.apiAvailable !== false) {
+        const operatorId = currentUser.id;
+        if (!operatorId) {
+          setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
+          return null;
+        }
+
+        const unsynced = cart.filter(i => !isUuid(i.salesProductId));
+        if (unsynced.length > 0) {
+          setToast(
+            'Hay productos no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.',
+          );
+          return null;
+        }
+
+        let salesProducts = ctx.salesProducts;
+        let stockProducts = ctx.products;
+        try {
+          const [freshSales, freshStock] = await Promise.all([
+            ctx.hydrateSalesProducts(),
+            ctx.refreshStockProducts(),
+          ]);
+          salesProducts = freshSales;
+          stockProducts = freshStock;
+        } catch {
+          // Si el refresh falla, el checkout puede igualmente validar en servidor.
+        }
+
+        const validation = validateStockForCart(cart, salesProducts, stockProducts);
+        if (!validation.ok) {
+          setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+          return null;
+        }
+
         const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const apiResult = await salesApi.checkout({
           items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-          operatorId: currentUser.id,
+          operatorId,
           note,
           idempotencyKey,
         });
@@ -383,19 +377,26 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         if (apiResult.ok && 'result' in apiResult) {
           const ticket = mapApiTicketToLocal(
             apiResult.result.ticket,
-            currentUser.name,
             ctx.salesProducts,
+            currentUser.name,
           );
           ctx.setSalesTicketCounter(ticket.number);
           const pos = finishSaleLocal(ticket, cart, false);
-          // El stock real lo descontó la API: refrescamos el caché local desde el server.
+          // El stock real lo descontó la API: refrescamos caché local desde el server.
           void ctx.refreshStockProducts().catch(() => undefined);
+          void ctx.refreshOperations?.().catch(() => undefined);
           return pos;
         }
         if (!apiResult.apiUnavailable && 'error' in apiResult) {
           setToast(`Error en venta: ${apiResult.error}`);
           return null;
         }
+      }
+
+      const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
+      if (!validation.ok) {
+        setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+        return null;
       }
 
       const nextCounter = ctx.salesTicketCounter + 1;
@@ -427,12 +428,15 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       const ticket = ctx.salesTickets.find(t => t.id === id);
       if (!ticket || ticket.status !== 'emitido') return null;
 
+      let apiHandled = false;
+
       if (salesApi.apiAvailable && !isLocalOnlyTicketId(ticket.id)) {
         const apiResult = await salesApi.voidTicket(id, currentUser.id);
         if (apiResult.ok && 'result' in apiResult) {
-          const synced = mapApiTicketToLocal(apiResult.result, currentUser.name, ctx.salesProducts);
-          // La API ya restauró el stock server-side: re-hidratamos en vez de restaurar local.
+          apiHandled = true;
+          const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
           void ctx.refreshStockProducts().catch(() => undefined);
+          void ctx.refreshOperations?.().catch(() => undefined);
           ctx.setSalesTickets(prev =>
             prev.map(t => (t.id === id ? { ...synced, status: 'anulado' as const } : t)),
           );
@@ -452,16 +456,18 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         );
       }
 
-      ctx.addStockMovements(
-        buildStockMovementsFromCart(
-          ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-          ctx.salesProducts,
-          'venta_anulada',
-          1,
-          ticket.id,
-          currentUser,
-        ),
-      );
+      if (!apiHandled) {
+        ctx.addStockMovements(
+          buildStockMovementsFromCart(
+            ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+            ctx.salesProducts,
+            'venta_anulada',
+            1,
+            ticket.id,
+            currentUser,
+          ),
+        );
+      }
 
       const historyEntry: SalesHistoryEntry = {
         id: `h-${Date.now()}`,

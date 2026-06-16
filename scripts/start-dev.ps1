@@ -1,4 +1,10 @@
 #Requires -Version 5.1
+param(
+    [switch]$Setup,
+    [switch]$Infra,
+    [switch]$All
+)
+
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -14,107 +20,100 @@ function Test-DockerRunning {
     return $LASTEXITCODE -eq 0
 }
 
-function Start-DockerDesktop {
-    $paths = @(
-        "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
-        "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe"
-    )
-    foreach ($path in $paths) {
-        if (Test-Path $path) {
-            Write-Host "Iniciando Docker Desktop..." -ForegroundColor Yellow
-            Start-Process $path
-            return $true
+function Get-DatabaseUrl {
+    $envFile = Join-Path $Root "apps\api\.env"
+    if (-not (Test-Path $envFile)) { return $null }
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*DATABASE_URL\s*=\s*(.+)\s*$') {
+            return $Matches[1].Trim().Trim('"').Trim("'")
         }
     }
-    return $false
+    return $null
 }
 
-function Wait-Docker([int]$MaxAttempts = 40) {
-    for ($i = 1; $i -le $MaxAttempts; $i++) {
-        if (Test-DockerRunning) {
-            Write-Host "Docker listo." -ForegroundColor Green
-            return
-        }
-        Write-Host "Esperando Docker... ($i/$MaxAttempts)"
-        Start-Sleep -Seconds 3
-    }
-    throw "Docker no respondio a tiempo. Abrilo manualmente y volve a ejecutar el script."
+function Test-UsesSupabase([string]$Url) {
+    return $Url -and ($Url -match 'supabase\.co' -or $Url -match 'pooler\.supabase')
 }
 
-function Wait-Postgres([int]$MaxAttempts = 30) {
-    for ($i = 1; $i -le $MaxAttempts; $i++) {
-        docker compose exec -T postgres pg_isready -U lch -d lch_stock 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "PostgreSQL listo." -ForegroundColor Green
-            return
-        }
-        Start-Sleep -Seconds 2
-    }
-    throw "PostgreSQL no respondio a tiempo."
+function Test-UsesLocalDb([string]$Url) {
+    return $Url -and ($Url -match 'localhost' -or $Url -match '127\.0\.0\.1')
 }
 
-Write-Host "=== Sistema LCH - Inicio de desarrollo ===" -ForegroundColor Cyan
+Write-Host "=== Sistema LCH - Desarrollo ===" -ForegroundColor Cyan
 Write-Host "Directorio: $Root"
-
-Write-Step "Verificando Docker"
-if (-not (Test-DockerRunning)) {
-    if (-not (Start-DockerDesktop)) {
-        throw "Docker Desktop no esta instalado. Instalalo desde https://www.docker.com/products/docker-desktop/"
-    }
-    Wait-Docker
-}
-
-Write-Step "Levantando infraestructura (PostgreSQL, Redis, MinIO)"
-docker compose up -d postgres redis minio minio-init
-if ($LASTEXITCODE -ne 0) {
-    throw "No se pudo levantar la infraestructura con Docker Compose."
-}
-Wait-Postgres
 
 $envFile = Join-Path $Root "apps\api\.env"
 $envExample = Join-Path $Root "apps\api\.env.example"
 if (-not (Test-Path $envFile)) {
     Copy-Item $envExample $envFile
-    Write-Host "Creado apps/api/.env desde .env.example" -ForegroundColor Yellow
+    Write-Host "Creado apps/api/.env desde .env.example - configura DATABASE_URL si usas Supabase." -ForegroundColor Yellow
+}
+
+$dbUrl = Get-DatabaseUrl
+$usesSupabase = Test-UsesSupabase $dbUrl
+$usesLocalDb = Test-UsesLocalDb $dbUrl
+
+if ($usesSupabase) {
+    Write-Host "Base de datos: Supabase (sin Docker local)." -ForegroundColor DarkGray
+} elseif ($usesLocalDb) {
+    Write-Host "Base de datos: PostgreSQL local." -ForegroundColor DarkGray
+} else {
+    Write-Host "Base de datos: revisa DATABASE_URL en apps/api/.env" -ForegroundColor Yellow
+}
+
+$needInfra = $Infra -or ($usesLocalDb -and -not $usesSupabase)
+if ($needInfra) {
+    Write-Step "Levantando infraestructura Docker"
+    if (-not (Test-DockerRunning)) {
+        throw "Docker no esta corriendo. Abri Docker Desktop o usa Supabase en apps/api/.env"
+    }
+    docker compose up -d postgres redis minio minio-init
+    if ($LASTEXITCODE -ne 0) {
+        throw "No se pudo levantar Docker Compose."
+    }
+    Write-Host "Esperando PostgreSQL..." -ForegroundColor DarkGray
+    for ($i = 1; $i -le 30; $i++) {
+        docker compose exec -T postgres pg_isready -U lch -d lch_stock 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { break }
+        Start-Sleep -Seconds 2
+    }
 }
 
 if (-not (Test-Path (Join-Path $Root "node_modules"))) {
-    Write-Step "Instalando dependencias (primera vez, puede tardar)"
+    Write-Step "Instalando dependencias (primera vez)"
     npm install
-    if ($LASTEXITCODE -ne 0) {
-        throw "npm install fallo."
-    }
+    if ($LASTEXITCODE -ne 0) { throw "npm install fallo." }
 }
 
-Write-Step "Preparando base de datos"
-Push-Location (Join-Path $Root "apps\api")
-try {
-    npx prisma db push
-    if ($LASTEXITCODE -ne 0) {
-        throw "prisma db push fallo."
+if ($Setup) {
+    Write-Step "Preparando base de datos (prisma db push + seed)"
+    Push-Location (Join-Path $Root "apps\api")
+    try {
+        npx prisma generate
+        if ($LASTEXITCODE -ne 0) { throw "prisma generate fallo." }
+        npx prisma db push
+        if ($LASTEXITCODE -ne 0) { throw "prisma db push fallo." }
+        npm run prisma:seed
+        if ($LASTEXITCODE -ne 0) { throw "prisma:seed fallo." }
     }
-
-    npm run prisma:seed
-    if ($LASTEXITCODE -ne 0) {
-        throw "prisma:seed fallo."
+    finally {
+        Pop-Location
     }
-}
-finally {
-    Pop-Location
 }
 
 Write-Host ""
-Write-Host "=== Servicios listos ===" -ForegroundColor Green
-Write-Host "  API:    http://localhost:3001"
+Write-Host "=== URLs ===" -ForegroundColor Green
 Write-Host "  Admin:  http://localhost:5173"
-Write-Host "  Public: http://localhost:5174"
+Write-Host "  API:    http://localhost:3001"
 Write-Host "  Docs:   http://localhost:3001/api/docs"
+if ($All) { Write-Host "  Public: http://localhost:5174" }
 Write-Host "  Login:  admin / admin123"
 Write-Host ""
-Write-Host "Iniciando API + Admin + Public (Ctrl+C para detener todo)..." -ForegroundColor DarkGray
+Write-Host "Ctrl+C para detener todo." -ForegroundColor DarkGray
 Write-Host ""
 
-npx concurrently -n api,admin,public -c magenta,green,blue `
-    "npm run dev:api" `
-    "npm run dev:admin" `
-    "npm run dev:public"
+if ($All) {
+    npx concurrently -n api,admin,public -c magenta,green,blue "npm run dev:api" "npm run dev:admin" "npm run dev:public"
+} else {
+    npx concurrently -n api,admin -c magenta,green "npm run dev:api" "npm run dev:admin"
+}

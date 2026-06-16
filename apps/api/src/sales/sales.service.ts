@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto } from './dto';
 
 interface MissingStockItem {
@@ -11,11 +12,21 @@ interface MissingStockItem {
   available: number;
 }
 
+// Las cantidades de stock/receta son Decimal(12,3) en la DB y Prisma las
+// devuelve como objetos Decimal (o string en SQL crudo). Redondeo a 3 decimales
+// para evitar derivas de punto flotante al operar en memoria.
+function round3(n: number): number {
+  return Math.round((n + Number.EPSILON) * 1000) / 1000;
+}
+
 interface TicketItemData extends Omit<Prisma.SalesTicketItemUncheckedCreateWithoutTicketInput, 'createdAt'> {}
 
 @Injectable()
 export class SalesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private movements: StockMovementsService,
+  ) {}
 
   // ============ CRITICAL: Transactional Checkout ============
   // Uses Prisma interactive transactions with SELECT FOR UPDATE
@@ -54,7 +65,9 @@ export class SalesService {
       if (!sp) continue;
       for (const recipeItem of sp.recipe) {
         const key = recipeItem.stockProductId;
-        requiredByStockProduct[key] = (requiredByStockProduct[key] || 0) + recipeItem.quantity * item.quantity;
+        requiredByStockProduct[key] = round3(
+          (requiredByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
+        );
       }
     }
 
@@ -70,10 +83,12 @@ export class SalesService {
         FOR UPDATE
       ` as Array<{ productId: string; quantity: number; warehouseId: string; productName: string }>;
 
-      // Build available totals per stock product
+      // Build available totals per stock product (Decimal llega como string en SQL crudo)
       const availableByProduct: Record<string, number> = {};
       for (const level of lockedLevels) {
-        availableByProduct[level.productId] = (availableByProduct[level.productId] || 0) + level.quantity;
+        availableByProduct[level.productId] = round3(
+          (availableByProduct[level.productId] || 0) + Number(level.quantity),
+        );
       }
 
       // Validate stock availability
@@ -92,20 +107,37 @@ export class SalesService {
         });
       }
 
-      // Deduct stock atomically
+      // Deduct stock atomically and registrar movimientos por almacén
       let remainingByProduct = { ...requiredByStockProduct };
+      const movementEntries: Array<{
+        type: 'venta';
+        productId: string;
+        warehouseId: string;
+        quantity: number;
+        reference: string;
+        operatorId: string;
+      }> = [];
+
       for (const level of lockedLevels) {
         const required = remainingByProduct[level.productId] || 0;
         if (required <= 0) continue;
 
-        const deduction = Math.min(level.quantity, required);
-        remainingByProduct[level.productId] -= deduction;
+        const deduction = round3(Math.min(Number(level.quantity), required));
+        remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
 
-        // Use raw query for reliable composite key update
         await tx.$executeRaw`
           UPDATE "StockLevel" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
           WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
         `;
+
+        movementEntries.push({
+          type: 'venta',
+          productId: level.productId,
+          warehouseId: level.warehouseId,
+          quantity: -deduction,
+          reference: '', // se completa con ticket.id después de crear el ticket
+          operatorId: dto.operatorId,
+        });
       }
 
       // Get next ticket number atomically
@@ -140,8 +172,18 @@ export class SalesService {
           idempotencyKey: dto.idempotencyKey,
           items: { create: ticketItems },
         },
-        include: { items: true },
+        include: { items: true, operator: { select: { name: true, username: true } } },
       });
+
+      const operatorName = ticket.operator?.name ?? ticket.operator?.username;
+      await this.movements.recordMany(
+        tx,
+        movementEntries.map(m => ({
+          ...m,
+          reference: ticket.id,
+          operatorName,
+        })),
+      );
 
       // Create kitchen orders
       const kitchenGroups: Record<string, typeof ticketItems> = {};
@@ -226,13 +268,23 @@ export class SalesService {
         if (!sp) continue;
         for (const recipeItem of sp.recipe) {
           const key = recipeItem.stockProductId;
-          restoreByStockProduct[key] = (restoreByStockProduct[key] || 0) + recipeItem.quantity * item.quantity;
+          restoreByStockProduct[key] = round3(
+            (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
+          );
         }
       }
 
       // Restore stock atomically
+      const restoreMovements: Array<{
+        type: 'devolucion';
+        productId: string;
+        warehouseId: string;
+        quantity: number;
+        reference: string;
+        operatorId: string;
+      }> = [];
+
       for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-        // Get all stock levels for this product and restore to first warehouse
         const levels = await tx.stockLevel.findMany({
           where: { productId: stockProductId },
           orderBy: { warehouseId: 'asc' },
@@ -243,8 +295,25 @@ export class SalesService {
             UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
             WHERE id::text = ${levels[0].id}
           `;
+          restoreMovements.push({
+            type: 'devolucion',
+            productId: stockProductId,
+            warehouseId: levels[0].warehouseId,
+            quantity: qty,
+            reference: dto.ticketId,
+            operatorId: dto.operatorId,
+          });
         }
       }
+
+      const operator = await tx.user.findUnique({ where: { id: dto.operatorId } });
+      await this.movements.recordMany(
+        tx,
+        restoreMovements.map(m => ({
+          ...m,
+          operatorName: operator?.name ?? operator?.username,
+        })),
+      );
 
       // Update ticket status
       const updated = await tx.salesTicket.update({
@@ -367,9 +436,20 @@ export class SalesService {
         if (!sp) continue;
         for (const recipeItem of sp.recipe) {
           const key = recipeItem.stockProductId;
-          restoreByStockProduct[key] = (restoreByStockProduct[key] || 0) + recipeItem.quantity * item.quantity;
+          restoreByStockProduct[key] = round3(
+            (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
+          );
         }
       }
+
+      const voidMovements: Array<{
+        type: 'venta_anulada';
+        productId: string;
+        warehouseId: string;
+        quantity: number;
+        reference: string;
+        operatorId: string;
+      }> = [];
 
       for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
         const levels = await tx.stockLevel.findMany({
@@ -380,8 +460,25 @@ export class SalesService {
           await tx.$executeRaw`
             UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW() WHERE id::text = ${levels[0].id}
           `;
+          voidMovements.push({
+            type: 'venta_anulada',
+            productId: stockProductId,
+            warehouseId: levels[0].warehouseId,
+            quantity: qty,
+            reference: ticketId,
+            operatorId,
+          });
         }
       }
+
+      const operator = await tx.user.findUnique({ where: { id: operatorId } });
+      await this.movements.recordMany(
+        tx,
+        voidMovements.map(m => ({
+          ...m,
+          operatorName: operator?.name ?? operator?.username,
+        })),
+      );
 
       return tx.salesTicket.update({
         where: { id: ticketId },

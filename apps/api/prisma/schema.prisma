@@ -63,8 +63,9 @@ model Product {
 
   category         Category        @relation(fields: [categoryId], references: [id])
   stockLevels      StockLevel[]
-  recipeItems      RecipeItem[]
-  supplierProducts SupplierProduct[]
+  recipeItems        RecipeItem[]
+  supplierProducts   SupplierProduct[]
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@index([categoryId])
 }
@@ -73,7 +74,7 @@ model StockLevel {
   id          String   @id @default(uuid())
   productId   String
   warehouseId String
-  quantity    Int      @default(0)
+  quantity    Decimal  @default(0) @db.Decimal(12, 3) // soporta fracciones (kg, litros)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -91,7 +92,8 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  products    SupplierProduct[]
+  products       SupplierProduct[]
+  purchaseOrders PurchaseOrder[]
 }
 
 model SupplierProduct {
@@ -128,7 +130,7 @@ model RecipeItem {
   id                String        @id @default(uuid())
   salesProductId    String
   stockProductId    String
-  quantity          Int
+  quantity          Decimal       @db.Decimal(12, 3) // soporta fracciones (ej. 0.2 kg por unidad)
   createdAt         DateTime      @default(now())
 
   salesProduct      SalesProduct  @relation(fields: [salesProductId], references: [id], onDelete: Cascade)
@@ -327,7 +329,112 @@ model AuditEntry {
   @@index([createdAt])
 }
 
-// ==================== CONSUMPTION LOGS ====================
+// ==================== STOCK MOVEMENTS & OPERATIONS ====================
+
+model StockMovement {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  type         String   // venta, venta_anulada, devolucion, consumo, entrada, ajuste_manual
+  productId    String
+  warehouseId  String?
+  quantity     Decimal  @db.Decimal(12, 3) // signado: salida negativa, entrada positiva
+  reference    String?
+  operatorId   String?
+  operatorName String?
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model EmployeeConsumption {
+  id            String   @id @default(uuid())
+  day           String   // YYYY-MM-DD
+  createdAt     DateTime @default(now())
+  productId     String
+  productName   String
+  productCode   String?
+  warehouseId   String
+  warehouseName String
+  quantity      Decimal  @db.Decimal(12, 3)
+  unit          String   @default("unidades")
+  previousStock Decimal  @db.Decimal(12, 3)
+  newStock      Decimal  @db.Decimal(12, 3)
+  operatorId    String?
+  operatorName  String?
+  operatorRole  String?
+  note          String?
+
+  @@index([productId])
+  @@index([day])
+  @@index([createdAt])
+}
+
+model StockCountSession {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  date         String
+  dateType     String   @default("regular") // regular, after
+  operatorId   String?
+  operatorName String?
+
+  entries      StockCountEntry[]
+
+  @@index([date])
+  @@index([createdAt])
+}
+
+model PurchaseOrder {
+  id          String    @id @default(uuid())
+  orderNumber String    @unique // PED-001 (visible en UI)
+  date        String    // YYYY-MM-DD
+  provider    String
+  supplierId  String?
+  status      String    @default("Pendiente") // Pendiente, Recibido
+  receivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items    PurchaseOrderItem[]
+
+  @@index([status])
+  @@index([date])
+  @@index([createdAt])
+}
+
+model PurchaseOrderItem {
+  id               String   @id @default(uuid())
+  purchaseOrderId  String
+  productId        String
+  quantityOrdered  Decimal  @db.Decimal(12, 3)
+  quantityReceived Decimal? @db.Decimal(12, 3)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model StockCountEntry {
+  id          String   @id @default(uuid())
+  sessionId   String
+  productId   String
+  productName String
+  unit        String   @default("unidades")
+  expected    Decimal  @db.Decimal(12, 3)
+  counted     Decimal  @db.Decimal(12, 3)
+  createdAt   DateTime @default(now())
+
+  session     StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([productId])
+}
+
+// ==================== CONSUMPTION LOGS (legacy) ====================
 
 model ConsumptionLog {
   id          String   @id @default(uuid())
@@ -348,9 +455,9 @@ model ConsumptionEntry {
   productName     String
   warehouseId     String
   warehouseName   String
-  previousStock   Int
-  newStock        Int
-  consumed        Int
+  previousStock   Decimal         @db.Decimal(12, 3)
+  newStock        Decimal         @db.Decimal(12, 3)
+  consumed        Decimal         @db.Decimal(12, 3)
   unit            String          @default("unidades")
   createdAt       DateTime        @default(now())
 

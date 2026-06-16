@@ -8,6 +8,8 @@
   "scripts": {
     "dev:infra": "docker compose up -d postgres redis minio minio-init",
     "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
+    "start:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -Setup",
+    "start:all": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -All",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:admin": "npm run dev --workspace=apps/web-admin",
     "stop:admin": "npx --yes kill-port 5173",
@@ -15,6 +17,7 @@
     "dev:webs": "concurrently -n admin,public -c green,blue \"npm run dev:admin\" \"npm run dev:public\"",
     "dev:all": "concurrently -n infra,api,admin,public -c yellow,magenta,green,blue \"npm run dev:infra\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:public\"",
     "test": "npm run test --workspaces --if-present",
+    "test:deep": "npm run test:deep --workspace=apps/api && npm run test:deep --workspace=apps/web-admin",
     "test:admin": "npm run test --workspace=apps/web-admin",
     "test:public": "npm run test --workspace=apps/web-public",
     "test:api": "npm run test --workspace=apps/api",

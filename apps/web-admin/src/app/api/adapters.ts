@@ -58,8 +58,7 @@ export function useSalesApiAdapter() {
   }, []);
 
   const checkout = useCallback(async (payload: CheckoutPayload) => {
-    if (!apiAvailable) {
-      // Signal to caller that API is not available — use localStorage fallback
+    if (apiAvailable === false) {
       return { ok: false, apiUnavailable: true } as const;
     }
     setLoading(true);

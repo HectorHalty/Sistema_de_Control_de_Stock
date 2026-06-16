@@ -59,6 +59,7 @@ export function WarehousesPage() {
     }
     addAudit({ user: 'Admin', action: 'Eliminación Almacén', element: wh?.name || '' });
     setDeleteConfirm(null);
+    if (expandedId === id) setExpandedId(null);
   };
 
   const toggleExpand = (id: string) => {

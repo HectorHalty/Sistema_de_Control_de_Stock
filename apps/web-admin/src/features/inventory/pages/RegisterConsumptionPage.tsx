@@ -24,6 +24,8 @@ export function RegisterConsumptionPage() {
     getTotalStock,
     addAudit,
     addStockMovements,
+    inventoryApiAvailable,
+    registerEmployeeConsumption,
   } = useAppContext();
 
   const [search, setSearch] = useState('');
@@ -83,7 +85,7 @@ export function RegisterConsumptionPage() {
     setError('');
   };
 
-  const registerConsumption = () => {
+  const registerConsumption = async () => {
     if (!selectedProduct) return;
     if (!warehouseId) {
       setError('Seleccioná un almacén con stock disponible.');
@@ -100,6 +102,33 @@ export function RegisterConsumptionPage() {
     const previousStock = stockRow.quantity;
     const newStock = previousStock - qty;
     const now = new Date();
+
+    if (inventoryApiAvailable) {
+      try {
+        await registerEmployeeConsumption({
+          productId: selectedProduct.id,
+          warehouseId,
+          quantity: qty,
+          operatorId: currentUser.id,
+          operatorName: currentUser.name,
+          operatorRole: currentUser.role,
+        });
+        addAudit({
+          user: currentUser.username,
+          action: 'Registro de consumo',
+          element: selectedProduct.name,
+          previousValue: `${previousStock} ${getUnitLabel(selectedProduct.unit, true)}`,
+          newValue: `-${qty} → ${newStock} (${warehouse?.name})`,
+        });
+        setSuccessMsg(`Registrado: -${qty} ${getUnitLabel(selectedProduct.unit, true)} de ${selectedProduct.name}.`);
+        setSelectedProductId(null);
+        setQuantity(1);
+        setError('');
+      } catch {
+        setError('No se pudo registrar el consumo en el servidor.');
+      }
+      return;
+    }
 
     const entry: EmployeeConsumptionEntry = {
       id: `emp-cons-${Date.now()}`,

@@ -17,7 +17,10 @@ type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
 
 export function OrdersPage() {
   const ctx = useAppContext();
-  const { orders, setOrders, products, setProducts, addAudit, addStockMovements, getTotalStock, warehouses, suppliers, stockMovements } = ctx;
+  const {
+    orders, setOrders, products, addAudit, addStockMovements, getTotalStock, warehouses, suppliers, stockMovements,
+    inventoryApiAvailable, createPurchaseOrder, receivePurchaseOrder, setProducts,
+  } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<OrderView>('list');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -111,15 +114,16 @@ export function OrdersPage() {
     setView('create-step2');
   };
 
-  const confirmOrder = () => {
-    const newOrder: Order = {
-      id: 'PED-' + String(orders.length + 1).padStart(3, '0'),
-      date: new Date().toISOString().split('T')[0],
+  const confirmOrder = async () => {
+    const items = orderItems.filter(i => i.included && i.quantity > 0).map(i => ({
+      productId: i.productId,
+      quantityOrdered: i.quantity,
+    }));
+    const newOrder = await createPurchaseOrder({
+      supplierId: supplierId || undefined,
       provider: selectedSupplier?.name || provider || 'Proveedor General',
-      status: 'Pendiente',
-      items: orderItems.filter(i => i.included && i.quantity > 0).map(i => ({ productId: i.productId, quantityOrdered: i.quantity })),
-    };
-    setOrders(prev => [...prev, newOrder]);
+      items,
+    });
     addAudit({ user: 'Admin', action: 'Creación Pedido ' + newOrder.id, element: newOrder.id, newValue: 'Pendiente' });
     setSuccessMsg('Pedido ' + newOrder.id + ' creado exitosamente');
     setLastCreatedOrder(newOrder);
@@ -363,65 +367,79 @@ export function OrdersPage() {
 
   const arrivalHasErrors = arrivalItems.some(it => arrivalItemError(it) !== null);
 
-  const confirmArrival = () => {
+  const confirmArrival = async () => {
     if (!selectedOrder) return;
     if (arrivalHasErrors) return;
 
     const receivedAtISO = new Date().toISOString();
-    setOrders(prev => prev.map(o => o.id === selectedOrder.id ? {
-      ...o,
-      status: 'Recibido' as const,
-      receivedAtISO,
-      items: o.items.map((item, idx) => ({ ...item, quantityReceived: arrivalItems[idx]?.received || 0 }))
-    } : o));
 
-    // Sum received quantities into selected warehouse(s)
-    const addMap = new Map<string, number>(); // key: productId__warehouseId => qty
-    for (const it of arrivalItems) {
-      for (const a of it.allocations) {
-        const key = `${it.productId}__${a.warehouseId}`;
-        addMap.set(key, (addMap.get(key) || 0) + (a.quantity || 0));
-      }
-    }
-
-    addStockMovements(
-      Array.from(addMap.entries())
-        .map(([key, qty]) => {
-          const [productId, warehouseId] = key.split('__');
-          return { productId, warehouseId, qty };
-        })
-        .filter(a => a.warehouseId && a.qty > 0)
-        .map(a => ({
-          type: 'entrada' as const,
-          productId: a.productId,
-          warehouseId: a.warehouseId,
-          quantity: a.qty,
-          reference: selectedOrder.id,
-          operatorId: 'Admin',
-          operatorName: 'Admin',
+    if (inventoryApiAvailable) {
+      await receivePurchaseOrder({
+        orderId: selectedOrder.id,
+        items: arrivalItems.map(it => ({
+          productId: it.productId,
+          quantityReceived: it.received,
+          allocations: it.allocations,
         })),
-      receivedAtISO,
-    );
+        operatorId: 'Admin',
+        operatorName: 'Admin',
+      });
+    } else {
+      // Modo offline: actualizar estado local
+      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? {
+        ...o,
+        status: 'Recibido' as const,
+        receivedAtISO,
+        items: o.items.map((item, idx) => ({ ...item, quantityReceived: arrivalItems[idx]?.received || 0 })),
+      } : o));
 
-    setProducts(prev => prev.map(p => {
-      const additions = Array.from(addMap.entries())
-        .filter(([key]) => key.startsWith(p.id + '__'))
-        .map(([key, qty]) => ({
-          warehouseId: key.split('__')[1],
-          qty,
-        }))
-        .filter(a => a.warehouseId && a.qty !== 0);
-
-      if (additions.length === 0) return p;
-
-      const next = [...p.stockByWarehouse];
-      for (const a of additions) {
-        const idx = next.findIndex(s => s.warehouseId === a.warehouseId);
-        if (idx >= 0) next[idx] = { ...next[idx], quantity: next[idx].quantity + a.qty };
-        else next.push({ warehouseId: a.warehouseId, quantity: a.qty });
+      const addMap = new Map<string, number>();
+      for (const it of arrivalItems) {
+        for (const a of it.allocations) {
+          const key = `${it.productId}__${a.warehouseId}`;
+          addMap.set(key, (addMap.get(key) || 0) + (a.quantity || 0));
+        }
       }
-      return { ...p, stockByWarehouse: next };
-    }));
+
+      addStockMovements(
+        Array.from(addMap.entries())
+          .map(([key, qty]) => {
+            const [productId, warehouseId] = key.split('__');
+            return { productId, warehouseId, qty };
+          })
+          .filter(a => a.warehouseId && a.qty > 0)
+          .map(a => ({
+            type: 'entrada' as const,
+            productId: a.productId,
+            warehouseId: a.warehouseId,
+            quantity: a.qty,
+            reference: selectedOrder.id,
+            operatorId: 'Admin',
+            operatorName: 'Admin',
+          })),
+        receivedAtISO,
+      );
+
+      setProducts(prev => prev.map(p => {
+        const additions = Array.from(addMap.entries())
+          .filter(([key]) => key.startsWith(p.id + '__'))
+          .map(([key, qty]) => ({
+            warehouseId: key.split('__')[1],
+            qty,
+          }))
+          .filter(a => a.warehouseId && a.qty !== 0);
+
+        if (additions.length === 0) return p;
+
+        const next = [...p.stockByWarehouse];
+        for (const a of additions) {
+          const idx = next.findIndex(s => s.warehouseId === a.warehouseId);
+          if (idx >= 0) next[idx] = { ...next[idx], quantity: next[idx].quantity + a.qty };
+          else next.push({ warehouseId: a.warehouseId, quantity: a.qty });
+        }
+        return { ...p, stockByWarehouse: next };
+      }));
+    }
 
     const whName = (id: string) => warehouses.find(w => w.id === id)?.name || id;
     const uniqueWh = Array.from(new Set(arrivalItems.flatMap(i => i.allocations.map(a => a.warehouseId)).filter(Boolean)));

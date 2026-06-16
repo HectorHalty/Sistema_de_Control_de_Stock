@@ -387,10 +387,8 @@ export function ProductsPage() {
           allProducts={products}
           warehouses={warehouses}
           categories={categories}
-          onAddCategory={(cat: Category) => {
-            void createCategory({ name: cat.name, icon: cat.icon }).catch(e =>
-              window.alert(e instanceof Error ? e.message : 'No se pudo crear la categoría'),
-            );
+          onAddCategory={async (cat: Category) => {
+            await createCategory({ name: cat.name, icon: cat.icon });
           }}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditingProduct(null); }}
@@ -418,12 +416,12 @@ export function ProductsPage() {
 function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <h3 className="text-foreground">{title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X size={18} /></button>
         </div>
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
@@ -434,7 +432,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
   allProducts: Product[];
   warehouses: { id: string; name: string }[];
   categories: Category[];
-  onAddCategory: (cat: Category) => void;
+  onAddCategory: (cat: Category) => void | Promise<void>;
   onSave: (p: Product) => void;
   onClose: () => void;
 }) {
@@ -466,19 +464,24 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
     }));
   };
 
-  const handleCreateCategory = () => {
+  const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     const newCat: Category = {
       id: 'cat' + Date.now(),
       name: newCategoryName.trim(),
       icon: newCategoryIcon,
     };
-    onAddCategory(newCat);
-    setForm(prev => ({ ...prev, category: newCat.name }));
-    setNewCategoryName('');
-    setNewCategoryIcon('Package');
-    setShowNewCategoryForm(false);
-    setShowCategoryDropdown(false);
+    try {
+      await onAddCategory(newCat);
+      setForm(prev => ({ ...prev, category: newCat.name }));
+      setNewCategoryName('');
+      setNewCategoryIcon('Package');
+      setShowIconPicker(false);
+      setShowNewCategoryForm(false);
+      setShowCategoryDropdown(false);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo crear la categoría');
+    }
   };
 
   const SelectedCatIcon = getCategoryIcon(
@@ -514,12 +517,18 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
           </div>
         </div>
 
-        {/* Category selector with dropdown */}
-        <div className="relative">
+        {/* Category selector */}
+        <div className="relative z-30">
           <label className="block text-sm mb-1">Categoría</label>
           <button
             type="button"
-            onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowNewCategoryForm(false); }}
+            onClick={() => {
+              setShowCategoryDropdown(prev => {
+                const next = !prev;
+                if (!next) setShowNewCategoryForm(false);
+                return next;
+              });
+            }}
             className="w-full px-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm text-left flex items-center justify-between text-foreground"
           >
             <span className="flex items-center gap-2">
@@ -532,45 +541,23 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                 <span className="text-muted-foreground">Seleccionar categoría...</span>
               )}
             </span>
-            <ChevronDown size={16} className="text-muted-foreground" />
+            <ChevronDown size={16} className={`text-muted-foreground transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
           </button>
 
           {showCategoryDropdown && (
-            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-              <div className="max-h-48 overflow-y-auto">
-                {categories.map(cat => {
-                  const CIcon = getCategoryIcon(cat.icon);
-                  return (
+            <div className="absolute z-[100] top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg">
+              {showNewCategoryForm ? (
+                <div className="border-t border-border p-3 space-y-3 bg-muted rounded-b-lg">
+                  <div className="flex items-center gap-2">
                     <button
-                      key={cat.id}
                       type="button"
-                      onClick={() => {
-                        setForm(prev => ({ ...prev, category: cat.name }));
-                        setShowCategoryDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-sm hover:bg-muted transition-colors text-left text-foreground ${form.category === cat.name ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
+                      onClick={() => { setShowNewCategoryForm(false); setShowIconPicker(false); setNewCategoryName(''); }}
+                      className="text-xs text-muted-foreground hover:text-foreground"
                     >
-                      <div className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center">
-                        <CIcon size={14} className="text-[#3d7a3d]" />
-                      </div>
-                      <span>{cat.name}</span>
+                      ← Volver
                     </button>
-                  );
-                })}
-              </div>
-              <div className="border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowNewCategoryForm(true)}
-                  className="w-full px-3 py-2.5 flex items-center gap-2 text-sm text-[#3d7a3d] hover:bg-muted transition-colors"
-                >
-                  <Plus size={16} />
-                  Crear nueva categoría
-                </button>
-              </div>
-
-              {showNewCategoryForm && (
-                <div className="border-t border-border p-3 space-y-3 bg-muted">
+                    <span className="text-sm text-foreground" style={{ fontWeight: 500 }}>Nueva categoría</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -589,7 +576,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   </div>
 
                   {showIconPicker && (
-                    <div className="grid grid-cols-7 gap-1 p-2 bg-card rounded-lg border border-border">
+                    <div className="grid grid-cols-7 gap-1 p-2 bg-card rounded-lg border border-border max-h-36 overflow-y-auto">
                       {AVAILABLE_ICON_NAMES.map(name => {
                         const IconComp = getCategoryIcon(name);
                         return (
@@ -610,20 +597,57 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   <div className="flex gap-2 justify-end">
                     <button
                       type="button"
-                      onClick={() => { setShowNewCategoryForm(false); setNewCategoryName(''); }}
+                      onClick={() => { setShowNewCategoryForm(false); setNewCategoryName(''); setShowIconPicker(false); }}
                       className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
                       type="button"
-                      onClick={handleCreateCategory}
+                      onClick={() => void handleCreateCategory()}
                       className="px-3 py-1.5 rounded-lg text-xs bg-[#3d7a3d] text-white hover:bg-[#2f5f2f] transition-colors"
                     >
                       Crear
                     </button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="max-h-48 overflow-y-auto">
+                    {categories.length === 0 && (
+                      <p className="px-3 py-2.5 text-sm text-muted-foreground">No hay categorías aún</p>
+                    )}
+                    {categories.map(cat => {
+                      const CIcon = getCategoryIcon(cat.icon);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, category: cat.name }));
+                            setShowCategoryDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-sm hover:bg-muted transition-colors text-left text-foreground ${form.category === cat.name ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
+                        >
+                          <div className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center">
+                            <CIcon size={14} className="text-[#3d7a3d]" />
+                          </div>
+                          <span>{cat.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategoryForm(true)}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 text-sm text-[#3d7a3d] hover:bg-muted transition-colors"
+                    >
+                      <Plus size={16} />
+                      Crear nueva categoría
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -701,12 +725,15 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   type="number"
                   value={s.quantity}
                   onChange={e => {
+                    const raw = e.target.value;
+                    const parsed = form.unit === 'kg' ? parseFloat(raw) : parseInt(raw, 10);
                     const newStock = [...form.stockByWarehouse];
-                    newStock[idx] = { ...newStock[idx], quantity: parseInt(e.target.value) || 0 };
+                    newStock[idx] = { ...newStock[idx], quantity: Number.isNaN(parsed) ? 0 : parsed };
                     setForm(p => ({ ...p, stockByWarehouse: newStock }));
                   }}
                   className="w-24 px-3 py-2 rounded-lg bg-input-background border border-border outline-none text-sm text-right text-foreground"
                   min={0}
+                  step={form.unit === 'kg' ? 0.001 : 1}
                 />
                 <button type="button" onClick={() => removeWarehouseStock(s.warehouseId)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
                   <X size={14} />
