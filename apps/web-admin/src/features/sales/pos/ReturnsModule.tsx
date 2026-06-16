@@ -6,7 +6,7 @@ import { TicketPreview } from "./TicketPreview";
 import { getReturnableQuantities } from "./returnable-products";
 
 export function ReturnsModule() {
-  const { products, printReturn, template, printers, tickets } = useStore();
+  const { products, printReturn, printToPrinter, template, printers, tickets } = useStore();
   const [items, setItems] = useState<OrderItem[]>([]);
   const [query, setQuery] = useState("");
   const [preview, setPreview] = useState<Ticket | null>(null);
@@ -58,14 +58,24 @@ export function ReturnsModule() {
 
   const total = items.reduce((s, i) => s + i.price * i.qty, 0);
 
-  const confirm = () => {
+  const confirm = async () => {
     if (items.length === 0) return;
     const t = printReturn(items);
     if (!t) return;
     setPreview(t);
     setItems([]);
     setToast(`✅ Devolución #${t.number} registrada con éxito`);
-    setTimeout(() => setToast(null), 2500);
+
+    if (defaultPrinter) {
+      const result = await printToPrinter(t, defaultPrinter);
+      if (!result.ok) {
+        const reason = result.apiUnavailable
+          ? "el servidor de impresión no está disponible"
+          : result.error || "no se pudo conectar con la impresora";
+        setToast(`⚠️ Devolución #${t.number} registrada, pero no se imprimió: ${reason}`);
+      }
+    }
+    setTimeout(() => setToast(null), 3500);
   };
 
   return (

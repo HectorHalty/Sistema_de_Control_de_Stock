@@ -10,6 +10,7 @@ import { SponsorsModule } from './sponsors/sponsors.module';
 import { FootballModule } from './football/football.module';
 import { OnlineCatalogModule } from './online-catalog/online-catalog.module';
 import { SseModule } from './sse/sse.module';
+import { PrintingModule } from './printing/printing.module';
 import { HealthController } from './common/health.controller';
 
 @Module({
@@ -28,6 +29,7 @@ import { HealthController } from './common/health.controller';
     FootballModule,
     OnlineCatalogModule,
     SseModule,
+    PrintingModule,
   ],
   controllers: [HealthController],
 })

@@ -1,16 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Printer as PrinterIcon,
   Plus,
-  Trash2,
-  Wifi,
-  WifiOff,
-  Star,
   FileText,
   X,
-  Edit2,
 } from 'lucide-react';
 import { useAppContext } from '@/app/providers/AppContext';
+import { usePrintingApiAdapter } from '@/app/api/adapters';
+import { buildTestTicketPayload } from '@/features/sales/lib/test-ticket';
+import { PrinterCard } from '@/features/sales/components/PrinterCard';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
 import { TicketPreview } from '@/features/sales/pos/TicketPreview';
 import type { PosTicket } from '@/features/sales/pos/VentasPosContext';
@@ -57,18 +55,64 @@ export function PrinterSettingsPanel() {
     addPrinter,
     updatePrinter,
     removePrinter,
-    setDefaultPrinter,
-    togglePrinter,
     ticketTemplate,
     updateTicketTemplate,
   } = useAppContext();
+  const printingApi = usePrintingApiAdapter();
 
   const [section, setSection] = useState<'printers' | 'template'>('printers');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PrinterDraft>(emptyPrinterDraft());
   const [formError, setFormError] = useState('');
-  const [testingId, setTestingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [printingTestId, setPrintingTestId] = useState<string | null>(null);
+  const [checkingIds, setCheckingIds] = useState<Set<string>>(new Set());
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testInfo, setTestInfo] = useState<string | null>(null);
+
+  const refreshStatus = async (printer: SalesPrinter) => {
+    if (!printingApi.apiAvailable) return;
+    if (!isValidIpv4(printer.ip) || printer.port < 1 || printer.port > 65535) {
+      updatePrinter(printer.id, { connected: false });
+      return;
+    }
+    setCheckingIds(prev => new Set(prev).add(printer.id));
+    try {
+      const result = await printingApi.testPrinter({ ip: printer.ip, port: printer.port });
+      updatePrinter(printer.id, { connected: result.ok });
+    } finally {
+      setCheckingIds(prev => {
+        const next = new Set(prev);
+        next.delete(printer.id);
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!printingApi.apiAvailable) return;
+    let cancelled = false;
+    (async () => {
+      for (const p of salesPrinters) {
+        if (cancelled) break;
+        await refreshStatus(p);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salesPrinters.map(p => `${p.id}:${p.ip}:${p.port}`).join('|'), printingApi.apiAvailable]);
+
+  const toggleExpand = (id: string) => {
+    const willExpand = expandedId !== id;
+    setExpandedId(willExpand ? id : null);
+    if (willExpand) {
+      const printer = salesPrinters.find(p => p.id === id);
+      if (printer) void refreshStatus(printer);
+    }
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -92,13 +136,28 @@ export function PrinterSettingsPanel() {
     setShowForm(true);
   };
 
-  const testConnection = (printer: SalesPrinter) => {
-    setTestingId(printer.id);
-    window.setTimeout(() => {
-      const ok = isValidIpv4(printer.ip) && printer.port > 0 && printer.port <= 65535;
-      updatePrinter(printer.id, { connected: ok });
-      setTestingId(null);
-    }, 800);
+  const sendTestTicket = async (printer: SalesPrinter) => {
+    setPrintingTestId(printer.id);
+    setTestError(null);
+    setTestInfo(null);
+    if (!isValidIpv4(printer.ip) || printer.port < 1 || printer.port > 65535) {
+      setTestError(`${printer.name}: IP o puerto inválidos.`);
+      setPrintingTestId(null);
+      return;
+    }
+    const result = await printingApi.printTicket(buildTestTicketPayload(printer, ticketTemplate));
+    if (result.ok) {
+      setTestInfo(`Ticket de prueba enviado a ${printer.name}.`);
+    } else {
+      setTestError(
+        `${printer.name}: ${
+          result.apiUnavailable
+            ? 'el servidor de impresión no está disponible.'
+            : result.error || 'no se pudo imprimir.'
+        }`,
+      );
+    }
+    setPrintingTestId(null);
   };
 
   const savePrinter = () => {
@@ -165,112 +224,35 @@ export function PrinterSettingsPanel() {
             </button>
           </div>
 
+          {testError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 px-3 py-2 text-sm">
+              {testError}
+            </div>
+          )}
+
+          {testInfo && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 text-sm">
+              {testInfo}
+            </div>
+          )}
+
           {salesPrinters.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
               No hay impresoras configuradas. Agregá una con su dirección IP y puerto (habitualmente 9100).
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-2">
               {salesPrinters.map(p => (
-                <div key={p.id} className="bg-card rounded-xl border border-border p-4">
-                  <div className="flex justify-between items-start mb-3 gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                          p.connected
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        <PrinterIcon className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-foreground flex items-center gap-1 truncate">
-                          {p.name}
-                          {p.isDefault && (
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{p.type}</div>
-                      </div>
-                    </div>
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 shrink-0 ${
-                        p.connected
-                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20'
-                          : 'bg-red-50 text-red-700 dark:bg-red-900/20'
-                      }`}
-                    >
-                      {p.connected ? (
-                        <>
-                          <Wifi className="w-3 h-3" /> Conectada
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff className="w-3 h-3" /> Desconectada
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="text-sm text-muted-foreground space-y-1 mb-3">
-                    <div className="flex justify-between gap-2">
-                      <span>IP</span>
-                      <span className="font-mono text-foreground">{p.ip || '—'}</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span>Puerto</span>
-                      <span className="font-mono text-foreground">{p.port}</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span>Papel</span>
-                      <span className="text-foreground">{p.paperWidth} mm</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => testConnection(p)}
-                      disabled={testingId === p.id}
-                      className="px-3 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 rounded-lg text-sm"
-                    >
-                      {testingId === p.id ? 'Probando...' : 'Probar conexión'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(p)}
-                      className="px-3 py-1.5 bg-muted text-foreground rounded-lg text-sm flex items-center gap-1"
-                    >
-                      <Edit2 className="w-3 h-3" /> Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => togglePrinter(p.id)}
-                      className="px-3 py-1.5 bg-muted text-foreground rounded-lg text-sm"
-                    >
-                      {p.connected ? 'Desconectar' : 'Conectar'}
-                    </button>
-                    {!p.isDefault && (
-                      <button
-                        type="button"
-                        onClick={() => setDefaultPrinter(p.id)}
-                        className="px-3 py-1.5 bg-amber-50 text-amber-700 dark:bg-amber-900/20 rounded-lg text-sm flex items-center gap-1"
-                      >
-                        <Star className="w-3 h-3" /> Predeterminada
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`¿Eliminar ${p.name}?`)) removePrinter(p.id);
-                      }}
-                      className="px-3 py-1.5 bg-red-50 text-red-600 dark:bg-red-900/20 rounded-lg text-sm flex items-center gap-1 ml-auto"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
+                <PrinterCard
+                  key={p.id}
+                  printer={p}
+                  expanded={expandedId === p.id}
+                  printing={printingTestId === p.id}
+                  checkingStatus={checkingIds.has(p.id)}
+                  onToggleExpand={() => toggleExpand(p.id)}
+                  onEdit={() => openEdit(p)}
+                  onPrintTest={() => sendTestTicket(p)}
+                />
               ))}
             </div>
           )}
@@ -292,6 +274,19 @@ export function PrinterSettingsPanel() {
             setEditingId(null);
           }}
           onSave={savePrinter}
+          onDelete={
+            editingId
+              ? () => {
+                  const printer = salesPrinters.find(p => p.id === editingId);
+                  if (printer && confirm(`¿Eliminar ${printer.name}?`)) {
+                    removePrinter(editingId);
+                    setShowForm(false);
+                    setEditingId(null);
+                    setExpandedId(null);
+                  }
+                }
+              : undefined
+          }
         />
       )}
     </div>
@@ -305,6 +300,7 @@ function PrinterFormModal({
   onChange,
   onClose,
   onSave,
+  onDelete,
 }: {
   title: string;
   draft: PrinterDraft;
@@ -312,6 +308,7 @@ function PrinterFormModal({
   onChange: (draft: PrinterDraft) => void;
   onClose: () => void;
   onSave: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -395,17 +392,28 @@ function PrinterFormModal({
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-muted-foreground">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={onSave}
-            className="px-4 py-2 bg-[#3d7a3d] text-white rounded-lg hover:bg-[#2f5f2f]"
-          >
-            Guardar
-          </button>
+        <div className="flex items-center gap-2 mt-5">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+            >
+              Eliminar
+            </button>
+          )}
+          <div className="flex justify-end gap-2 flex-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-muted-foreground">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              className="px-4 py-2 bg-[#3d7a3d] text-white rounded-lg hover:bg-[#2f5f2f]"
+            >
+              Guardar
+            </button>
+          </div>
         </div>
       </div>
     </div>

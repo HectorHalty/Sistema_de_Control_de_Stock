@@ -7,12 +7,13 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi,
+  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
   API_BASE_URL, ApiError,
 } from './client';
 import type {
   CheckoutPayload, ReturnPayload, KitchenOrderStatus,
   PresignPayload, ConfirmMediaPayload,
+  TestPrinterPayload, PrintTicketPayload,
 } from './client';
 
 /**
@@ -68,7 +69,6 @@ export function useSalesApiAdapter() {
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
       if (shouldFallbackToLocal(e)) {
-        // Catálogo aún no migrado a la API: completar la venta en modo local.
         return { ok: false, apiUnavailable: true } as const;
       }
       const msg = e instanceof ApiError ? e.message : 'Checkout failed';
@@ -122,6 +122,50 @@ export function useSalesApiAdapter() {
   }, [apiAvailable]);
 
   return { checkout, returnSale, voidTicket, loading, error, apiAvailable };
+}
+
+// ==================== Printing Adapter ====================
+
+export function usePrintingApiAdapter() {
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    isApiReachable().then(setApiAvailable);
+  }, []);
+
+  const testPrinter = useCallback(async (payload: TestPrinterPayload) => {
+    if (!apiAvailable) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    try {
+      const result = await printingApi.test(payload);
+      return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+    } catch (e) {
+      return {
+        ok: false,
+        apiUnavailable: false,
+        error: e instanceof ApiError ? e.message : 'No se pudo probar la impresora',
+      } as const;
+    }
+  }, [apiAvailable]);
+
+  const printTicket = useCallback(async (payload: PrintTicketPayload) => {
+    if (!apiAvailable) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    try {
+      const result = await printingApi.print(payload);
+      return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+    } catch (e) {
+      return {
+        ok: false,
+        apiUnavailable: false,
+        error: e instanceof ApiError ? e.message : 'No se pudo imprimir',
+      } as const;
+    }
+  }, [apiAvailable]);
+
+  return { testPrinter, printTicket, apiAvailable };
 }
 
 // ==================== Kitchen Adapter ====================
