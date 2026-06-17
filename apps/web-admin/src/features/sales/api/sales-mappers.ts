@@ -7,22 +7,41 @@ import type {
   Kitchen as ApiKitchen,
   SalesTicket as ApiSalesTicket,
 } from '@/app/api/client';
-import type { SalesProduct, Kitchen, SalesTicket } from '@/features/sales/types';
+import type { SalesProduct, Kitchen, SalesTicket, SalesProductKind } from '@/features/sales/types';
+
+/** Asegura campos de promo en productos cacheados antes del feature de bundles. */
+export function normalizeSalesProduct(p: SalesProduct): SalesProduct {
+  const kind: SalesProductKind = p.kind === 'promo' ? 'promo' : 'simple';
+  return {
+    ...p,
+    kind,
+    recipe: p.recipe ?? [],
+    bundle: p.bundle ?? [],
+  };
+}
 
 export function mapApiSalesProductToLocal(api: ApiSalesProduct): SalesProduct {
-  return {
+  const kind = api.kind === 'promo' ? 'promo' : 'simple';
+  return normalizeSalesProduct({
     id: api.id,
     name: api.name,
     category: api.category,
     kitchenId: api.kitchenId,
     price: Number(api.price),
     emoji: api.emoji ?? '',
+    kind,
     active: api.active,
     recipe: (api.recipe ?? []).map(r => ({
       stockProductId: r.stockProductId,
-      quantity: Number(r.quantity), // Decimal llega como string por JSON
+      quantity: Number(r.quantity),
     })),
-  };
+    bundle: (api.bundleItems ?? []).map(b => ({
+      salesProductId: b.componentProductId,
+      quantity: b.quantity,
+      name: b.componentProduct?.name,
+      emoji: b.componentProduct?.emoji ?? undefined,
+    })),
+  });
 }
 
 export function mapApiKitchenToLocal(api: ApiKitchen): Kitchen {

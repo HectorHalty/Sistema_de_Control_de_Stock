@@ -77,6 +77,16 @@ if ($needInfra) {
         if ($LASTEXITCODE -eq 0) { break }
         Start-Sleep -Seconds 2
     }
+
+    Write-Step "Sincronizando esquema de base de datos"
+    Push-Location (Join-Path $Root "apps\api")
+    try {
+        npx prisma db push
+        if ($LASTEXITCODE -ne 0) { throw "prisma db push fallo." }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 if (-not (Test-Path (Join-Path $Root "node_modules"))) {

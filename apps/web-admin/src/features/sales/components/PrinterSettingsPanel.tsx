@@ -40,7 +40,7 @@ const previewTicket: PosTicket = {
   number: 1,
   createdAt: new Date().toLocaleString('es-AR'),
   createdAtISO: new Date().toISOString(),
-  items: [{ productId: 'preview-1', name: 'Producto de ejemplo', price: 1000, qty: 1 }],
+  items: [{ productId: 'preview-1', name: 'Producto de ejemplo', price: 1000, qty: 1, station: 'Cocina' }],
   total: 1000,
   status: 'emitido',
   kind: 'venta',

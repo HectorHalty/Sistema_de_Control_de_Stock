@@ -24,6 +24,7 @@ import type { StockMovement } from '@/app/components/store';
 import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
 import { buildTestTicketPayload } from '../lib/test-ticket';
+import { splitTicketByStation } from '../lib/split-ticket-by-station';
 import { mapApiTicketToLocal } from '../api/sales-mappers';
 import type { Kitchen, Product as StoreProduct, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
@@ -57,7 +58,9 @@ export type PosProduct = {
   station: Station;
   stock: number;
   emoji: string;
+  kind: 'simple' | 'promo';
   recipe?: { ingredientId: string; qty: number }[];
+  bundle?: { productId: string; qty: number }[];
 };
 
 export type PosIngredient = {
@@ -221,9 +224,11 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             price: sp.price,
             category: mapCategory(sp.category),
             station: stationFromKitchen(kitchen),
-            stock: getMaxSellableUnits(sp, ctx.products),
+            stock: getMaxSellableUnits(sp, ctx.products, ctx.salesProducts),
             emoji: sp.emoji,
+            kind: sp.kind === 'promo' ? 'promo' : 'simple',
             recipe: sp.recipe.map(r => ({ ingredientId: r.stockProductId, qty: r.quantity })),
+            bundle: (sp.bundle ?? []).map(b => ({ productId: b.salesProductId, qty: b.quantity })),
           };
         }),
     [ctx.salesProducts, ctx.kitchens, ctx.products],
@@ -746,9 +751,14 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         price: p.price,
         emoji: p.emoji,
         active: true,
+        kind: p.kind === 'promo' ? 'promo' : 'simple',
         recipe: (p.recipe || []).map(r => ({
           stockProductId: r.ingredientId,
           quantity: r.qty,
+        })),
+        bundle: (p.bundle || []).map(b => ({
+          salesProductId: b.productId,
+          quantity: b.qty,
         })),
       };
       try {
@@ -758,7 +768,9 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           await ctx.createSalesProduct(salesProduct);
         }
       } catch (e) {
-        setToast(e instanceof Error ? e.message : 'No se pudo guardar el producto');
+        const msg = e instanceof Error ? e.message : 'No se pudo guardar el producto';
+        setToast(msg);
+        throw e;
       }
     },
     [ctx],
@@ -868,30 +880,38 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   const printToPrinter = useCallback<VentasPosStore['printToPrinter']>(
     async (ticket, printer) => {
       const template = ctx.ticketTemplate;
-      return printingApi.printTicket({
-        ip: printer.ip,
-        port: printer.port,
-        paperWidth: printer.paperWidth,
-        ticketNumber: ticket.number,
-        createdAt: ticket.createdAt,
-        items: ticket.items.map(i => ({
-          name: i.name,
-          quantity: i.qty,
-          unitPrice: i.price,
-          station: i.station,
-        })),
-        total: ticket.total,
-        header: template.header,
-        subheader: template.subheader,
-        footer: template.footer,
-        operatorName: ticket.operator,
-        note: ticket.context,
-        kind: ticket.kind,
-        showDate: template.showDate,
-        showOperator: template.showOperator,
-        showItemDetails: template.showItemDetails,
-        showLogo: template.showLogo,
-      });
+      const splits = splitTicketByStation(ticket);
+
+      for (const split of splits) {
+        const result = await printingApi.printTicket({
+          ip: printer.ip,
+          port: printer.port,
+          paperWidth: printer.paperWidth,
+          ticketNumber: split.number,
+          createdAt: split.createdAt,
+          items: split.items.map(i => ({
+            name: i.name,
+            quantity: i.qty,
+            unitPrice: i.price,
+          })),
+          total: split.total,
+          header: template.header,
+          subheader: template.subheader,
+          footer: template.footer,
+          operatorName: split.operator,
+          source: split.source,
+          context: split.context,
+          pickupStation: split.pickupStation || undefined,
+          kind: split.kind,
+          showDate: template.showDate,
+          showOperator: template.showOperator,
+          showItemDetails: template.showItemDetails,
+          showLogo: template.showLogo,
+        });
+        if (!result.ok) return result;
+      }
+
+      return { ok: true };
     },
     [printingApi, ctx.ticketTemplate],
   );

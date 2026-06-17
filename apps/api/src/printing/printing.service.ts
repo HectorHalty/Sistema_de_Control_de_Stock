@@ -40,6 +40,9 @@ export class PrintingService {
       items: dto.items,
       total: dto.total,
       note: dto.note,
+      source: dto.source,
+      context: dto.context,
+      pickupStation: dto.pickupStation,
       kind: dto.kind,
       logoRaster,
     });

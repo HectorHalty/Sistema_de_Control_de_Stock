@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { getUnitLabel } from '@/app/components/store';
 import { useStore } from '@/features/sales/pos/VentasPosContext';
+import {
+  formatQuantityInput,
+  isPartialQuantityInput,
+  parseQuantityInput,
+} from '@/features/sales/lib/parse-quantity';
 
 export type RecipeLine = { ingredientId: string; qty: number };
 
@@ -17,6 +22,7 @@ function defaultQty(unit: 'unidades' | 'kg') {
 export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsEditorProps) {
   const { ingredients } = useStore();
   const [search, setSearch] = useState('');
+  const [qtyInput, setQtyInput] = useState<Record<string, string>>({});
 
   const ingredientMap = useMemo(
     () => new Map(ingredients.map(i => [i.id, i])),
@@ -39,13 +45,28 @@ export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsE
   };
 
   const updateQty = (id: string, raw: string) => {
-    const ing = ingredientMap.get(id);
-    const qty = ing?.unit === 'kg' ? parseFloat(raw) : parseInt(raw, 10);
-    if (Number.isNaN(qty) || qty <= 0) return;
+    if (!isPartialQuantityInput(raw)) return;
+    setQtyInput(prev => ({ ...prev, [id]: raw }));
+    const qty = parseQuantityInput(raw);
+    if (qty === null || qty <= 0) return;
+    onChange(recipe.map(r => (r.ingredientId === id ? { ...r, qty } : r)));
+  };
+
+  const commitQty = (id: string, qty: number) => {
+    setQtyInput(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     onChange(recipe.map(r => (r.ingredientId === id ? { ...r, qty } : r)));
   };
 
   const removeIngredient = (id: string) => {
+    setQtyInput(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     onChange(recipe.filter(r => r.ingredientId !== id));
   };
 
@@ -78,7 +99,8 @@ export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsE
             );
           }
 
-          const isKg = ing.unit === 'kg';
+          const displayQty = qtyInput[r.ingredientId] ?? formatQuantityInput(r.qty);
+
           return (
             <div
               key={r.ingredientId}
@@ -86,11 +108,23 @@ export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsE
             >
               <span className="flex-1 min-w-0 truncate text-foreground">{ing.name}</span>
               <input
-                type="number"
-                min={isKg ? 0.01 : 1}
-                step={isKg ? 0.01 : 1}
-                value={r.qty}
+                type="text"
+                inputMode="decimal"
+                value={displayQty}
                 onChange={e => updateQty(r.ingredientId, e.target.value)}
+                onBlur={() => {
+                  const parsed = parseQuantityInput(displayQty);
+                  if (parsed !== null && parsed > 0) {
+                    commitQty(r.ingredientId, parsed);
+                  } else {
+                    setQtyInput(prev => {
+                      const next = { ...prev };
+                      delete next[r.ingredientId];
+                      return next;
+                    });
+                  }
+                }}
+                placeholder="0,1"
                 className="w-20 px-2 py-1 border border-border rounded bg-input-background text-right"
                 aria-label={`Cantidad de ${ing.name}`}
               />
@@ -109,6 +143,10 @@ export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsE
           );
         })}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Podés usar decimales con coma (ej. 0,1 = un décimo del producto por venta).
+      </p>
 
       <div>
         <label className="text-sm text-muted-foreground mb-1 block">Inventario</label>

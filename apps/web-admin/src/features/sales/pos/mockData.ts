@@ -10,7 +10,9 @@ export type Product = {
   station: Station;
   stock: number;
   emoji: string;
+  kind?: 'simple' | 'promo';
   recipe?: { ingredientId: string; qty: number }[];
+  bundle?: { productId: string; qty: number }[];
 };
 
 export type Ingredient = {

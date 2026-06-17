@@ -4,7 +4,7 @@ import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
 import { salesApi } from '@/app/api/client';
 import { isApiReachable } from '@/app/api/adapters';
-import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal } from './api/sales-mappers';
+import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal, normalizeSalesProduct } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
 import { initialKitchens, initialSalesProducts, initialTables } from './seeds';
 import type {
@@ -19,6 +19,7 @@ import type {
 } from './types';
 import { DEFAULT_TICKET_TEMPLATE } from './types';
 import { historyFromTickets, mergeSalesHistory, mergeTicketsFromServer } from './sales-history';
+import { isLocalOnlyId } from '@/shared/utils/local-ids';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -31,6 +32,45 @@ function appendAudit(
     id: `a${Date.now()}`,
     date: new Date().toLocaleString('es-AR'),
   }, ...prev]);
+}
+
+function upsertSalesProduct(
+  setter: Dispatch<SetStateAction<SalesProduct[]>>,
+  product: SalesProduct,
+) {
+  const normalized = normalizeSalesProduct(product);
+  setter(prev => {
+    const idx = prev.findIndex(p => p.id === normalized.id);
+    if (idx < 0) return [...prev, normalized];
+    return prev.map(p => (p.id === normalized.id ? normalized : p));
+  });
+}
+
+function toApiSalesProductBody(input: SalesProduct) {
+  const kind = input.kind === 'promo' ? 'promo' : 'simple';
+  if (kind === 'promo') {
+    return {
+      name: input.name,
+      category: input.category,
+      kitchenId: input.kitchenId,
+      price: input.price,
+      emoji: input.emoji || undefined,
+      kind: 'promo' as const,
+      bundle: (input.bundle ?? []).map(b => ({
+        componentProductId: b.salesProductId,
+        quantity: b.quantity,
+      })),
+    };
+  }
+  return {
+    name: input.name,
+    category: input.category,
+    kitchenId: input.kitchenId,
+    price: input.price,
+    emoji: input.emoji || undefined,
+    kind: 'simple' as const,
+    recipe: (input.recipe ?? []).map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
+  };
 }
 
 export function useSalesState() {
@@ -89,6 +129,13 @@ export function useSalesState() {
     });
   }, [setSalesCategories, setSalesCategoryEmojis]);
 
+  useEffect(() => {
+    setSalesProducts(prev => {
+      if (prev.every(p => p.kind && p.recipe && p.bundle)) return prev;
+      return prev.map(normalizeSalesProduct);
+    });
+  }, [setSalesProducts]);
+
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(null);
   const mountHydrationGen = useRef(0);
@@ -118,9 +165,15 @@ export function useSalesState() {
 
   const hydrateSalesProducts = useCallback(async (mountGen?: number): Promise<SalesProduct[]> => {
     const ps = await salesApi.products.list();
-    const local = ps.map(mapApiSalesProductToLocal);
-    applyHydration(mountGen, () => setSalesProducts(local));
-    return local;
+    const server = ps.map(mapApiSalesProductToLocal);
+    applyHydration(mountGen, () => setSalesProducts(prev => {
+      const serverIds = new Set(server.map(p => p.id));
+      const pendingLocal = prev
+        .filter(p => isLocalOnlyId(p.id) && !serverIds.has(p.id))
+        .map(normalizeSalesProduct);
+      return [...server, ...pendingLocal];
+    }));
+    return server;
   }, [setSalesProducts, applyHydration]);
 
   const hydrateTickets = useCallback(
@@ -165,28 +218,23 @@ export function useSalesState() {
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setSalesProducts(prev => [...prev, { ...input, id: `p${Date.now()}` }]);
-        return;
-      }
+      const product: SalesProduct = {
+        kind: 'simple',
+        bundle: [],
+        recipe: [],
+        ...input,
+        id: input.id || `p${Date.now()}`,
+      };
+      upsertSalesProduct(setSalesProducts, product);
+
+      if (salesApiAvailable !== true) return;
+
       try {
-        await salesApi.products.create(
-          {
-            name: input.name,
-            category: input.category,
-            kitchenId: input.kitchenId,
-            price: input.price,
-            emoji: input.emoji || undefined,
-            recipe: input.recipe.map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
-          },
-          '',
-        );
+        await salesApi.products.create(toApiSalesProductBody(product), '');
         markApiSynced();
         await hydrateSalesProducts();
-        return;
       } catch (e) {
-        if (salesApiAvailable === true) throw e;
-        setSalesProducts(prev => [...prev, { ...input, id: `p${Date.now()}` }]);
+        throw e;
       }
     },
     [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
@@ -194,30 +242,21 @@ export function useSalesState() {
 
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setSalesProducts(prev => prev.map(p => (p.id === input.id ? input : p)));
-        return;
-      }
+      upsertSalesProduct(setSalesProducts, input);
+
+      if (salesApiAvailable !== true) return;
+
       try {
-        await salesApi.products.update(
-          input.id,
-          {
-            name: input.name,
-            category: input.category,
-            kitchenId: input.kitchenId,
-            price: input.price,
-            emoji: input.emoji || undefined,
-            active: input.active,
-            recipe: input.recipe.map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
-          },
-          '',
-        );
+        const body = { ...toApiSalesProductBody(input), active: input.active };
+        if (isLocalOnlyId(input.id)) {
+          await salesApi.products.create(toApiSalesProductBody(input), '');
+        } else {
+          await salesApi.products.update(input.id, body, '');
+        }
         markApiSynced();
         await hydrateSalesProducts();
-        return;
       } catch (e) {
-        if (salesApiAvailable === true) throw e;
-        setSalesProducts(prev => prev.map(p => (p.id === input.id ? input : p)));
+        throw e;
       }
     },
     [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
@@ -225,18 +264,18 @@ export function useSalesState() {
 
   const deleteSalesProduct = useCallback(
     async (id: string): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setSalesProducts(prev => prev.filter(p => p.id !== id));
-        return;
-      }
+      setSalesProducts(prev => prev.filter(p => p.id !== id));
+
+      if (salesApiAvailable !== true) return;
+
       try {
-        await salesApi.products.update(id, { active: false }, '');
+        if (!isLocalOnlyId(id)) {
+          await salesApi.products.update(id, { active: false }, '');
+        }
         markApiSynced();
         await hydrateSalesProducts();
-        return;
       } catch (e) {
-        if (salesApiAvailable === true) throw e;
-        setSalesProducts(prev => prev.filter(p => p.id !== id));
+        throw e;
       }
     },
     [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],

@@ -5,6 +5,15 @@ export interface Kitchen {
   active: boolean;
 }
 
+export type SalesProductKind = 'simple' | 'promo';
+
+export interface SalesProductBundleItem {
+  salesProductId: string;
+  quantity: number;
+  name?: string;
+  emoji?: string;
+}
+
 export interface SalesProduct {
   id: string;
   name: string;
@@ -12,7 +21,9 @@ export interface SalesProduct {
   kitchenId: string;
   price: number;
   emoji: string;
+  kind: SalesProductKind;
   recipe: { stockProductId: string; quantity: number }[];
+  bundle: SalesProductBundleItem[];
   active: boolean;
 }
 

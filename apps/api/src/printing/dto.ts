@@ -78,6 +78,18 @@ export class PrintTicketDto {
   note?: string;
 
   @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  context?: string;
+
+  @IsOptional()
+  @IsString()
+  pickupStation?: string;
+
+  @IsOptional()
   @IsIn(['venta', 'devolucion'])
   kind?: 'venta' | 'devolucion';
 

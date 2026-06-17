@@ -613,8 +613,15 @@ export interface SalesProduct {
   kitchenId: string;
   price: number;
   emoji?: string;
+  kind?: string;
   active: boolean;
   recipe: { id: string; stockProductId: string; quantity: number; stockProduct?: StockProduct }[];
+  bundleItems?: Array<{
+    id: string;
+    componentProductId: string;
+    quantity: number;
+    componentProduct?: { id: string; name: string; emoji?: string };
+  }>;
 }
 
 export interface SalesTicket {
@@ -735,13 +742,16 @@ export interface UpdateProductPayload {
 
 export interface CreateSalesProductPayload {
   name: string; category: string; kitchenId: string; price: number;
-  emoji?: string; recipe: { stockProductId: string; quantity: number }[];
+  emoji?: string; kind?: string;
+  recipe?: { stockProductId: string; quantity: number }[];
+  bundle?: { componentProductId: string; quantity: number }[];
 }
 
 export interface UpdateSalesProductPayload {
   name?: string; category?: string; kitchenId?: string;
-  price?: number; emoji?: string; active?: boolean;
+  price?: number; emoji?: string; active?: boolean; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
+  bundle?: { componentProductId: string; quantity: number }[];
 }
 
 export interface CheckoutItem {
@@ -811,6 +821,9 @@ export interface PrintTicketPayload {
   footer?: string;
   operatorName?: string;
   note?: string;
+  source?: string;
+  context?: string;
+  pickupStation?: string;
   kind?: 'venta' | 'devolucion';
   showDate?: boolean;
   showOperator?: boolean;

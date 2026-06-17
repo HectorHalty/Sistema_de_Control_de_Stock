@@ -117,13 +117,31 @@ model SalesProduct {
   kitchenId   String
   price       Decimal  @db.Decimal(10, 2)
   emoji       String?
+  kind        String   @default("simple") // simple | promo
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  recipe      RecipeItem[]
-  ticketItems SalesTicketItem[]
-  kitchen     Kitchen    @relation(fields: [kitchenId], references: [id])
+  recipe        RecipeItem[]
+  bundleItems   SalesProductBundleItem[] @relation("PromoProduct")
+  usedInBundles SalesProductBundleItem[] @relation("BundleComponent")
+  ticketItems   SalesTicketItem[]
+  kitchen       Kitchen    @relation(fields: [kitchenId], references: [id])
+}
+
+model SalesProductBundleItem {
+  id                 String       @id @default(uuid())
+  promoProductId     String
+  componentProductId String
+  quantity           Int          @default(1)
+  createdAt          DateTime     @default(now())
+
+  promoProduct       SalesProduct @relation("PromoProduct", fields: [promoProductId], references: [id], onDelete: Cascade)
+  componentProduct   SalesProduct @relation("BundleComponent", fields: [componentProductId], references: [id], onDelete: Restrict)
+
+  @@unique([promoProductId, componentProductId])
+  @@index([promoProductId])
+  @@index([componentProductId])
 }
 
 model RecipeItem {

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
+import { getApiErrorMessage } from '@/app/api/client';
 import { getUnitLabel } from '@/app/components/store';
 import type { Product } from '@/app/components/store';
 import { getCategoryIcon } from '@/features/inventory/lib/category-icons';
@@ -22,6 +23,7 @@ export function WarehousesPage() {
   const [editing, setEditing] = useState<WarehouseType | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showCatFilter, setShowCatFilter] = useState(false);
@@ -51,11 +53,14 @@ export function WarehousesPage() {
 
   const handleDelete = async (id: string) => {
     const wh = warehouses.find(w => w.id === id);
+    setDeletingId(id);
     try {
       await deleteWarehouse(id);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'No se pudo eliminar el almacén');
+      window.alert(getApiErrorMessage(e, 'No se pudo eliminar el almacén'));
       return;
+    } finally {
+      setDeletingId(null);
     }
     addAudit({ user: 'Admin', action: 'Eliminación Almacén', element: wh?.name || '' });
     setDeleteConfirm(null);
@@ -200,8 +205,20 @@ export function WarehousesPage() {
             <h3 className="mb-2">Confirmar Eliminación</h3>
             <p className="text-sm text-muted-foreground mb-4">¿Estás seguro? Los productos en este almacén perderán esta ubicación.</p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm">Eliminar</button>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deletingId !== null}
+                className="px-4 py-2 rounded-lg border border-border text-sm disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleDelete(deleteConfirm)}
+                disabled={deletingId !== null}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm disabled:opacity-50"
+              >
+                {deletingId ? 'Eliminando…' : 'Eliminar'}
+              </button>
             </div>
           </div>
         </div>

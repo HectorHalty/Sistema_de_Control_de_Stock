@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
-import { stockApi } from '@/app/api/client';
+import { stockApi, isApiError } from '@/app/api/client';
 import { isApiReachable } from '@/app/api/adapters';
 import {
   mapApiProductToLocal,
@@ -24,6 +24,7 @@ import {
   initialSuppliers,
   initialWarehouses,
 } from './seeds';
+import { isLocalOnlyId } from '@/shared/utils/local-ids';
 import type { AuditEntry, AuditModule, Category, ConsumptionLog, EmployeeConsumptionEntry, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
 
 function appendAudit(
@@ -86,19 +87,36 @@ export function useInventoryState() {
 
   const hydrateCategories = useCallback(async (mountGen?: number) => {
     const cats = await stockApi.categories.list();
-    applyHydration(mountGen, () => setCategories(cats.map(mapApiCategoryToLocal)));
+    const server = cats.map(mapApiCategoryToLocal);
+    applyHydration(mountGen, () => setCategories(prev => {
+      const serverIds = new Set(server.map(c => c.id));
+      const serverNames = new Set(server.map(c => c.name.toLowerCase()));
+      const pendingLocal = prev.filter(
+        c => isLocalOnlyId(c.id) && !serverIds.has(c.id) && !serverNames.has(c.name.toLowerCase()),
+      );
+      return [...server, ...pendingLocal].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    }));
   }, [setCategories, applyHydration]);
 
   const hydrateWarehouses = useCallback(async (mountGen?: number) => {
     const whs = await stockApi.warehouses.list();
-    applyHydration(mountGen, () => setWarehouses(whs.map(mapApiWarehouseToLocal)));
+    const server = whs.map(mapApiWarehouseToLocal);
+    applyHydration(mountGen, () => setWarehouses(prev => {
+      const serverIds = new Set(server.map(w => w.id));
+      const pendingLocal = prev.filter(w => isLocalOnlyId(w.id) && !serverIds.has(w.id));
+      return [...server, ...pendingLocal].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    }));
   }, [setWarehouses, applyHydration]);
 
   const hydrateProducts = useCallback(async (mountGen?: number) => {
     const prods = await stockApi.products.list();
-    const mapped = prods.map(mapApiProductToLocal);
-    applyHydration(mountGen, () => setProducts(mapped));
-    return mapped;
+    const server = prods.map(mapApiProductToLocal);
+    applyHydration(mountGen, () => setProducts(prev => {
+      const serverIds = new Set(server.map(p => p.id));
+      const pendingLocal = prev.filter(p => isLocalOnlyId(p.id) && !serverIds.has(p.id));
+      return reassignProductCodes([...server, ...pendingLocal]);
+    }));
+    return server;
   }, [setProducts, applyHydration]);
 
   const hydrateMovements = useCallback(async (mountGen?: number) => {
@@ -171,10 +189,18 @@ export function useInventoryState() {
 
   const createProduct = useCallback(
     async (input: Product): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setProducts(prev => reassignProductCodes([...prev, { ...input, id: `p${Date.now()}`, code: '' }]));
-        return;
-      }
+      const localProduct: Product = {
+        ...input,
+        id: input.id || `p${Date.now()}`,
+        code: input.code || '',
+      };
+      setProducts(prev => reassignProductCodes([
+        ...prev.filter(p => p.id !== localProduct.id),
+        localProduct,
+      ]));
+
+      if (inventoryApiAvailable !== true) return;
+
       try {
         const categoryId = categories.find(c => c.name === input.category)?.id;
         if (!categoryId) throw new Error(`Categoría no encontrada: ${input.category}`);
@@ -197,16 +223,9 @@ export function useInventoryState() {
           }
         }
         markApiSynced();
-        setProducts(prev => {
-          const mapped = mapApiProductToLocal(created);
-          const without = prev.filter(p => p.id !== mapped.id);
-          return reassignProductCodes([...without, mapped]);
-        });
         await hydrateProducts();
-        return;
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setProducts(prev => reassignProductCodes([...prev, { ...input, id: `p${Date.now()}`, code: '' }]));
+        throw e;
       }
     },
     [inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
@@ -214,13 +233,36 @@ export function useInventoryState() {
 
   const updateProduct = useCallback(
     async (input: Product, previous: Product): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
-        return;
-      }
+      setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
+
+      if (inventoryApiAvailable !== true) return;
+
       try {
         const categoryId = categories.find(c => c.name === input.category)?.id;
         if (!categoryId) throw new Error(`Categoría no encontrada: ${input.category}`);
+        if (isLocalOnlyId(input.id)) {
+          const code = nextProductCode(products, input.category, getCategoryCodePrefix, formatProductCode);
+          const created = await stockApi.products.create(
+            {
+              name: input.name,
+              code,
+              description: input.description || undefined,
+              categoryId,
+              unit: input.unit,
+              orderUnit: input.orderUnit,
+              image: input.image || undefined,
+            },
+            '',
+          );
+          for (const s of input.stockByWarehouse) {
+            if (s.quantity > 0) {
+              await stockApi.products.adjustStock(created.id, s.warehouseId, s.quantity, '');
+            }
+          }
+          markApiSynced();
+          await hydrateProducts();
+          return;
+        }
         await stockApi.products.update(
           input.id,
           {
@@ -245,13 +287,11 @@ export function useInventoryState() {
         }
         markApiSynced();
         await hydrateProducts();
-        return;
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
+        throw e;
       }
     },
-    [inventoryApiAvailable, categories, hydrateProducts, setProducts, markApiSynced],
+    [inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
   );
 
   const deleteProduct = useCallback(
@@ -276,13 +316,22 @@ export function useInventoryState() {
 
   const createCategory = useCallback(
     async (input: { name: string; icon: string }): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setCategories(prev => [...prev, { ...input, id: `cat${Date.now()}` }]);
-        return;
-      }
+      const name = input.name.trim();
+      const localCategory: Category = {
+        id: `cat${Date.now()}`,
+        name,
+        icon: input.icon,
+      };
+      setCategories(prev => {
+        const without = prev.filter(c => c.name.toLowerCase() !== name.toLowerCase());
+        return [...without, localCategory].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      });
+
+      if (inventoryApiAvailable !== true) return;
+
       try {
         const created = await stockApi.categories.create(
-          { name: input.name, icon: input.icon },
+          { name, icon: input.icon },
           '',
         );
         markApiSynced();
@@ -294,10 +343,8 @@ export function useInventoryState() {
           return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
         });
         await hydrateCategories();
-        return;
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setCategories(prev => [...prev, { ...input, id: `cat${Date.now()}` }]);
+        throw e;
       }
     },
     [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
@@ -407,26 +454,52 @@ export function useInventoryState() {
         })));
       };
 
-      // null = hidratación en curso: intentar API salvo que sepamos que está offline
-      if (inventoryApiAvailable !== false) {
+      const refreshCatalog = async () => {
         try {
-          await stockApi.warehouses.remove(id, '');
-          markApiSynced();
-          stripFromLocal();
-          try {
-            await Promise.all([hydrateWarehouses(), hydrateProducts()]);
-          } catch {
-            // El almacén ya se quitó de la UI; reintentar hidratación de productos después
-          }
-          return;
-        } catch (e) {
-          if (inventoryApiAvailable === true) throw e;
+          await Promise.all([hydrateWarehouses(), hydrateProducts()]);
+        } catch {
+          // La UI ya refleja el borrado local.
         }
+      };
+
+      if (inventoryApiAvailable === false) {
+        stripFromLocal();
+        return;
       }
 
-      stripFromLocal();
+      // Almacén creado solo en localStorage (id w123…): no existe en el servidor.
+      if (isLocalOnlyId(id)) {
+        invalidateMountHydration();
+        stripFromLocal();
+        return;
+      }
+
+      try {
+        await stockApi.warehouses.remove(id, '');
+        markApiSynced();
+        stripFromLocal();
+        await refreshCatalog();
+      } catch (e) {
+        const alreadyGone = isApiError(e) && e.status === 404;
+        if (alreadyGone) {
+          markApiSynced();
+          stripFromLocal();
+          return;
+        }
+        if (inventoryApiAvailable === true) throw e;
+        invalidateMountHydration();
+        stripFromLocal();
+      }
     },
-    [inventoryApiAvailable, hydrateWarehouses, hydrateProducts, setWarehouses, setProducts, markApiSynced],
+    [
+      inventoryApiAvailable,
+      hydrateWarehouses,
+      hydrateProducts,
+      setWarehouses,
+      setProducts,
+      markApiSynced,
+      invalidateMountHydration,
+    ],
   );
 
   const addStockAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {

@@ -11,6 +11,42 @@ export function getTotalStockQuantity(product: Product): number {
 
 export type RecipeStockItem = { stockProductId: string; quantity: number };
 
+function isPromoProduct(sp: Pick<SalesProduct, 'kind' | 'bundle'>): boolean {
+  return sp.kind === 'promo' && (sp.bundle?.length ?? 0) > 0;
+}
+
+function addStockRequirementsFromSalesProduct(
+  spId: string,
+  multiplier: number,
+  salesMap: Map<string, SalesProduct>,
+  required: Record<string, number>,
+  visiting: Set<string>,
+): void {
+  const sp = salesMap.get(spId);
+  if (!sp) return;
+
+  if (isPromoProduct(sp)) {
+    if (visiting.has(spId)) return;
+    visiting.add(spId);
+    for (const item of sp.bundle ?? []) {
+      addStockRequirementsFromSalesProduct(
+        item.salesProductId,
+        multiplier * item.quantity,
+        salesMap,
+        required,
+        visiting,
+      );
+    }
+    visiting.delete(spId);
+    return;
+  }
+
+  for (const recipeItem of sp.recipe) {
+    required[recipeItem.stockProductId] =
+      (required[recipeItem.stockProductId] || 0) + recipeItem.quantity * multiplier;
+  }
+}
+
 /** Units sellable from a recipe and per-ingredient availability (ids → total qty in stock). */
 export function computeSellableStock(
   recipe: RecipeStockItem[],
@@ -23,22 +59,57 @@ export function computeSellableStock(
   for (const recipeItem of recipe) {
     if (recipeItem.quantity <= 0) return 0;
     const available = getAvailable(recipeItem.stockProductId);
-    maxUnits = Math.min(maxUnits, Math.floor(available / recipeItem.quantity));
+    const units = available / recipeItem.quantity;
+    maxUnits = Math.min(maxUnits, Math.floor(units + 1e-9));
   }
 
   return Number.isFinite(maxUnits) ? maxUnits : 0;
 }
 
-/** Units that can still be sold according to recipe ingredients in stock. */
-export function getMaxSellableUnits(salesProduct: SalesProduct, stockProducts: Product[]): number {
-  if (!salesProduct.active || salesProduct.recipe.length === 0) return 0;
+/** Units that can still be sold according to recipe ingredients or promo components. */
+export function getMaxSellableUnits(
+  salesProduct: SalesProduct,
+  stockProducts: Product[],
+  allSalesProducts: SalesProduct[] = [],
+): number {
+  if (!salesProduct.active) return 0;
 
-  const stockMap = new Map(stockProducts.map(p => [p.id, getTotalStockQuantity(p)]));
-  return computeSellableStock(salesProduct.recipe, id => stockMap.get(id) ?? 0);
+  const catalog = allSalesProducts.length > 0 ? allSalesProducts : [salesProduct];
+  const visiting = new Set<string>();
+
+  const sellable = (sp: SalesProduct): number => {
+    if (!sp.active) return 0;
+    if (isPromoProduct(sp)) {
+      if (visiting.has(sp.id)) return 0;
+      visiting.add(sp.id);
+      let minUnits = Number.POSITIVE_INFINITY;
+      for (const item of sp.bundle ?? []) {
+        const component = catalog.find(p => p.id === item.salesProductId);
+        if (!component || item.quantity <= 0) {
+          visiting.delete(sp.id);
+          return 0;
+        }
+        const available = sellable(component);
+        minUnits = Math.min(minUnits, Math.floor(available / item.quantity));
+      }
+      visiting.delete(sp.id);
+      return Number.isFinite(minUnits) ? minUnits : 0;
+    }
+
+    if (sp.recipe.length === 0) return 0;
+    const stockMap = new Map(stockProducts.map(p => [p.id, getTotalStockQuantity(p)]));
+    return computeSellableStock(sp.recipe, id => stockMap.get(id) ?? 0);
+  };
+
+  return sellable(salesProduct);
 }
 
-export function isSalesProductAvailable(salesProduct: SalesProduct, stockProducts: Product[]): boolean {
-  return getMaxSellableUnits(salesProduct, stockProducts) > 0;
+export function isSalesProductAvailable(
+  salesProduct: SalesProduct,
+  stockProducts: Product[],
+  allSalesProducts?: SalesProduct[],
+): boolean {
+  return getMaxSellableUnits(salesProduct, stockProducts, allSalesProducts) > 0;
 }
 
 export function buildRequiredStockFromCart(
@@ -48,13 +119,15 @@ export function buildRequiredStockFromCart(
   const salesMap = new Map(salesProducts.map(p => [p.id, p]));
   const required: Record<string, number> = {};
 
-  cart.forEach(item => {
-    const sp = salesMap.get(item.salesProductId);
-    if (!sp) return;
-    sp.recipe.forEach(r => {
-      required[r.stockProductId] = (required[r.stockProductId] || 0) + r.quantity * item.quantity;
-    });
-  });
+  for (const item of cart) {
+    addStockRequirementsFromSalesProduct(
+      item.salesProductId,
+      item.quantity,
+      salesMap,
+      required,
+      new Set(),
+    );
+  }
 
   return required;
 }
@@ -78,7 +151,9 @@ export function validateStockForCart(
 
   if (cart.some(item => {
     const sp = salesProducts.find(p => p.id === item.salesProductId);
-    return !sp || sp.recipe.length === 0;
+    if (!sp) return true;
+    if (isPromoProduct(sp)) return false;
+    return sp.recipe.length === 0;
   })) {
     missing.push({ name: 'Producto sin receta de stock', required: 1, available: 0 });
   }

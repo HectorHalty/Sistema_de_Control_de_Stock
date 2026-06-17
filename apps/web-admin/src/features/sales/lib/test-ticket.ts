@@ -20,6 +20,8 @@ export function buildTestTicketPayload(
       { name: printer.name, quantity: 1, unitPrice: 0 },
     ],
     total: 0,
+    source: 'Mostrador',
+    pickupStation: 'Cocina',
     header: template.header,
     subheader: 'PRUEBA DE IMPRESION',
     footer: template.footer,

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { computeSellableStock } from "@/features/sales/stock-link";
-import { Plus, Edit2, Trash2, X, ChefHat } from "lucide-react";
+import { computeSellableStock, getMaxSellableUnits } from "@/features/sales/stock-link";
+import { Plus, Edit2, Trash2, X, ChefHat, Tags } from "lucide-react";
 import { ProductEmojiPicker } from "@/features/sales/components/ProductEmojiPicker";
 import { RecipeIngredientsEditor } from "@/features/sales/components/RecipeIngredientsEditor";
+import { PromoComponentsEditor } from "@/features/sales/components/PromoComponentsEditor";
 import { SalesCategorySelect } from "@/features/sales/components/SalesCategorySelect";
 import { getSalesCategoryEmoji, mergeSalesCategories } from "@/features/sales/lib/sales-categories";
 import { Product } from "./mockData";
@@ -28,10 +29,14 @@ export function ProductsModule() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const saveProduct = (p: Product) => {
-    storeSave(p);
-    setEditing(null);
-    setCreating(false);
+  const saveProduct = async (p: Product) => {
+    try {
+      await storeSave(p);
+      setEditing(null);
+      setCreating(false);
+    } catch {
+      // El modal muestra el error; los datos ya quedaron en localStorage.
+    }
   };
 
   const deleteProduct = (id: string) => {
@@ -46,7 +51,9 @@ export function ProductsModule() {
     station: kitchens[0]?.name ?? "",
     stock: 0,
     emoji: "🍽️",
+    kind: "simple",
     recipe: [],
+    bundle: [],
   };
 
   return (
@@ -114,7 +121,12 @@ export function ProductsModule() {
                           <span className={p.stock < 10 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}>
                             · disp. {p.stock}
                           </span>
-                          {p.recipe && p.recipe.length > 0 && (
+                          {p.kind === 'promo' && p.bundle && p.bundle.length > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
+                              <Tags className="w-3 h-3" /> promo · {p.bundle.length}
+                            </span>
+                          )}
+                          {p.kind !== 'promo' && p.recipe && p.recipe.length > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300">
                               <ChefHat className="w-3 h-3" /> {p.recipe.length}
                             </span>
@@ -333,20 +345,75 @@ function ProductEditor({
   product: Product;
   categories: string[];
   isNew: boolean;
-  onSave: (p: Product) => void;
+  onSave: (p: Product) => Promise<void>;
   onClose: () => void;
 }) {
-  const { addSalesCategory, salesCategoryEmojis, ingredients, kitchens } = useStore();
-  const [draft, setDraft] = useState<Product>({ ...product, recipe: product.recipe || [] });
+  const { addSalesCategory, salesCategoryEmojis, ingredients, kitchens, products: menuProducts } = useStore();
+  const [draft, setDraft] = useState<Product>({
+    ...product,
+    kind: product.kind ?? 'simple',
+    recipe: product.recipe || [],
+    bundle: product.bundle || [],
+  });
   const [saveError, setSaveError] = useState('');
 
+  const salesCatalog = useMemo(
+    () => menuProducts.map(p => ({
+      id: p.id,
+      name: p.name,
+      emoji: p.emoji,
+      category: p.category,
+      kind: p.kind ?? 'simple' as const,
+      kitchenId: '',
+      price: p.price,
+      active: true,
+      recipe: (p.recipe || []).map(r => ({ stockProductId: r.ingredientId, quantity: r.qty })),
+      bundle: (p.bundle || []).map(b => ({ salesProductId: b.productId, quantity: b.qty })),
+    })),
+    [menuProducts],
+  );
+
   const calculatedStock = useMemo(() => {
+    if (draft.kind === 'promo') {
+      return getMaxSellableUnits(
+        {
+          id: draft.id,
+          name: draft.name,
+          category: draft.category,
+          kitchenId: '',
+          price: draft.price,
+          emoji: draft.emoji,
+          kind: 'promo',
+          active: true,
+          recipe: [],
+          bundle: (draft.bundle || []).map(b => ({ salesProductId: b.productId, quantity: b.qty })),
+        },
+        ingredients.map(i => ({
+          id: i.id,
+          name: i.name,
+          code: '',
+          description: '',
+          category: '',
+          unit: i.unit,
+          image: '',
+          stockByWarehouse: [{ warehouseId: 'w1', quantity: i.stock }],
+        })),
+        salesCatalog,
+      );
+    }
     const availability = new Map(ingredients.map(i => [i.id, i.stock]));
     return computeSellableStock(
       (draft.recipe || []).map(r => ({ stockProductId: r.ingredientId, quantity: r.qty })),
       id => availability.get(id) ?? 0,
     );
-  }, [draft.recipe, ingredients]);
+  }, [draft.kind, draft.recipe, draft.bundle, draft.id, draft.name, draft.category, draft.price, draft.emoji, ingredients, salesCatalog]);
+
+  const promoProductOptions = useMemo(
+    () => menuProducts
+      .filter(p => p.id !== draft.id && p.kind !== 'promo')
+      .map(p => ({ id: p.id, name: p.name, emoji: p.emoji, category: p.category })),
+    [menuProducts, draft.id],
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -390,10 +457,14 @@ function ProductEditor({
                   calculatedStock < 10 ? "text-red-600 dark:text-red-400" : "text-foreground"
                 }`}
               >
-                {(draft.recipe?.length ?? 0) > 0 ? calculatedStock : "—"}
+                {(draft.kind === 'promo' ? (draft.bundle?.length ?? 0) > 0 : (draft.recipe?.length ?? 0) > 0)
+                  ? calculatedStock
+                  : "—"}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Calculado según inventario y receta
+                {draft.kind === 'promo'
+                  ? 'Calculado según los productos incluidos'
+                  : 'Calculado según inventario y receta'}
               </p>
             </div>
             <SalesCategorySelect
@@ -426,19 +497,67 @@ function ProductEditor({
             </div>
           </div>
 
-          <div className="border-t border-border pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <ChefHat className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              <h4 className="text-foreground">Receta — descuento de stock</h4>
+          <div className="border-t border-border pt-4 space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block">Tipo de producto</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDraft(prev => ({ ...prev, kind: 'simple', bundle: [] }))}
+                  className={`px-3 py-2 rounded-lg border text-sm ${
+                    draft.kind !== 'promo'
+                      ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Producto simple
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft(prev => ({ ...prev, kind: 'promo', recipe: [] }))}
+                  className={`px-3 py-2 rounded-lg border text-sm ${
+                    draft.kind === 'promo'
+                      ? 'border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Promo compuesta
+                </button>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground mb-3">
-              Productos del inventario que se descontarán al vender 1 unidad de este producto.
-            </p>
 
-            <RecipeIngredientsEditor
-              recipe={draft.recipe || []}
-              onChange={recipe => setDraft(prev => ({ ...prev, recipe }))}
-            />
+            {draft.kind === 'promo' ? (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <Tags className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <h4 className="text-foreground">Composición de la promo</h4>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Elegí qué productos del menú incluye esta promo y en qué cantidad (ej. 2 vasos de fernet).
+                </p>
+                <PromoComponentsEditor
+                  bundle={draft.bundle || []}
+                  products={promoProductOptions}
+                  excludeProductId={draft.id}
+                  onChange={bundle => setDraft(prev => ({ ...prev, bundle }))}
+                />
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <ChefHat className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <h4 className="text-foreground">Receta — descuento de stock</h4>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Productos del inventario que se descontarán al vender 1 unidad de este producto.
+                </p>
+
+                <RecipeIngredientsEditor
+                  recipe={draft.recipe || []}
+                  onChange={recipe => setDraft(prev => ({ ...prev, recipe }))}
+                />
+              </>
+            )}
           </div>
         </div>
 
@@ -449,7 +568,7 @@ function ProductEditor({
             Cancelar
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!draft.name.trim()) {
                 setSaveError('Ingresá un nombre para el producto.');
                 return;
@@ -458,8 +577,19 @@ function ProductEditor({
                 setSaveError('Seleccioná o creá una categoría.');
                 return;
               }
+              if (draft.kind === 'promo' && (!draft.bundle || draft.bundle.length === 0)) {
+                setSaveError('Agregá al menos un producto a la promo.');
+                return;
+              }
               setSaveError('');
-              onSave(draft);
+              try {
+                await onSave({
+                  ...draft,
+                  kind: draft.kind === 'promo' ? 'promo' : 'simple',
+                });
+              } catch (e) {
+                setSaveError(e instanceof Error ? e.message : 'No se pudo guardar el producto');
+              }
             }}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg"
           >

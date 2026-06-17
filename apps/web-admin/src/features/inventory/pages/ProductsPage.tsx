@@ -478,7 +478,6 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
       setNewCategoryIcon('Package');
       setShowIconPicker(false);
       setShowNewCategoryForm(false);
-      setShowCategoryDropdown(false);
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'No se pudo crear la categoría');
     }

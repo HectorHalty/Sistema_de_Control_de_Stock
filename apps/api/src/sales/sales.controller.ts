@@ -28,7 +28,9 @@ export class SalesController {
   @Roles('Admin', 'SuperAdmin')
   createProduct(@Body() body: {
     name: string; category: string; kitchenId: string; price: number;
-    emoji?: string; recipe: { stockProductId: string; quantity: number }[];
+    emoji?: string; kind?: string;
+    recipe?: { stockProductId: string; quantity: number }[];
+    bundle?: { componentProductId: string; quantity: number }[];
   }) {
     return this.salesService.createSalesProduct(body);
   }
@@ -37,8 +39,9 @@ export class SalesController {
   @Roles('Admin', 'SuperAdmin')
   updateProduct(@Param('id') id: string, @Body() body: {
     name?: string; category?: string; kitchenId?: string;
-    price?: number; emoji?: string; active?: boolean;
+    price?: number; emoji?: string; active?: boolean; kind?: string;
     recipe?: { stockProductId: string; quantity: number }[];
+    bundle?: { componentProductId: string; quantity: number }[];
   }) {
     return this.salesService.updateSalesProduct(id, body);
   }

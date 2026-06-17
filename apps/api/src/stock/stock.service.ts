@@ -489,11 +489,8 @@ export class StockService {
   async deleteWarehouse(id: string) {
     const existing = await this.prisma.warehouse.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Warehouse ${id} not found`);
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.stockLevel.deleteMany({ where: { warehouseId: id } });
-      return tx.warehouse.delete({ where: { id } });
-    });
+    // StockLevel tiene onDelete: Cascade — no hace falta borrar niveles a mano.
+    return this.prisma.warehouse.delete({ where: { id } });
   }
 
   // Categories

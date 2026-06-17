@@ -30,6 +30,9 @@ export interface BuildTicketOptions {
   items: PrintItem[];
   total: number;
   note?: string;
+  source?: string;
+  context?: string;
+  pickupStation?: string;
   kind?: 'venta' | 'devolucion';
   /** Pre-built ESC/POS raster command (GS v 0) for the brand logo. */
   logoRaster?: Buffer | null;
@@ -156,11 +159,22 @@ export function buildTicketBuffer(opts: BuildTicketOptions): Buffer {
   if (opts.showOperator !== false && opts.operatorName) {
     b.line(`Operador: ${opts.operatorName}`);
   }
-  if (opts.note) {
+  if (opts.note && !opts.source) {
     b.line(opts.note);
   }
 
   b.line(divider);
+
+  if (opts.source) {
+    const origen = opts.context ? `${opts.source} · ${opts.context}` : opts.source;
+    b.line(`Origen: ${origen}`);
+  }
+  if (opts.pickupStation) {
+    b.line(`Retirar en: ${opts.pickupStation}`);
+  }
+  if (opts.source || opts.pickupStation) {
+    b.line(divider);
+  }
 
   // Items: quantity + name in bold double-size; price on the same line.
   const itemWidth = Math.floor(width / 2);
@@ -172,9 +186,6 @@ export function buildTicketBuffer(opts: BuildTicketOptions): Buffer {
       .line(twoColumns(qtyName, lineTotal, itemWidth))
       .size(0, 0)
       .bold(false);
-    if (item.station) {
-      b.line(`   Retirar en: ${item.station}`);
-    }
     if (opts.showItemDetails !== false && item.quantity > 1) {
       b.line(`   ${formatMoney(item.unitPrice)} c/u`);
     }

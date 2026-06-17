@@ -1,4 +1,5 @@
 import { Ticket, TicketTemplate } from "./VentasPosContext";
+import { ticketPickupStation } from "@/features/sales/lib/split-ticket-by-station";
 import logo from "@/assets/baner-chacra.png";
 
 const sizes = { sm: "text-[11px]", md: "text-xs", lg: "text-sm" } as const;
@@ -15,6 +16,7 @@ export function TicketPreview({
   const w = paperWidth === 58 ? "w-[220px]" : "w-[280px]";
   const isVoid = ticket.status === "anulado";
   const isReturn = ticket.kind === "devolucion";
+  const pickupStation = ticketPickupStation(ticket);
 
   return (
     <div
@@ -73,6 +75,12 @@ export function TicketPreview({
           {ticket.context ? ` · ${ticket.context}` : ""}
         </span>
       </div>
+      {pickupStation && (
+        <div className="flex justify-between">
+          <span>Retirar en</span>
+          <span className="uppercase">{pickupStation}</span>
+        </div>
+      )}
 
       <div className="border-t border-dashed border-gray-400 my-2" />
 
@@ -87,11 +95,6 @@ export function TicketPreview({
                 ${(i.qty * i.price).toLocaleString()}
               </span>
             </div>
-            {i.station && (
-              <div className="text-[10px] uppercase tracking-wide text-gray-600 pl-3">
-                Retirar en: {i.station}
-              </div>
-            )}
             {template.showItemDetails && (
               <div className="text-[10px] text-gray-500 pl-3">
                 @ ${i.price.toLocaleString()} c/u

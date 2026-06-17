@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { Product, SalesProduct } from '@/app/components/store';
-import { getMaxSellableUnits, isSalesProductAvailable, deductStockForSale } from './stock-link';
+import { getMaxSellableUnits, isSalesProductAvailable, deductStockForSale, computeSellableStock } from './stock-link';
 
 const stockProducts: Product[] = [
   {
@@ -32,11 +32,39 @@ const combo: SalesProduct = {
   kitchenId: 'k1',
   price: 1000,
   emoji: '🎯',
+  kind: 'simple',
   active: true,
   recipe: [
     { stockProductId: 'p1', quantity: 2 },
     { stockProductId: 'p2', quantity: 1 },
   ],
+  bundle: [],
+};
+
+const vasoFernet: SalesProduct = {
+  id: 'sp-vaso',
+  name: 'Vaso Fernet',
+  category: 'Bebidas',
+  kitchenId: 'k1',
+  price: 500,
+  emoji: '🥃',
+  kind: 'simple',
+  active: true,
+  recipe: [{ stockProductId: 'p1', quantity: 1 }],
+  bundle: [],
+};
+
+const promoFernet: SalesProduct = {
+  id: 'sp-promo',
+  name: 'Promo 2 Fernet',
+  category: 'Promos',
+  kitchenId: 'k1',
+  price: 900,
+  emoji: '🎉',
+  kind: 'promo',
+  active: true,
+  recipe: [],
+  bundle: [{ salesProductId: 'sp-vaso', quantity: 2 }],
 };
 
 describe('stock-link', () => {
@@ -52,5 +80,24 @@ describe('stock-link', () => {
     const pan = updated.find(p => p.id === 'p2');
     expect(coca?.stockByWarehouse[0].quantity).toBe(3);
     expect(pan?.stockByWarehouse[0].quantity).toBe(1);
+  });
+
+  it('computes sellable units with fractional recipe (e.g. 1 lt → 10 vasos at 0,1)', () => {
+    const sellable = computeSellableStock(
+      [{ stockProductId: 'p1', quantity: 0.1 }],
+      () => 1,
+    );
+    expect(sellable).toBe(10);
+  });
+
+  it('expands promo components for stock and sellable units', () => {
+    const catalog = [vasoFernet, promoFernet];
+    expect(getMaxSellableUnits(promoFernet, stockProducts, catalog)).toBe(2);
+    const updated = deductStockForSale(
+      stockProducts,
+      [{ salesProductId: 'sp-promo', quantity: 1 }],
+      catalog,
+    );
+    expect(updated.find(p => p.id === 'p1')?.stockByWarehouse[0].quantity).toBe(3);
   });
 });

@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, ConflictException,
+  Injectable, NotFoundException, ConflictException, BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
@@ -11,6 +11,13 @@ import {
   netRestoreQuantitiesAfterPartialReturns,
   round3,
 } from './sales-integrity';
+import {
+  SALES_PRODUCT_API_INCLUDE,
+  assertNoPromoCycle,
+  assertValidPromoBundle,
+  buildRequiredByStockProduct,
+  loadSalesProductsForStock,
+} from './sales-stock';
 
 interface MissingStockItem {
   stockProductId: string;
@@ -32,6 +39,7 @@ export class SalesService {
   // to prevent race conditions on stock deduction.
 
   async checkout(dto: CheckoutDto) {
+    const operatorId = dto.operatorId ?? 'local';
     // Idempotency check
     if (dto.idempotencyKey) {
       const existing = await this.prisma.salesTicket.findUnique({
@@ -47,7 +55,6 @@ export class SalesService {
     const salesProductIds = [...new Set(dto.items.map(i => i.salesProductId))];
     const salesProducts = await this.prisma.salesProduct.findMany({
       where: { id: { in: salesProductIds }, active: true },
-      include: { recipe: true },
     });
 
     if (salesProducts.length !== salesProductIds.length) {
@@ -56,20 +63,9 @@ export class SalesService {
       throw new NotFoundException(`Sales products not found or inactive: ${missing.join(', ')}`);
     }
 
-    // Build required stock quantities by stock product ID
-    const requiredByStockProduct: Record<string, number> = {};
-    const salesProductMap = new Map(salesProducts.map(p => [p.id, p]));
-
-    for (const item of dto.items) {
-      const sp = salesProductMap.get(item.salesProductId);
-      if (!sp) continue;
-      for (const recipeItem of sp.recipe) {
-        const key = recipeItem.stockProductId;
-        requiredByStockProduct[key] = round3(
-          (requiredByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
-        );
-      }
-    }
+    const salesProductMap = await loadSalesProductsForStock(this.prisma, salesProductIds);
+    const requiredByStockProduct = buildRequiredByStockProduct(dto.items, salesProductMap);
+    const salesProductMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
     // Execute transaction with row-level locking
     const result = await this.prisma.$transaction(async (tx) => {
@@ -136,7 +132,7 @@ export class SalesService {
           warehouseId: level.warehouseId,
           quantity: -deduction,
           reference: '', // se completa con ticket.id después de crear el ticket
-          operatorId: dto.operatorId,
+          operatorId: operatorId,
         });
       }
 
@@ -150,7 +146,7 @@ export class SalesService {
       let total = 0;
       const ticketItems: TicketItemData[] = [];
       for (const item of dto.items) {
-        const sp = salesProductMap.get(item.salesProductId)!;
+        const sp = salesProductMapForPricing.get(item.salesProductId)!;
         const lineTotal = Number(sp.price) * item.quantity;
         total += lineTotal;
         ticketItems.push({
@@ -167,7 +163,7 @@ export class SalesService {
           number: ticketNumber,
           status: 'emitido',
           total,
-          operatorId: dto.operatorId,
+          operatorId: operatorId,
           note: dto.note,
           idempotencyKey: dto.idempotencyKey,
           items: { create: ticketItems },
@@ -188,7 +184,7 @@ export class SalesService {
       // Create kitchen orders
       const kitchenGroups: Record<string, typeof ticketItems> = {};
       for (const item of ticketItems) {
-        const sp = salesProductMap.get(item.salesProductId)!;
+        const sp = salesProductMapForPricing.get(item.salesProductId)!;
         const kitchenId = sp.kitchenId;
         if (!kitchenGroups[kitchenId]) kitchenGroups[kitchenId] = [];
         kitchenGroups[kitchenId].push(item);
@@ -209,7 +205,7 @@ export class SalesService {
             ticketNumber: ticket.number,
             kitchenId,
             status: 'pending',
-            operatorName: dto.operatorId, // simplified
+            operatorName: operatorId, // simplified
             items: {
               create: items.map(i => ({
                 salesProductId: i.salesProductId,
@@ -233,6 +229,7 @@ export class SalesService {
   // ============ CRITICAL: Transactional Return ============
 
   async returnSale(dto: ReturnDto) {
+    const operatorId = dto.operatorId ?? 'local';
     // Idempotency check
     if (dto.idempotencyKey) {
       const existing = await this.prisma.salesTicket.findFirst({
@@ -253,26 +250,12 @@ export class SalesService {
       if (ticket.status === 'devuelto') throw new ConflictException('Ticket already returned');
       if (ticket.status === 'anulado') throw new ConflictException('Ticket is voided');
 
-      // Get sales products with recipes to restore stock
       const salesProductIds = [...new Set(ticket.items.map(i => i.salesProductId))];
-      const salesProducts = await tx.salesProduct.findMany({
-        where: { id: { in: salesProductIds } },
-        include: { recipe: true },
-      });
-      const spMap = new Map(salesProducts.map(p => [p.id, p]));
-
-      // Calculate stock to restore
-      const restoreByStockProduct: Record<string, number> = {};
-      for (const item of ticket.items) {
-        const sp = spMap.get(item.salesProductId);
-        if (!sp) continue;
-        for (const recipeItem of sp.recipe) {
-          const key = recipeItem.stockProductId;
-          restoreByStockProduct[key] = round3(
-            (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
-          );
-        }
-      }
+      const spMap = await loadSalesProductsForStock(tx, salesProductIds);
+      const restoreByStockProduct = buildRequiredByStockProduct(
+        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+        spMap,
+      );
 
       // Restore stock atomically
       const restoreMovements: Array<{
@@ -301,12 +284,12 @@ export class SalesService {
             warehouseId: levels[0].warehouseId,
             quantity: qty,
             reference: dto.ticketId,
-            operatorId: dto.operatorId,
+            operatorId: operatorId,
           });
         }
       }
 
-      const operator = await tx.user.findUnique({ where: { id: dto.operatorId } });
+      const operator = await tx.user.findUnique({ where: { id: operatorId } });
       await this.movements.recordMany(
         tx,
         restoreMovements.map(m => ({
@@ -332,6 +315,7 @@ export class SalesService {
   // ============ Partial return by products (POS devoluciones) ============
 
   async returnItems(dto: ReturnItemsDto) {
+    const operatorId = dto.operatorId ?? 'local';
     if (dto.idempotencyKey) {
       const existing = await this.prisma.salesTicket.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
@@ -368,12 +352,12 @@ export class SalesService {
       const salesProductIds = aggregated.map(i => i.salesProductId);
       const salesProducts = await tx.salesProduct.findMany({
         where: { id: { in: salesProductIds }, active: true },
-        include: { recipe: true },
       });
       if (salesProducts.length !== salesProductIds.length) {
         throw new NotFoundException('One or more sales products not found or inactive');
       }
-      const spMap = new Map(salesProducts.map(p => [p.id, p]));
+      const spMap = await loadSalesProductsForStock(tx, salesProductIds);
+      const spMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
       const counter = await tx.$queryRaw`
         SELECT COALESCE(MAX(number), 999) + 1 as next_num FROM "SalesTicket"
@@ -383,7 +367,7 @@ export class SalesService {
       let total = 0;
       const ticketItems: TicketItemData[] = [];
       for (const item of aggregated) {
-        const sp = spMap.get(item.salesProductId)!;
+        const sp = spMapForPricing.get(item.salesProductId)!;
         total += Number(sp.price) * item.quantity;
         ticketItems.push({
           salesProductId: item.salesProductId,
@@ -398,7 +382,7 @@ export class SalesService {
           number: ticketNumber,
           status: 'devuelto',
           total,
-          operatorId: dto.operatorId,
+          operatorId: operatorId,
           note: dto.note ?? 'Devolución parcial',
           idempotencyKey: dto.idempotencyKey,
           items: { create: ticketItems },
@@ -410,7 +394,7 @@ export class SalesService {
         tx,
         aggregated,
         spMap,
-        dto.operatorId,
+        operatorId,
         ticket.id,
         'devolucion',
       );
@@ -426,6 +410,7 @@ export class SalesService {
   // ============ Edit issued ticket items ============
 
   async updateTicketItems(ticketId: string, dto: UpdateTicketItemsDto) {
+    const operatorId = dto.operatorId ?? 'local';
     const newItems = aggregateSalesLineItems(dto.items);
     if (!newItems.length) {
       throw new ConflictException('Ticket must include at least one item');
@@ -453,9 +438,9 @@ export class SalesService {
       ];
       const salesProducts = await tx.salesProduct.findMany({
         where: { id: { in: allProductIds } },
-        include: { recipe: true },
       });
-      const spMap = new Map(salesProducts.map(p => [p.id, p]));
+      const spMap = await loadSalesProductsForStock(tx, allProductIds);
+      const spMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
       const inactiveNew = newItems.filter(i => !salesProducts.find(p => p.id === i.salesProductId && p.active));
       if (inactiveNew.length > 0) {
@@ -473,22 +458,12 @@ export class SalesService {
         tx,
         netOldItems,
         spMap,
-        dto.operatorId,
+        operatorId,
         ticketId,
         'venta_anulada',
       );
 
-      const requiredByStockProduct: Record<string, number> = {};
-      for (const item of newItems) {
-        const sp = spMap.get(item.salesProductId);
-        if (!sp?.active) throw new NotFoundException(`Sales product ${item.salesProductId} not found`);
-        for (const recipeItem of sp.recipe) {
-          const key = recipeItem.stockProductId;
-          requiredByStockProduct[key] = round3(
-            (requiredByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
-          );
-        }
-      }
+      const requiredByStockProduct = buildRequiredByStockProduct(newItems, spMap);
 
       const stockProductIds = Object.keys(requiredByStockProduct);
       if (stockProductIds.length > 0) {
@@ -545,11 +520,11 @@ export class SalesService {
             warehouseId: level.warehouseId,
             quantity: -deduction,
             reference: ticketId,
-            operatorId: dto.operatorId,
+            operatorId: operatorId,
           });
         }
 
-        const operator = await tx.user.findUnique({ where: { id: dto.operatorId } });
+        const operator = await tx.user.findUnique({ where: { id: operatorId } });
         await this.movements.recordMany(
           tx,
           movementEntries.map(m => ({
@@ -564,7 +539,7 @@ export class SalesService {
       let total = 0;
       const ticketItemRows: TicketItemData[] = [];
       for (const item of newItems) {
-        const sp = spMap.get(item.salesProductId)!;
+        const sp = spMapForPricing.get(item.salesProductId)!;
         total += Number(sp.price) * item.quantity;
         ticketItemRows.push({
           salesProductId: item.salesProductId,
@@ -626,26 +601,12 @@ export class SalesService {
   private async restoreStockForSalesItems(
     tx: Prisma.TransactionClient,
     items: Array<{ salesProductId: string; quantity: number }>,
-    spMap: Map<string, { recipe: Array<{ stockProductId: string; quantity: Prisma.Decimal }> }>,
+    spMap: Awaited<ReturnType<typeof loadSalesProductsForStock>>,
     operatorId: string,
     reference: string,
     movementType: 'devolucion' | 'venta_anulada',
   ): Promise<void> {
-    const restoreByStockProduct: Record<string, number> = {};
-    for (const item of items) {
-      const sp = spMap.get(item.salesProductId);
-      if (!sp) {
-        throw new NotFoundException(
-          `Sales product ${item.salesProductId} not found for stock ${movementType}`,
-        );
-      }
-      for (const recipeItem of sp.recipe) {
-        const key = recipeItem.stockProductId;
-        restoreByStockProduct[key] = round3(
-          (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
-        );
-      }
-    }
+    const restoreByStockProduct = buildRequiredByStockProduct(items, spMap);
 
     const restoreMovements: Array<{
       type: typeof movementType;
@@ -694,7 +655,7 @@ export class SalesService {
   async findAllSalesProducts() {
     return this.prisma.salesProduct.findMany({
       where: { active: true },
-      include: { recipe: { include: { stockProduct: true } } },
+      include: SALES_PRODUCT_API_INCLUDE,
       orderBy: { name: 'asc' },
     });
   }
@@ -702,16 +663,68 @@ export class SalesService {
   async findSalesProductById(id: string) {
     const product = await this.prisma.salesProduct.findUnique({
       where: { id },
-      include: { recipe: { include: { stockProduct: true } } },
+      include: SALES_PRODUCT_API_INCLUDE,
     });
     if (!product) throw new NotFoundException(`Sales product ${id} not found`);
     return product;
   }
 
+  private async validatePromoBundle(
+    promoId: string | undefined,
+    bundle: Array<{ componentProductId: string; quantity: number }>,
+  ) {
+    assertValidPromoBundle(promoId, bundle);
+    const componentIds = bundle.map(b => b.componentProductId);
+    const found = await this.prisma.salesProduct.findMany({
+      where: { id: { in: componentIds }, active: true },
+    });
+    if (found.length !== componentIds.length) {
+      throw new BadRequestException('Uno o más productos de la promo no existen o están inactivos');
+    }
+    const graph = await loadSalesProductsForStock(this.prisma, componentIds);
+    if (promoId) {
+      graph.set(promoId, {
+        id: promoId,
+        kind: 'promo',
+        recipe: [],
+        bundleItems: bundle.map(b => ({
+          componentProductId: b.componentProductId,
+          quantity: b.quantity,
+        })),
+      });
+      assertNoPromoCycle(promoId, bundle, graph);
+    }
+  }
+
   async createSalesProduct(data: {
     name: string; category: string; kitchenId: string; price: number;
-    emoji?: string; recipe: { stockProductId: string; quantity: number }[];
+    emoji?: string; kind?: string;
+    recipe?: { stockProductId: string; quantity: number }[];
+    bundle?: { componentProductId: string; quantity: number }[];
   }) {
+    const kind = data.kind === 'promo' ? 'promo' : 'simple';
+
+    if (kind === 'promo') {
+      await this.validatePromoBundle(undefined, data.bundle ?? []);
+      return this.prisma.salesProduct.create({
+        data: {
+          name: data.name,
+          category: data.category,
+          kitchenId: data.kitchenId,
+          price: data.price,
+          emoji: data.emoji,
+          kind: 'promo',
+          bundleItems: {
+            create: (data.bundle ?? []).map(b => ({
+              componentProductId: b.componentProductId,
+              quantity: b.quantity,
+            })),
+          },
+        },
+        include: SALES_PRODUCT_API_INCLUDE,
+      });
+    }
+
     return this.prisma.salesProduct.create({
       data: {
         name: data.name,
@@ -719,37 +732,65 @@ export class SalesService {
         kitchenId: data.kitchenId,
         price: data.price,
         emoji: data.emoji,
-        recipe: { create: data.recipe },
+        kind: 'simple',
+        recipe: { create: data.recipe ?? [] },
       },
-      include: { recipe: true },
+      include: SALES_PRODUCT_API_INCLUDE,
     });
   }
 
   async updateSalesProduct(id: string, data: {
     name?: string; category?: string; kitchenId?: string;
-    price?: number; emoji?: string; active?: boolean;
+    price?: number; emoji?: string; active?: boolean; kind?: string;
     recipe?: { stockProductId: string; quantity: number }[];
+    bundle?: { componentProductId: string; quantity: number }[];
   }) {
     await this.findSalesProductById(id);
 
     return this.prisma.$transaction(async (tx) => {
-      const { recipe, ...productData } = data;
-      const product = await tx.salesProduct.update({
+      const { recipe, bundle, kind, ...productData } = data;
+      const nextKind = kind === 'promo' ? 'promo' : kind === 'simple' ? 'simple' : undefined;
+
+      if (nextKind === 'promo') {
+        await this.validatePromoBundle(id, bundle ?? []);
+      }
+
+      await tx.salesProduct.update({
         where: { id },
-        data: productData,
+        data: {
+          ...productData,
+          ...(nextKind ? { kind: nextKind } : {}),
+        },
       });
 
-      if (recipe) {
-        // Replace recipe entirely
+      if (nextKind === 'promo') {
         await tx.recipeItem.deleteMany({ where: { salesProductId: id } });
-        await tx.recipeItem.createMany({
-          data: recipe.map(r => ({ salesProductId: id, ...r })),
-        });
+        await tx.salesProductBundleItem.deleteMany({ where: { promoProductId: id } });
+        if (bundle && bundle.length > 0) {
+          await tx.salesProductBundleItem.createMany({
+            data: bundle.map(b => ({
+              promoProductId: id,
+              componentProductId: b.componentProductId,
+              quantity: b.quantity,
+            })),
+          });
+        }
+      } else if (nextKind === 'simple' || recipe !== undefined) {
+        await tx.salesProductBundleItem.deleteMany({ where: { promoProductId: id } });
+        await tx.recipeItem.deleteMany({ where: { salesProductId: id } });
+        if (recipe && recipe.length > 0) {
+          await tx.recipeItem.createMany({
+            data: recipe.map(r => ({ salesProductId: id, ...r })),
+          });
+        }
+        if (nextKind === 'simple') {
+          await tx.salesProduct.update({ where: { id }, data: { kind: 'simple' } });
+        }
       }
 
       return tx.salesProduct.findUnique({
         where: { id },
-        include: { recipe: { include: { stockProduct: true } } },
+        include: SALES_PRODUCT_API_INCLUDE,
       });
     });
   }
@@ -788,11 +829,7 @@ export class SalesService {
       if (ticket.status !== 'emitido') throw new ConflictException('Can only void issued tickets');
 
       const productIds = [...new Set(ticket.items.map(i => i.salesProductId))];
-      const salesProducts = await tx.salesProduct.findMany({
-        where: { id: { in: productIds } },
-        include: { recipe: true },
-      });
-      const spMap = new Map(salesProducts.map(p => [p.id, p]));
+      const spMap = await loadSalesProductsForStock(tx, productIds);
 
       const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
       const netItems = netRestoreQuantitiesAfterPartialReturns(

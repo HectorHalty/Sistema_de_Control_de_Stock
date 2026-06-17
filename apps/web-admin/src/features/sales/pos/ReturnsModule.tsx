@@ -3,6 +3,7 @@ import { Plus, Minus, Search, Printer, RotateCcw, X } from "lucide-react";
 import { Product, OrderItem } from "./mockData";
 import { useStore, Ticket } from "./VentasPosContext";
 import { TicketPreview } from "./TicketPreview";
+import { splitTicketByStation } from "@/features/sales/lib/split-ticket-by-station";
 import { getReturnableQuantities } from "./returnable-products";
 
 export function ReturnsModule() {
@@ -221,11 +222,21 @@ export function ReturnsModule() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <TicketPreview
-              ticket={preview}
-              template={template}
-              paperWidth={defaultPrinter?.paperWidth || 80}
-            />
+            {splitTicketByStation(preview).map((split, idx, splits) => (
+              <div key={split.pickupStation || idx} className={idx > 0 ? "mt-4" : ""}>
+                {splits.length > 1 && (
+                  <div className="text-xs text-muted-foreground text-center mb-2">
+                    Comanda {idx + 1} de {splits.length}
+                    {split.pickupStation ? ` · Retirar en: ${split.pickupStation}` : ""}
+                  </div>
+                )}
+                <TicketPreview
+                  ticket={split}
+                  template={template}
+                  paperWidth={defaultPrinter?.paperWidth || 80}
+                />
+              </div>
+            ))}
             <button
               type="button"
               onClick={() => setPreview(null)}

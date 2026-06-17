@@ -27,11 +27,13 @@ describe('mapApiSalesProductToLocal', () => {
       kitchenId: 'k-1',
       price: 3500,
       emoji: '',
+      kind: 'simple',
       active: true,
       recipe: [
         { stockProductId: 'prod-a', quantity: 1 },
         { stockProductId: 'prod-b', quantity: 2 },
       ],
+      bundle: [],
     });
   });
 
