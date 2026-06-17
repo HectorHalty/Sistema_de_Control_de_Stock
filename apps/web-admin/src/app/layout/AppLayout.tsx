@@ -38,6 +38,16 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
 const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
 const BOTTOM_NAV_IDLE_MS = 4000;
 
+/** Misma altura/ancho visual que cada botón del menú colapsado. */
+const SIDEBAR_COLLAPSED_ITEM =
+  'flex h-12 w-full items-center justify-center rounded-2xl transition-colors';
+const SIDEBAR_EXPANDED_ITEM =
+  'flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-[1.05rem] transition-colors';
+
+function sidebarItemClass(collapsed: boolean, extra = '') {
+  return collapsed ? `${SIDEBAR_COLLAPSED_ITEM} ${extra}`.trim() : `${SIDEBAR_EXPANDED_ITEM} ${extra}`.trim();
+}
+
 interface ContextNavItem {
   label: string;
   to: string;
@@ -172,9 +182,26 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-[360px] flex-col border-r border-border bg-card transition-all duration-200 ${sidebarWidthClass} ${drawerOpen ? 'translate-x-0' : '-translate-x-full'} lg:max-w-none lg:translate-x-0`}
       >
-        <div className="border-b border-border px-4 pb-4 pt-5" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-          <NavLink to="/" className="flex items-center justify-center rounded-2xl bg-background px-3 py-3" onClick={() => setDrawerOpen(false)}>
-            <img src={logoFull} alt="La Chacra Futbol" className={`logo-sidebar h-11 object-contain transition-all ${collapsed ? 'w-10' : 'w-52'}`} />
+        <div
+          className={`border-b border-border ${collapsed ? 'p-3' : 'px-4 pb-4 pt-5'}`}
+          style={{ paddingTop: collapsed ? 'calc(env(safe-area-inset-top) + 0.75rem)' : 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
+          <NavLink
+            to="/"
+            onClick={() => setDrawerOpen(false)}
+            className={
+              collapsed
+                ? sidebarItemClass(true, 'hover:bg-muted')
+                : 'flex items-center justify-center rounded-2xl bg-background px-3 py-3 transition-colors hover:bg-muted'
+            }
+          >
+            <img
+              src={collapsed ? logoIcon : logoFull}
+              alt="La Chacra Futbol"
+              className={`object-contain transition-all ${
+                collapsed ? 'logo-sidebar-icon size-12 shrink-0 rounded-full' : 'logo-sidebar h-11 w-52'
+              }`}
+            />
           </NavLink>
         </div>
 
@@ -187,7 +214,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                   navigate(item.to);
                   setDrawerOpen(false);
                 }}
-                className={`flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-[1.05rem] transition-colors ${item.active ? 'bg-[#3d7a3d] text-white' : 'text-foreground hover:bg-muted'}`}
+                className={sidebarItemClass(collapsed, item.active ? 'bg-[#3d7a3d] text-white' : 'text-foreground hover:bg-muted')}
               >
                 <item.icon size={24} />
                 {!collapsed && <span>{item.label}</span>}
@@ -207,7 +234,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                   handleModuleNavigation(moduleId);
                   setDrawerOpen(false);
                 }}
-                className={`flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-[1.05rem] transition-colors ${active ? 'bg-[#3d7a3d] text-white' : 'text-foreground hover:bg-muted'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={sidebarItemClass(collapsed, `${active ? 'bg-[#3d7a3d] text-white' : 'text-foreground hover:bg-muted'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`)}
               >
                 <Icon size={24} />
                 {!collapsed && <span>{item.label}</span>}
@@ -221,7 +248,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           <NavLink
             to="/configuracion"
             onClick={() => setDrawerOpen(false)}
-            className="flex items-center gap-4 rounded-2xl px-4 py-3 text-[1.05rem] text-foreground transition-colors hover:bg-muted"
+            className={sidebarItemClass(collapsed, 'text-foreground hover:bg-muted')}
           >
             <Settings size={24} />
             {!collapsed && <span>Configuracion</span>}
@@ -229,7 +256,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
           <button
             onClick={onLogout}
-            className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-[1.05rem] text-red-700 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-950/40"
+            className={sidebarItemClass(collapsed, 'text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40')}
           >
             <LogOut size={24} />
             {!collapsed && <span>Cerrar Sesion</span>}
