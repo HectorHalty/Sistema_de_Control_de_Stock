@@ -18,7 +18,7 @@ import type {
   TicketTemplate,
 } from './types';
 import { DEFAULT_TICKET_TEMPLATE } from './types';
-import { historyFromTickets, mergeSalesHistory } from './sales-history';
+import { historyFromTickets, mergeSalesHistory, mergeTicketsFromServer } from './sales-history';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -128,10 +128,10 @@ export function useSalesState() {
       const ts = await salesApi.tickets.list();
       const local = ts.map(t => mapApiTicketToLocal(t, products));
       applyHydration(mountGen, () => {
-        setSalesTickets(local);
+        setSalesTickets(prev => mergeTicketsFromServer(local, prev));
         setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
         const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
-        if (maxNum > 0) setSalesTicketCounter(maxNum);
+        if (maxNum > 0) setSalesTicketCounter(c => Math.max(c, maxNum));
       });
     },
     [setSalesTickets, setSalesHistory, setSalesTicketCounter, applyHydration],
@@ -375,6 +375,7 @@ export function useSalesState() {
     salesProducts,
     setSalesProducts,
     salesApiAvailable,
+    invalidateSalesHydration: invalidateMountHydration,
     hydrateSalesProducts,
     hydrateTickets,
     createSalesProduct,

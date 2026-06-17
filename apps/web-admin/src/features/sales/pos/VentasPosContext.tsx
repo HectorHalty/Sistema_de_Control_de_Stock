@@ -99,7 +99,7 @@ type VentasPosStore = {
   createKitchen: (input: { name: string; emoji?: string }) => Promise<void>;
   updateKitchen: (id: string, patch: { name?: string; emoji?: string; active?: boolean }) => Promise<void>;
   deleteKitchen: (id: string) => Promise<void>;
-  saveIngredient: (i: PosIngredient) => void;
+  saveIngredient: (i: PosIngredient) => Promise<void>;
   printers: Printer[];
   addPrinter: (printer: Omit<Printer, 'id'>) => void;
   updatePrinter: (id: string, patch: Partial<Printer>) => void;
@@ -335,8 +335,14 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
 
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
       const note = t.context || (table ? `Mesa: ${table.name}` : undefined);
+      const offlineMode = ctx.salesApiAvailable === false;
 
-      if (salesApi.apiAvailable !== false) {
+      if (!offlineMode) {
+        if (salesApi.apiAvailable === false) {
+          setToast('Servidor no disponible. La venta no se puede guardar sin conexión a la API.');
+          return null;
+        }
+
         const operatorId = currentUser.id;
         if (!operatorId) {
           setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
@@ -374,15 +380,20 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             ctx.salesProducts,
             currentUser.name,
           );
+          ctx.invalidateSalesHydration();
+          ctx.invalidateInventoryHydration();
           ctx.setSalesTicketCounter(ticket.number);
           const pos = finishSaleLocal(ticket, cart, true);
+          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
           void ctx.refreshStockProducts().catch(() => undefined);
           return pos;
         }
-        if (!apiResult.apiUnavailable && 'error' in apiResult) {
+        if ('error' in apiResult && apiResult.error) {
           setToast(`Error en venta: ${apiResult.error}`);
           return null;
         }
+        setToast('No se pudo guardar la venta en el servidor.');
+        return null;
       }
 
       const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
@@ -427,6 +438,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         if (apiResult.ok && 'result' in apiResult) {
           apiHandled = true;
           const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
+          ctx.invalidateSalesHydration();
+          ctx.invalidateInventoryHydration();
           void ctx.refreshStockProducts().catch(() => undefined);
           ctx.setSalesTickets(prev =>
             prev.map(t => (t.id === id ? { ...synced, status: 'anulado' as const } : t)),
@@ -517,8 +530,11 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             ctx.salesProducts,
             currentUser.name,
           );
+          ctx.invalidateSalesHydration();
+          ctx.invalidateInventoryHydration();
           ctx.setSalesTicketCounter(ticket.number);
           ctx.setSalesTickets(prev => [ticket, ...prev]);
+          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
           void ctx.refreshStockProducts().catch(() => undefined);
 
           const historyEntry: SalesHistoryEntry = {
@@ -647,7 +663,10 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
 
         if (apiResult.ok && 'result' in apiResult) {
           const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
+          ctx.invalidateSalesHydration();
+          ctx.invalidateInventoryHydration();
           ctx.setSalesTickets(prev => prev.map(t => (t.id === id ? synced : t)));
+          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
           void ctx.refreshStockProducts().catch(() => undefined);
           return ticketToPos(synced, currentUser.name, ctx.kitchens);
         }
@@ -767,7 +786,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   const clearPendingEdit = useCallback(() => setPendingEdit(null), []);
 
   const saveIngredient = useCallback(
-    (ing: PosIngredient) => {
+    async (ing: PosIngredient) => {
       const stockProduct = ctx.products.find(p => p.id === ing.id);
       if (!stockProduct) return;
       const updated: StoreProduct = {
@@ -778,7 +797,11 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           idx === 0 ? { ...w, quantity: ing.stock } : w,
         ),
       };
-      ctx.setProducts(prev => prev.map(p => (p.id === ing.id ? updated : p)));
+      try {
+        await ctx.updateProduct(updated, stockProduct);
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : 'No se pudo guardar el ingrediente');
+      }
     },
     [ctx],
   );

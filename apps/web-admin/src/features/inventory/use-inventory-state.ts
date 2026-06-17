@@ -689,6 +689,7 @@ export function useInventoryState() {
     getTotalStock,
     getWarehouseTotalProducts,
     inventoryApiAvailable,
+    invalidateInventoryHydration: invalidateMountHydration,
     refreshStockProducts: hydrateProducts,
     refreshOperations,
     registerEmployeeConsumption,

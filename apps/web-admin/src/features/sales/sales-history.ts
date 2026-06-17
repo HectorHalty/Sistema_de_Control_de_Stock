@@ -42,3 +42,21 @@ export function mergeSalesHistory(
     (a, b) => new Date(b.timestampISO).getTime() - new Date(a.timestampISO).getTime(),
   );
 }
+
+/**
+ * Fusiona tickets del servidor con el estado local.
+ * El servidor gana en IDs compartidos; se conservan tickets locales aún no replicados
+ * (evita que una hidratación en vuelo borre una venta recién confirmada).
+ */
+export function mergeTicketsFromServer(
+  fromServer: SalesTicket[],
+  existing: SalesTicket[],
+): SalesTicket[] {
+  const byId = new Map(fromServer.map(t => [t.id, t]));
+  for (const t of existing) {
+    if (!byId.has(t.id)) byId.set(t.id, t);
+  }
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.createdAtISO).getTime() - new Date(a.createdAtISO).getTime(),
+  );
+}
