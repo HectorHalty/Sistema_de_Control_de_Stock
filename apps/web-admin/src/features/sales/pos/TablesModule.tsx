@@ -1,26 +1,33 @@
 import { useState } from "react";
 import { Plus, Users, DollarSign, X, Trash2 } from "lucide-react";
-import { TeamAccount } from "./mockData";
 import { useStore } from "./VentasPosContext";
 
 export function TablesModule() {
-  const { products: initialProducts } = useStore();
-  const [teams, setTeams] = useState<TeamAccount[]>([]);
+  const {
+    products: initialProducts,
+    teamAccounts,
+    setTeamAccounts,
+    printTicket,
+    setToast,
+    saleBusy,
+  } = useStore();
   const [selected, setSelected] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const busy = closing || saleBusy;
 
-  const current = teams.find((t) => t.id === selected);
+  const current = teamAccounts.find((t) => t.id === selected);
 
   const openTeam = () => {
     if (!newName.trim()) return;
     const id = `t${Date.now()}`;
-    setTeams([
-      ...teams,
+    setTeamAccounts([
+      ...teamAccounts,
       {
         id,
-        team: newName,
+        team: newName.trim(),
         openedAt: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
         status: "abierta",
         items: [],
@@ -34,39 +41,56 @@ export function TablesModule() {
   const addProductToTeam = (productId: string) => {
     const p = initialProducts.find((x) => x.id === productId);
     if (!p || !current) return;
-    setTeams((prev) =>
-      prev.map((t) => {
+    setTeamAccounts(
+      teamAccounts.map((t) => {
         if (t.id !== current.id) return t;
         const ex = t.items.find((i) => i.productId === productId);
-        if (ex)
+        if (ex) {
           return {
             ...t,
             items: t.items.map((i) =>
-              i.productId === productId ? { ...i, qty: i.qty + 1 } : i
+              i.productId === productId ? { ...i, qty: i.qty + 1 } : i,
             ),
           };
+        }
         return {
           ...t,
           items: [...t.items, { productId, name: p.name, price: p.price, qty: 1 }],
         };
-      })
+      }),
     );
   };
 
   const removeItem = (pid: string) => {
     if (!current) return;
-    setTeams((prev) =>
-      prev.map((t) =>
-        t.id === current.id ? { ...t, items: t.items.filter((i) => i.productId !== pid) } : t
-      )
+    setTeamAccounts(
+      teamAccounts.map((t) =>
+        t.id === current.id ? { ...t, items: t.items.filter((i) => i.productId !== pid) } : t,
+      ),
     );
   };
 
-  const closeAccount = () => {
-    if (!current) return;
+  const closeAccount = async () => {
+    if (!current || busy) return;
+    if (current.items.length === 0) return;
     if (!confirm(`¿Cobrar y cerrar cuenta de ${current.team}?`)) return;
-    setTeams((prev) => prev.filter((t) => t.id !== current.id));
-    setSelected(null);
+
+    setClosing(true);
+    try {
+      const total = current.items.reduce((s, i) => s + i.price * i.qty, 0);
+      const ticket = await printTicket({
+        items: current.items,
+        total,
+        source: "Mesa",
+        context: `Equipo: ${current.team}`,
+      });
+      if (!ticket) return;
+      setTeamAccounts(teamAccounts.filter((t) => t.id !== current.id));
+      setSelected(null);
+      setToast(`✅ Cuenta de ${current.team} cobrada — ticket #${ticket.number}`);
+    } finally {
+      setClosing(false);
+    }
   };
 
   const total = current?.items.reduce((s, i) => s + i.price * i.qty, 0) || 0;
@@ -75,7 +99,7 @@ export function TablesModule() {
     <div className="flex flex-col lg:flex-row gap-4 h-full">
       <div className={`${selected ? "hidden lg:flex" : "flex"} flex-col flex-1 lg:max-w-md`}>
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-foreground">Cuentas Abiertas ({teams.length})</h3>
+          <h3 className="text-foreground">Cuentas Abiertas ({teamAccounts.length})</h3>
           <button
             onClick={() => setShowNew(true)}
             className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
@@ -85,11 +109,17 @@ export function TablesModule() {
         </div>
 
         <div className="space-y-2 overflow-y-auto pb-20 lg:pb-0">
-          {teams.map((t) => {
+          {teamAccounts.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No hay cuentas abiertas. Creá una para un equipo.
+            </p>
+          )}
+          {teamAccounts.map((t) => {
             const tot = t.items.reduce((s, i) => s + i.price * i.qty, 0);
             return (
               <button
                 key={t.id}
+                type="button"
                 onClick={() => setSelected(t.id)}
                 className={`w-full text-left bg-card rounded-xl border p-4 transition ${
                   selected === t.id ? "border-emerald-500 ring-2 ring-emerald-100" : "border-border"
@@ -119,6 +149,7 @@ export function TablesModule() {
           <div className="flex justify-between items-center mb-4">
             <div>
               <button
+                type="button"
                 onClick={() => setSelected(null)}
                 className="lg:hidden text-emerald-600 dark:text-emerald-400 mb-1"
               >
@@ -128,6 +159,7 @@ export function TablesModule() {
               <span className="text-sm text-muted-foreground">Abierta {current.openedAt}</span>
             </div>
             <button
+              type="button"
               onClick={() => setShowAddProduct(true)}
               className="bg-muted text-foreground px-3 py-2 rounded-lg flex items-center gap-1"
             >
@@ -155,6 +187,7 @@ export function TablesModule() {
                       ${(i.qty * i.price).toLocaleString()}
                     </span>
                     <button
+                      type="button"
                       onClick={() => removeItem(i.productId)}
                       className="text-red-500 dark:text-red-400"
                     >
@@ -172,12 +205,13 @@ export function TablesModule() {
               <span className="text-2xl text-emerald-600 dark:text-emerald-400">${total.toLocaleString()}</span>
             </div>
             <button
-              onClick={closeAccount}
-              disabled={current.items.length === 0}
+              type="button"
+              onClick={() => void closeAccount()}
+              disabled={current.items.length === 0 || busy}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
             >
               <DollarSign className="w-5 h-5" />
-              Cobrar y Cerrar Cuenta
+              {busy ? "Cobrando…" : "Cobrar y Cerrar Cuenta"}
             </button>
           </div>
         </div>
@@ -188,7 +222,7 @@ export function TablesModule() {
           <div className="bg-card rounded-xl p-5 w-full max-w-sm">
             <div className="flex justify-between items-center mb-3">
               <h3>Abrir cuenta de equipo</h3>
-              <button onClick={() => setShowNew(false)}>
+              <button type="button" onClick={() => setShowNew(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -200,6 +234,7 @@ export function TablesModule() {
               className="w-full px-3 py-2 border border-border rounded-lg bg-input-background mb-3"
             />
             <button
+              type="button"
               onClick={openTeam}
               className="w-full bg-emerald-600 text-white py-2 rounded-lg"
             >
@@ -214,7 +249,7 @@ export function TablesModule() {
           <div className="bg-card rounded-xl p-4 w-full max-w-md max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-3">
               <h3>Agregar a {current.team}</h3>
-              <button onClick={() => setShowAddProduct(false)}>
+              <button type="button" onClick={() => setShowAddProduct(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -222,6 +257,7 @@ export function TablesModule() {
               {initialProducts.map((p) => (
                 <button
                   key={p.id}
+                  type="button"
                   onClick={() => addProductToTeam(p.id)}
                   className="border border-border rounded-lg p-3 text-left hover:border-emerald-500"
                 >

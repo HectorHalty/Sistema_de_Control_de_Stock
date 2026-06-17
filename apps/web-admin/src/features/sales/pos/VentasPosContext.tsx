@@ -79,6 +79,8 @@ type VentasPosStore = {
   apiOnline: boolean | null;
   toast: string | null;
   setToast: (msg: string | null) => void;
+  /** true mientras checkout/void/return/update están en vuelo contra la API */
+  saleBusy: boolean;
   salesTickets: SalesTicket[];
   printTicket: (
     t: Omit<
@@ -87,8 +89,8 @@ type VentasPosStore = {
     >,
   ) => Promise<PosTicket | null>;
   voidTicket: (id: string, reason?: string) => Promise<PosTicket | null>;
-  replaceTicketItems: (id: string, items: OrderItem[]) => PosTicket | null;
-  printReturn: (items: OrderItem[]) => PosTicket | null;
+  replaceTicketItems: (id: string, items: OrderItem[]) => Promise<PosTicket | null>;
+  printReturn: (items: OrderItem[]) => Promise<PosTicket | null>;
   salesCategories: string[];
   salesCategoryEmojis: Record<string, string>;
   addSalesCategory: (name: string, emoji?: string) => string | null;
@@ -121,6 +123,8 @@ type VentasPosStore = {
   selectedTableId: string | null;
   setSelectedTableId: (id: string | null) => void;
   salesHistory: SalesHistoryEntry[];
+  teamAccounts: import('@/features/sales/types').TeamAccount[];
+  setTeamAccounts: ReturnType<typeof useAppContext>['setTeamAccounts'];
   users: { id: string; name: string; role: string }[];
   pendingEdit: { ticketId: string; items: OrderItem[] } | null;
   requestEditTicket: (ticket: PosTicket) => void;
@@ -347,23 +351,13 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           return null;
         }
 
-        let salesProducts = ctx.salesProducts;
-        let stockProducts = ctx.products;
-        try {
-          const [freshSales, freshStock] = await Promise.all([
-            ctx.hydrateSalesProducts(),
-            ctx.refreshStockProducts(),
-          ]);
-          salesProducts = freshSales;
-          stockProducts = freshStock;
-        } catch {
-          // Si el refresh falla, el checkout puede igualmente validar en servidor.
-        }
-
-        const validation = validateStockForCart(cart, salesProducts, stockProducts);
-        if (!validation.ok) {
-          setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
-          return null;
+        // Validación rápida con caché local; el servidor valida stock de forma autoritativa en checkout.
+        if (ctx.validateStockOnSale !== false) {
+          const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
+          if (!validation.ok) {
+            setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+            return null;
+          }
         }
 
         const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -381,10 +375,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             currentUser.name,
           );
           ctx.setSalesTicketCounter(ticket.number);
-          const pos = finishSaleLocal(ticket, cart, false);
-          // El stock real lo descontó la API: refrescamos caché local desde el server.
+          const pos = finishSaleLocal(ticket, cart, true);
           void ctx.refreshStockProducts().catch(() => undefined);
-          void ctx.refreshOperations?.().catch(() => undefined);
           return pos;
         }
         if (!apiResult.apiUnavailable && 'error' in apiResult) {
@@ -436,7 +428,6 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           apiHandled = true;
           const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
           void ctx.refreshStockProducts().catch(() => undefined);
-          void ctx.refreshOperations?.().catch(() => undefined);
           ctx.setSalesTickets(prev =>
             prev.map(t => (t.id === id ? { ...synced, status: 'anulado' as const } : t)),
           );
@@ -494,9 +485,77 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const printReturn: VentasPosStore['printReturn'] = useCallback(
-    items => {
+    async items => {
       const cart = enrichCartKitchens(items);
       if (cart.length === 0) return null;
+
+      if (salesApi.apiAvailable !== false) {
+        const operatorId = currentUser.id;
+        if (!operatorId) {
+          setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
+          return null;
+        }
+
+        const unsynced = cart.filter(i => !isUuid(i.salesProductId));
+        if (unsynced.length > 0) {
+          setToast(
+            'Hay productos no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.',
+          );
+          return null;
+        }
+
+        const idempotencyKey = `return-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const apiResult = await salesApi.returnItems({
+          items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          operatorId,
+          idempotencyKey,
+        });
+
+        if (apiResult.ok && 'result' in apiResult) {
+          const ticket = mapApiTicketToLocal(
+            apiResult.result.ticket,
+            ctx.salesProducts,
+            currentUser.name,
+          );
+          ctx.setSalesTicketCounter(ticket.number);
+          ctx.setSalesTickets(prev => [ticket, ...prev]);
+          void ctx.refreshStockProducts().catch(() => undefined);
+
+          const historyEntry: SalesHistoryEntry = {
+            id: `h-${Date.now()}`,
+            timestampISO: new Date().toISOString(),
+            operatorId: currentUser.id,
+            operatorName: currentUser.name,
+            type: 'devolucion',
+            detail: `Devolucion #${ticket.number}`,
+            ticketId: ticket.id,
+          };
+          ctx.setSalesHistory(prev => [historyEntry, ...prev]);
+          ctx.addSalesAudit({
+            user: currentUser.name,
+            action: `Devolución #${ticket.number}`,
+            element: `Ticket ${ticket.number}`,
+            previousValue: '-',
+            newValue: `${cart.length} item(s)`,
+          });
+
+          return ticketToPos(ticket, currentUser.name, ctx.kitchens);
+        }
+        if (!apiResult.apiUnavailable && 'error' in apiResult) {
+          setToast(`Error en devolución: ${apiResult.error}`);
+          return null;
+        }
+        if (apiResult.apiUnavailable) {
+          setToast('Servidor no disponible. Reintentá cuando la API esté en línea.');
+          return null;
+        }
+        return null;
+      }
+
+      if (salesApi.apiAvailable !== false) {
+        setToast('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return null;
+      }
 
       const pseudoTicket: SalesTicket = {
         id: `return-${Date.now()}`,
@@ -557,16 +616,55 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
 
       return ticketToPos(devTicket, currentUser.name, ctx.kitchens);
     },
-    [ctx, currentUser, enrichCartKitchens],
+    [ctx, currentUser, enrichCartKitchens, salesApi],
   );
 
   const replaceTicketItems: VentasPosStore['replaceTicketItems'] = useCallback(
-    (id, items) => {
+    async (id, items) => {
       const old = ctx.salesTickets.find(t => t.id === id);
       if (!old || old.status !== 'emitido') return null;
 
-      ctx.setProducts(prev => restoreStockForTicket(prev, old, ctx.salesProducts));
       const cart = enrichCartKitchens(items);
+      if (cart.length === 0) return null;
+
+      if (salesApi.apiAvailable !== false && !isLocalOnlyTicketId(id)) {
+        const operatorId = currentUser.id;
+        if (!operatorId) {
+          setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
+          return null;
+        }
+
+        const unsynced = cart.filter(i => !isUuid(i.salesProductId));
+        if (unsynced.length > 0) {
+          setToast('Hay productos no sincronizados con el servidor.');
+          return null;
+        }
+
+        const apiResult = await salesApi.updateTicketItems(id, {
+          items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+          operatorId,
+        });
+
+        if (apiResult.ok && 'result' in apiResult) {
+          const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
+          ctx.setSalesTickets(prev => prev.map(t => (t.id === id ? synced : t)));
+          void ctx.refreshStockProducts().catch(() => undefined);
+          return ticketToPos(synced, currentUser.name, ctx.kitchens);
+        }
+        if (!apiResult.apiUnavailable && 'error' in apiResult) {
+          setToast(`Error al editar ticket: ${apiResult.error}`);
+          return null;
+        }
+        setToast('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return null;
+      }
+
+      if (salesApi.apiAvailable !== false && !isLocalOnlyTicketId(id)) {
+        setToast('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return null;
+      }
+
+      ctx.setProducts(prev => restoreStockForTicket(prev, old, ctx.salesProducts));
       const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
       if (!validation.ok) {
         setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
@@ -614,7 +712,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       );
       return updated ? ticketToPos(updated, currentUser.name, ctx.kitchens) : null;
     },
-    [ctx, currentUser, enrichCartKitchens],
+    [ctx, currentUser, enrichCartKitchens, salesApi],
   );
 
   const saveProduct = useCallback(
@@ -783,6 +881,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     kitchens: ctx.kitchens,
     currentUser,
     apiOnline: salesApi.apiAvailable,
+    saleBusy: salesApi.loading,
     toast,
     setToast,
     printTicket,
@@ -814,6 +913,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     selectedTableId,
     setSelectedTableId,
     salesHistory: ctx.salesHistory,
+    teamAccounts: ctx.teamAccounts,
+    setTeamAccounts: ctx.setTeamAccounts,
     users: [currentUser],
     pendingEdit,
     requestEditTicket,

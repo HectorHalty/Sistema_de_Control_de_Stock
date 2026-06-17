@@ -14,9 +14,11 @@ import type {
   SalesProduct,
   SalesTable,
   SalesTicket,
+  TeamAccount,
   TicketTemplate,
 } from './types';
 import { DEFAULT_TICKET_TEMPLATE } from './types';
+import { historyFromTickets, mergeSalesHistory } from './sales-history';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -61,6 +63,10 @@ export function useSalesState() {
   const [raceConditionProtection, setRaceConditionProtection] = useLocalStorage<boolean>(
     storageKeys.sales.raceConditionProtection,
     true,
+  );
+  const [teamAccounts, setTeamAccounts] = useLocalStorage<TeamAccount[]>(
+    storageKeys.sales.teamAccounts,
+    [],
   );
 
   // Quitar categorías mock precargadas en sesiones anteriores.
@@ -120,9 +126,15 @@ export function useSalesState() {
   const hydrateTickets = useCallback(
     async (products: SalesProduct[], mountGen?: number) => {
       const ts = await salesApi.tickets.list();
-      applyHydration(mountGen, () => setSalesTickets(ts.map(t => mapApiTicketToLocal(t, products))));
+      const local = ts.map(t => mapApiTicketToLocal(t, products));
+      applyHydration(mountGen, () => {
+        setSalesTickets(local);
+        setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
+        const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
+        if (maxNum > 0) setSalesTicketCounter(maxNum);
+      });
     },
-    [setSalesTickets, applyHydration],
+    [setSalesTickets, setSalesHistory, setSalesTicketCounter, applyHydration],
   );
 
   useEffect(() => {
@@ -393,6 +405,8 @@ export function useSalesState() {
     setValidateStockOnSale,
     raceConditionProtection,
     setRaceConditionProtection,
+    teamAccounts,
+    setTeamAccounts,
   };
 }
 

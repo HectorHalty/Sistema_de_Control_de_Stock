@@ -60,7 +60,7 @@ export function ReturnsModule() {
 
   const confirm = async () => {
     if (items.length === 0) return;
-    const t = printReturn(items);
+    const t = await printReturn(items);
     if (!t) return;
     setPreview(t);
     setItems([]);

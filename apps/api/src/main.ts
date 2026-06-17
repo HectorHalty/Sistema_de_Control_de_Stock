@@ -46,17 +46,17 @@ async function bootstrap() {
     skip: (req) => req.path === '/health',
   });
 
-  // Relax limits in dev mode
+  // Relax limits in dev mode; disable general limiter entirely while developing
   const isDev = process.env.NODE_ENV !== 'production';
   if (isDev) {
     (authLimiter as any).windowMs = 60 * 1000;
     (authLimiter as any).max = 200;
-    (generalLimiter as any).windowMs = 60 * 1000;
-    (generalLimiter as any).max = 2000;
+    app.use('/auth', authLimiter);
+    console.log('Rate limiting: auth only (general limiter disabled in development)');
+  } else {
+    app.use('/auth', authLimiter);
+    app.use(generalLimiter);
   }
-
-  app.use('/auth', authLimiter);
-  app.use(generalLimiter);
 
   // Global validation pipe
   app.useGlobalPipes(

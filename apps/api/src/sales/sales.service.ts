@@ -4,19 +4,18 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
-import { CheckoutDto, ReturnDto } from './dto';
+import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
+import {
+  aggregateSalesLineItems,
+  computeReturnableFromTotals,
+  netRestoreQuantitiesAfterPartialReturns,
+  round3,
+} from './sales-integrity';
 
 interface MissingStockItem {
   stockProductId: string;
   required: number;
   available: number;
-}
-
-// Las cantidades de stock/receta son Decimal(12,3) en la DB y Prisma las
-// devuelve como objetos Decimal (o string en SQL crudo). Redondeo a 3 decimales
-// para evitar derivas de punto flotante al operar en memoria.
-function round3(n: number): number {
-  return Math.round((n + Number.EPSILON) * 1000) / 1000;
 }
 
 interface TicketItemData extends Omit<Prisma.SalesTicketItemUncheckedCreateWithoutTicketInput, 'createdAt'> {}
@@ -37,6 +36,7 @@ export class SalesService {
     if (dto.idempotencyKey) {
       const existing = await this.prisma.salesTicket.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
+        include: { items: true, operator: { select: { name: true, username: true } } },
       });
       if (existing) {
         return { ok: true, ticket: existing, idempotent: true };
@@ -329,6 +329,366 @@ export class SalesService {
     });
   }
 
+  // ============ Partial return by products (POS devoluciones) ============
+
+  async returnItems(dto: ReturnItemsDto) {
+    if (dto.idempotencyKey) {
+      const existing = await this.prisma.salesTicket.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+      });
+      if (existing) {
+        return { ok: true, ticket: existing, idempotent: true };
+      }
+    }
+
+    const aggregated = aggregateSalesLineItems(dto.items);
+    if (!aggregated.length) {
+      throw new ConflictException('Return must include at least one item');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('sales-return-items'))`;
+
+      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
+      const returnable = computeReturnableFromTotals(sold, returned);
+      const shortages: Array<{ salesProductId: string; requested: number; available: number }> = [];
+      for (const item of aggregated) {
+        const available = returnable[item.salesProductId] || 0;
+        if (item.quantity > available) {
+          shortages.push({ salesProductId: item.salesProductId, requested: item.quantity, available });
+        }
+      }
+      if (shortages.length > 0) {
+        throw new ConflictException({
+          message: 'Return quantity exceeds sold amount',
+          shortages,
+        });
+      }
+
+      const salesProductIds = aggregated.map(i => i.salesProductId);
+      const salesProducts = await tx.salesProduct.findMany({
+        where: { id: { in: salesProductIds }, active: true },
+        include: { recipe: true },
+      });
+      if (salesProducts.length !== salesProductIds.length) {
+        throw new NotFoundException('One or more sales products not found or inactive');
+      }
+      const spMap = new Map(salesProducts.map(p => [p.id, p]));
+
+      const counter = await tx.$queryRaw`
+        SELECT COALESCE(MAX(number), 999) + 1 as next_num FROM "SalesTicket"
+      ` as Array<{ next_num: number }>;
+      const ticketNumber = counter[0].next_num;
+
+      let total = 0;
+      const ticketItems: TicketItemData[] = [];
+      for (const item of aggregated) {
+        const sp = spMap.get(item.salesProductId)!;
+        total += Number(sp.price) * item.quantity;
+        ticketItems.push({
+          salesProductId: item.salesProductId,
+          name: sp.name,
+          unitPrice: sp.price,
+          quantity: item.quantity,
+        });
+      }
+
+      const ticket = await tx.salesTicket.create({
+        data: {
+          number: ticketNumber,
+          status: 'devuelto',
+          total,
+          operatorId: dto.operatorId,
+          note: dto.note ?? 'Devolución parcial',
+          idempotencyKey: dto.idempotencyKey,
+          items: { create: ticketItems },
+        },
+        include: { items: true, operator: { select: { name: true, username: true } } },
+      });
+
+      await this.restoreStockForSalesItems(
+        tx,
+        aggregated,
+        spMap,
+        dto.operatorId,
+        ticket.id,
+        'devolucion',
+      );
+
+      return { ok: true, ticket, idempotent: false };
+    }, {
+      maxWait: 5000,
+      timeout: 10000,
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  }
+
+  // ============ Edit issued ticket items ============
+
+  async updateTicketItems(ticketId: string, dto: UpdateTicketItemsDto) {
+    const newItems = aggregateSalesLineItems(dto.items);
+    if (!newItems.length) {
+      throw new ConflictException('Ticket must include at least one item');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM "SalesTicket" WHERE id::text = ${ticketId} FOR UPDATE
+      `;
+
+      const ticket = await tx.salesTicket.findUnique({
+        where: { id: ticketId },
+        include: { items: true },
+      });
+      if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+      if (ticket.status !== 'emitido') {
+        throw new ConflictException('Can only edit issued tickets');
+      }
+
+      const allProductIds = [
+        ...new Set([
+          ...ticket.items.map(i => i.salesProductId),
+          ...newItems.map(i => i.salesProductId),
+        ]),
+      ];
+      const salesProducts = await tx.salesProduct.findMany({
+        where: { id: { in: allProductIds } },
+        include: { recipe: true },
+      });
+      const spMap = new Map(salesProducts.map(p => [p.id, p]));
+
+      const inactiveNew = newItems.filter(i => !salesProducts.find(p => p.id === i.salesProductId && p.active));
+      if (inactiveNew.length > 0) {
+        throw new ConflictException('One or more sales products not found or inactive');
+      }
+
+      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
+      const netOldItems = netRestoreQuantitiesAfterPartialReturns(
+        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+        sold,
+        returned,
+      );
+
+      await this.restoreStockForSalesItems(
+        tx,
+        netOldItems,
+        spMap,
+        dto.operatorId,
+        ticketId,
+        'venta_anulada',
+      );
+
+      const requiredByStockProduct: Record<string, number> = {};
+      for (const item of newItems) {
+        const sp = spMap.get(item.salesProductId);
+        if (!sp?.active) throw new NotFoundException(`Sales product ${item.salesProductId} not found`);
+        for (const recipeItem of sp.recipe) {
+          const key = recipeItem.stockProductId;
+          requiredByStockProduct[key] = round3(
+            (requiredByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
+          );
+        }
+      }
+
+      const stockProductIds = Object.keys(requiredByStockProduct);
+      if (stockProductIds.length > 0) {
+        const lockedLevels = await tx.$queryRaw`
+          SELECT sl.*
+          FROM "StockLevel" sl
+          WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
+          FOR UPDATE
+        ` as Array<{ productId: string; quantity: number; warehouseId: string }>;
+
+        const availableByProduct: Record<string, number> = {};
+        for (const level of lockedLevels) {
+          availableByProduct[level.productId] = round3(
+            (availableByProduct[level.productId] || 0) + Number(level.quantity),
+          );
+        }
+
+        const missing: MissingStockItem[] = [];
+        for (const [stockProductId, requiredQty] of Object.entries(requiredByStockProduct)) {
+          const available = availableByProduct[stockProductId] || 0;
+          if (available < requiredQty) {
+            missing.push({ stockProductId, required: requiredQty, available });
+          }
+        }
+        if (missing.length > 0) {
+          throw new ConflictException({
+            message: 'Insufficient stock for ticket update',
+            missing,
+          });
+        }
+
+        let remainingByProduct = { ...requiredByStockProduct };
+        const movementEntries: Array<{
+          type: 'venta';
+          productId: string;
+          warehouseId: string;
+          quantity: number;
+          reference: string;
+          operatorId: string;
+        }> = [];
+
+        for (const level of lockedLevels) {
+          const required = remainingByProduct[level.productId] || 0;
+          if (required <= 0) continue;
+          const deduction = round3(Math.min(Number(level.quantity), required));
+          remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
+          await tx.$executeRaw`
+            UPDATE "StockLevel" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
+            WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
+          `;
+          movementEntries.push({
+            type: 'venta',
+            productId: level.productId,
+            warehouseId: level.warehouseId,
+            quantity: -deduction,
+            reference: ticketId,
+            operatorId: dto.operatorId,
+          });
+        }
+
+        const operator = await tx.user.findUnique({ where: { id: dto.operatorId } });
+        await this.movements.recordMany(
+          tx,
+          movementEntries.map(m => ({
+            ...m,
+            operatorName: operator?.name ?? operator?.username,
+          })),
+        );
+      }
+
+      await tx.salesTicketItem.deleteMany({ where: { ticketId } });
+
+      let total = 0;
+      const ticketItemRows: TicketItemData[] = [];
+      for (const item of newItems) {
+        const sp = spMap.get(item.salesProductId)!;
+        total += Number(sp.price) * item.quantity;
+        ticketItemRows.push({
+          salesProductId: item.salesProductId,
+          name: sp.name,
+          unitPrice: sp.price,
+          quantity: item.quantity,
+        });
+      }
+
+      await tx.salesTicketItem.createMany({
+        data: ticketItemRows.map(i => ({ ...i, ticketId })),
+      });
+
+      return tx.salesTicket.update({
+        where: { id: ticketId },
+        data: { total },
+        include: { items: true, operator: { select: { username: true } } },
+      });
+    }, {
+      maxWait: 5000,
+      timeout: 10000,
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  }
+
+  // ============ Stock helpers ============
+
+  private async getSoldAndReturnedByProduct(tx: Prisma.TransactionClient): Promise<{
+    sold: Record<string, number>;
+    returned: Record<string, number>;
+  }> {
+    const tickets = await tx.salesTicket.findMany({
+      where: { status: { in: ['emitido', 'devuelto'] } },
+      include: { items: true },
+    });
+    const sold: Record<string, number> = {};
+    const returned: Record<string, number> = {};
+    for (const t of tickets) {
+      if (t.status === 'emitido') {
+        for (const item of t.items) {
+          sold[item.salesProductId] = round3((sold[item.salesProductId] || 0) + item.quantity);
+        }
+      } else {
+        for (const item of t.items) {
+          returned[item.salesProductId] = round3((returned[item.salesProductId] || 0) + item.quantity);
+        }
+      }
+    }
+    return { sold, returned };
+  }
+
+  private async computeReturnableByProduct(
+    tx: Prisma.TransactionClient,
+  ): Promise<Record<string, number>> {
+    const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
+    return computeReturnableFromTotals(sold, returned);
+  }
+
+  private async restoreStockForSalesItems(
+    tx: Prisma.TransactionClient,
+    items: Array<{ salesProductId: string; quantity: number }>,
+    spMap: Map<string, { recipe: Array<{ stockProductId: string; quantity: Prisma.Decimal }> }>,
+    operatorId: string,
+    reference: string,
+    movementType: 'devolucion' | 'venta_anulada',
+  ): Promise<void> {
+    const restoreByStockProduct: Record<string, number> = {};
+    for (const item of items) {
+      const sp = spMap.get(item.salesProductId);
+      if (!sp) {
+        throw new NotFoundException(
+          `Sales product ${item.salesProductId} not found for stock ${movementType}`,
+        );
+      }
+      for (const recipeItem of sp.recipe) {
+        const key = recipeItem.stockProductId;
+        restoreByStockProduct[key] = round3(
+          (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
+        );
+      }
+    }
+
+    const restoreMovements: Array<{
+      type: typeof movementType;
+      productId: string;
+      warehouseId: string;
+      quantity: number;
+      reference: string;
+      operatorId: string;
+    }> = [];
+
+    for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
+      const levels = await tx.stockLevel.findMany({
+        where: { productId: stockProductId },
+        orderBy: { warehouseId: 'asc' },
+      });
+      if (levels.length > 0) {
+        await tx.$executeRaw`
+          UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
+          WHERE id::text = ${levels[0].id}
+        `;
+        restoreMovements.push({
+          type: movementType,
+          productId: stockProductId,
+          warehouseId: levels[0].warehouseId,
+          quantity: qty,
+          reference,
+          operatorId,
+        });
+      }
+    }
+
+    if (restoreMovements.length > 0) {
+      const operator = await tx.user.findUnique({ where: { id: operatorId } });
+      await this.movements.recordMany(
+        tx,
+        restoreMovements.map(m => ({
+          ...m,
+          operatorName: operator?.name ?? operator?.username,
+        })),
+      );
+    }
+  }
+
   // ============ Sales Products CRUD ============
 
   async findAllSalesProducts() {
@@ -416,6 +776,10 @@ export class SalesService {
 
   async voidTicket(ticketId: string, operatorId: string) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM "SalesTicket" WHERE id::text = ${ticketId} FOR UPDATE
+      `;
+
       const ticket = await tx.salesTicket.findUnique({
         where: { id: ticketId },
         include: { items: true },
@@ -423,61 +787,27 @@ export class SalesService {
       if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
       if (ticket.status !== 'emitido') throw new ConflictException('Can only void issued tickets');
 
-      // Restore stock (same as return)
+      const productIds = [...new Set(ticket.items.map(i => i.salesProductId))];
       const salesProducts = await tx.salesProduct.findMany({
-        where: { id: { in: ticket.items.map(i => i.salesProductId) } },
+        where: { id: { in: productIds } },
         include: { recipe: true },
       });
       const spMap = new Map(salesProducts.map(p => [p.id, p]));
 
-      const restoreByStockProduct: Record<string, number> = {};
-      for (const item of ticket.items) {
-        const sp = spMap.get(item.salesProductId);
-        if (!sp) continue;
-        for (const recipeItem of sp.recipe) {
-          const key = recipeItem.stockProductId;
-          restoreByStockProduct[key] = round3(
-            (restoreByStockProduct[key] || 0) + Number(recipeItem.quantity) * item.quantity,
-          );
-        }
-      }
+      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
+      const netItems = netRestoreQuantitiesAfterPartialReturns(
+        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+        sold,
+        returned,
+      );
 
-      const voidMovements: Array<{
-        type: 'venta_anulada';
-        productId: string;
-        warehouseId: string;
-        quantity: number;
-        reference: string;
-        operatorId: string;
-      }> = [];
-
-      for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-        const levels = await tx.stockLevel.findMany({
-          where: { productId: stockProductId },
-          orderBy: { warehouseId: 'asc' },
-        });
-        if (levels.length > 0) {
-          await tx.$executeRaw`
-            UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW() WHERE id::text = ${levels[0].id}
-          `;
-          voidMovements.push({
-            type: 'venta_anulada',
-            productId: stockProductId,
-            warehouseId: levels[0].warehouseId,
-            quantity: qty,
-            reference: ticketId,
-            operatorId,
-          });
-        }
-      }
-
-      const operator = await tx.user.findUnique({ where: { id: operatorId } });
-      await this.movements.recordMany(
+      await this.restoreStockForSalesItems(
         tx,
-        voidMovements.map(m => ({
-          ...m,
-          operatorName: operator?.name ?? operator?.username,
-        })),
+        netItems,
+        spMap,
+        operatorId,
+        ticketId,
+        'venta_anulada',
       );
 
       return tx.salesTicket.update({
@@ -485,6 +815,10 @@ export class SalesService {
         data: { status: 'anulado' },
         include: { items: true },
       });
+    }, {
+      maxWait: 5000,
+      timeout: 10000,
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 

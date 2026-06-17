@@ -24,6 +24,7 @@
     "build:admin": "npm run build --workspace=apps/web-admin",
     "build:public": "npm run build --workspace=apps/web-public",
     "build:api": "npm run build --workspace=apps/api",
+    "deploy:prod": "docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",
     "electron:public": "npm run electron:build --workspace=apps/web-public",
     "cap:sync:admin": "cd apps/web-admin && npx cap sync",

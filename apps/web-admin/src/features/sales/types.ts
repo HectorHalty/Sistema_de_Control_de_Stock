@@ -79,3 +79,11 @@ export interface SalesHistoryEntry {
   detail: string;
   ticketId?: string;
 }
+
+export interface TeamAccount {
+  id: string;
+  team: string;
+  openedAt: string;
+  status: 'abierta';
+  items: { productId: string; name: string; price: number; qty: number }[];
+}

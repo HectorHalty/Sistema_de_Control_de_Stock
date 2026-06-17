@@ -23,6 +23,7 @@ export function POSModule() {
     products,
     currentUser,
     setToast,
+    saleBusy,
   } = useStore();
   const [order, setOrder] = useState<OrderItem[]>([]);
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export function POSModule() {
   const total = order.reduce((s, i) => s + i.price * i.qty, 0);
 
   const finalizeOrder = async (print: boolean) => {
-    if (order.length === 0) return;
+    if (order.length === 0 || saleBusy) return;
     if (print && !defaultPrinter) {
       setToast("⚠️ No hay impresora conectada. Configurala en Configuración → Ventas.");
       setTimeout(() => setToast(null), 2500);
@@ -68,16 +69,17 @@ export function POSModule() {
     }
     let ticketToPrint: Ticket | null = null;
     if (editingTicket) {
-      const updated = replaceTicketItems(editingTicket.id, order);
-      if (updated) {
-        if (print) ticketToPrint = updated;
-        setToast(
-          print
-            ? `✏️ Comanda #${updated.number} actualizada y reimpresa`
-            : `✏️ Comanda #${updated.number} actualizada (sin imprimir)`
-        );
-      }
+      const updated = await replaceTicketItems(editingTicket.id, order);
+      if (!updated) return;
+      if (print) ticketToPrint = updated;
+      setToast(
+        print
+          ? `✏️ Comanda #${updated.number} actualizada y reimpresa`
+          : `✏️ Comanda #${updated.number} actualizada (sin imprimir)`
+      );
       setEditingTicketId(null);
+      setOrder([]);
+      setShowMobileOrder(false);
     } else {
       const t = await storePrint({ items: order, total, source: "Mostrador" });
       if (!t) return;
@@ -87,18 +89,20 @@ export function POSModule() {
           ? `✅ Pedido #${t.number} realizado con éxito — enviado a ${defaultPrinter!.name}`
           : `✅ Pedido #${t.number} registrado sin imprimir ticket`
       );
+      setOrder([]);
+      setShowMobileOrder(false);
     }
-    setOrder([]);
-    setShowMobileOrder(false);
 
     if (ticketToPrint && defaultPrinter) {
-      const result = await printToPrinter(ticketToPrint, defaultPrinter);
-      if (!result.ok) {
-        const reason = result.apiUnavailable
-          ? "el servidor de impresión no está disponible"
-          : result.error || "no se pudo conectar con la impresora";
-        setToast(`⚠️ Ticket #${ticketToPrint.number} registrado, pero no se imprimió: ${reason}`);
-      }
+      void printToPrinter(ticketToPrint, defaultPrinter).then(result => {
+        if (!result.ok) {
+          const reason = result.apiUnavailable
+            ? 'el servidor de impresión no está disponible'
+            : result.error || 'no se pudo conectar con la impresora';
+          setToast(`⚠️ Ticket #${ticketToPrint!.number} registrado, pero no se imprimió: ${reason}`);
+          setTimeout(() => setToast(null), 3500);
+        }
+      });
     }
     setTimeout(() => setToast(null), 3500);
   };
@@ -199,15 +203,15 @@ export function POSModule() {
           </div>
           <button
             onClick={() => finalizeOrder(true)}
-            disabled={order.length === 0}
+            disabled={order.length === 0 || saleBusy}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition"
           >
             <Printer className="w-5 h-5" />
-            {editingTicket ? "Reimprimir Ticket" : "Imprimir Ticket"}
+            {saleBusy ? 'Procesando…' : editingTicket ? 'Reimprimir Ticket' : 'Imprimir Ticket'}
           </button>
           <button
             onClick={() => finalizeOrder(false)}
-            disabled={order.length === 0}
+            disabled={order.length === 0 || saleBusy}
             className="w-full border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
           >
             <Banknote className="w-5 h-5" />
@@ -289,7 +293,7 @@ export function POSModule() {
           ticket={previewTicket}
           products={products}
           onClose={() => setPreviewTicket(null)}
-          onSave={(id, items) => replaceTicketItems(id, items)}
+          onSave={async (id, items) => { await replaceTicketItems(id, items); }}
           onVoid={(id) => voidTicket(id)}
           setToast={setToast}
         />

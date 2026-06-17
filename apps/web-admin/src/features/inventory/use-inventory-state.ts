@@ -303,6 +303,48 @@ export function useInventoryState() {
     [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
   );
 
+  const updateCategory = useCallback(
+    async (input: Category): Promise<void> => {
+      if (inventoryApiAvailable === false) {
+        setCategories(prev => prev.map(c => (c.id === input.id ? input : c)));
+        return;
+      }
+      try {
+        await stockApi.categories.update(
+          input.id,
+          { name: input.name, icon: input.icon },
+          '',
+        );
+        markApiSynced();
+        await hydrateCategories();
+        return;
+      } catch (e) {
+        if (inventoryApiAvailable === true) throw e;
+        setCategories(prev => prev.map(c => (c.id === input.id ? input : c)));
+      }
+    },
+    [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+  );
+
+  const deleteCategory = useCallback(
+    async (id: string): Promise<void> => {
+      if (inventoryApiAvailable === false) {
+        setCategories(prev => prev.filter(c => c.id !== id));
+        return;
+      }
+      try {
+        await stockApi.categories.remove(id, '');
+        markApiSynced();
+        await hydrateCategories();
+        return;
+      } catch (e) {
+        if (inventoryApiAvailable === true) throw e;
+        setCategories(prev => prev.filter(c => c.id !== id));
+      }
+    },
+    [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+  );
+
   const createWarehouse = useCallback(
     async (input: Omit<Warehouse, 'id'>): Promise<void> => {
       if (inventoryApiAvailable === false) {
@@ -660,6 +702,8 @@ export function useInventoryState() {
     updateProduct,
     deleteProduct,
     createCategory,
+    updateCategory,
+    deleteCategory,
     createWarehouse,
     updateWarehouse,
     deleteWarehouse,

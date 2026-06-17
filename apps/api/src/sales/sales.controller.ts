@@ -5,15 +5,15 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser, type AuthUser } from '../common/decorators/current-user.decorator';
 import { SalesService } from './sales.service';
-import { CheckoutDto, ReturnDto } from './dto';
+import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
   constructor(private salesService: SalesService) {}
 
-  // Sales products (menu) - GET for all authenticated
   @Get('products')
   findAllProducts() {
     return this.salesService.findAllSalesProducts();
@@ -24,7 +24,6 @@ export class SalesController {
     return this.salesService.findSalesProductById(id);
   }
 
-  // Mutating endpoints require Admin/SuperAdmin
   @Post('products')
   @Roles('Admin', 'SuperAdmin')
   createProduct(@Body() body: {
@@ -44,18 +43,21 @@ export class SalesController {
     return this.salesService.updateSalesProduct(id, body);
   }
 
-  // Checkout/Return - accessible to all authenticated operators
   @Post('checkout')
-  checkout(@Body() dto: CheckoutDto) {
-    return this.salesService.checkout(dto);
+  checkout(@Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
+    return this.salesService.checkout({ ...dto, operatorId: user.id });
   }
 
   @Post('return')
-  returnSale(@Body() dto: ReturnDto) {
-    return this.salesService.returnSale(dto);
+  returnSale(@Body() dto: ReturnDto, @CurrentUser() user: AuthUser) {
+    return this.salesService.returnSale({ ...dto, operatorId: user.id });
   }
 
-  // Tickets
+  @Post('return-items')
+  returnItems(@Body() dto: ReturnItemsDto, @CurrentUser() user: AuthUser) {
+    return this.salesService.returnItems({ ...dto, operatorId: user.id });
+  }
+
   @Get('tickets')
   findAllTickets(@Query('status') status?: string) {
     return this.salesService.findAllTickets(status);
@@ -68,11 +70,20 @@ export class SalesController {
 
   @Post('tickets/:id/void')
   @Roles('Admin', 'SuperAdmin')
-  voidTicket(@Param('id') id: string, @Body() body: { operatorId: string }) {
-    return this.salesService.voidTicket(id, body.operatorId);
+  voidTicket(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.salesService.voidTicket(id, user.id);
   }
 
-  // Kitchens
+  @Put('tickets/:id/items')
+  @Roles('Admin', 'SuperAdmin')
+  updateTicketItems(
+    @Param('id') id: string,
+    @Body() dto: UpdateTicketItemsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.salesService.updateTicketItems(id, { ...dto, operatorId: user.id });
+  }
+
   @Get('kitchens')
   findAllKitchens() {
     return this.salesService.findAllKitchens();

@@ -31,17 +31,54 @@ type ApiErrorBody = {
   statusCode?: number;
 };
 
-/** Mensaje legible para el operador a partir de la respuesta de error de la API. */
-export function formatApiErrorMessage(status: number, body: ApiErrorBody): string {
-  if (status === 409 && body.message === 'Insufficient stock for checkout') {
-    if (body.missing?.length) {
-      const parts = body.missing.map(
-        m => `faltan ${m.required} u., hay ${m.available} en servidor`,
-      );
-      return `Stock insuficiente (${parts.join('; ')}). Revisá el inventario.`;
-    }
-    return 'Stock insuficiente en el servidor. Revisá el inventario.';
+type NestedNestMessage = {
+  message?: unknown;
+  missing?: ApiErrorBody['missing'];
+};
+
+/** Nest suele anidar `{ message, missing }` dentro de `body.message` en ConflictException. */
+function unwrapNestErrorBody(body: ApiErrorBody): ApiErrorBody {
+  const raw = body.message;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'message' in raw) {
+    const nested = raw as NestedNestMessage;
+    return {
+      ...body,
+      message: nested.message,
+      missing: nested.missing ?? body.missing,
+    };
   }
+  return body;
+}
+
+function stockConflictMessage(
+  body: ApiErrorBody,
+  fallbackLabel: string,
+): string | null {
+  const msg = body.message;
+  const isStockConflict =
+    msg === 'Insufficient stock for checkout' ||
+    msg === 'Insufficient stock for ticket update';
+  if (!isStockConflict) return null;
+
+  if (body.missing?.length) {
+    const parts = body.missing.map(
+      m => `faltan ${m.required} u., hay ${m.available} en servidor`,
+    );
+    return `${fallbackLabel} (${parts.join('; ')}). Revisá el inventario.`;
+  }
+  return `${fallbackLabel} en el servidor. Revisá el inventario.`;
+}
+
+/** Mensaje legible para el operador a partir de la respuesta de error de la API. */
+export function formatApiErrorMessage(status: number, rawBody: ApiErrorBody): string {
+  const body = unwrapNestErrorBody(rawBody);
+
+  if (status === 429) {
+    return 'Demasiadas solicitudes. Esperá unos segundos y volvé a intentar.';
+  }
+
+  const checkoutStock = stockConflictMessage(body, 'Stock insuficiente');
+  if (status === 409 && checkoutStock) return checkoutStock;
 
   if (status === 404 && typeof body.message === 'string' && body.message.includes('Sales products')) {
     return 'Producto de venta no encontrado en el servidor. Recargá la página o recrealo en Ventas → Productos.';
@@ -68,19 +105,23 @@ export function formatApiErrorMessage(status: number, body: ApiErrorBody): strin
 /**
  * Low-level fetch wrapper with auth header and JSON serialization.
  */
-async function apiFetch<T>(path: string, options?: RequestInit & { token?: string }): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options?: Omit<RequestInit, 'body'> & { token?: string; body?: unknown },
+): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  const token = options?.token || accessToken;
+  const { token: tokenOpt, body, ...fetchOpts } = options ?? {};
+  const token = tokenOpt || accessToken;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options?.headers as Record<string, string>),
+    ...(fetchOpts.headers as Record<string, string>),
   };
 
   const response = await fetch(url, {
-    ...options,
+    ...fetchOpts,
     headers,
-    body: options?.body ? JSON.stringify(options.body) : undefined,
+    body: body != null ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
@@ -110,6 +151,25 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** Duck-typing: Vite puede duplicar la clase ApiError entre chunks y romper `instanceof`. */
+export function isApiError(e: unknown): e is ApiError {
+  return (
+    e instanceof ApiError ||
+    (typeof e === 'object' &&
+      e !== null &&
+      (e as ApiError).name === 'ApiError' &&
+      typeof (e as ApiError).message === 'string' &&
+      typeof (e as ApiError).status === 'number')
+  );
+}
+
+export function getApiErrorMessage(e: unknown, fallback: string): string {
+  if (isApiError(e)) return e.message;
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === 'string' && e.trim()) return e;
+  return fallback;
 }
 
 /**
@@ -287,6 +347,8 @@ export const salesApi = {
     apiFetch<CheckoutResult>('/sales/checkout', { method: 'POST', token, body: data }),
   returnSale: (data: ReturnPayload, token: string) =>
     apiFetch<ReturnResult>('/sales/return', { method: 'POST', token, body: data }),
+  returnItems: (data: ReturnItemsPayload, token: string) =>
+    apiFetch<ReturnResult>('/sales/return-items', { method: 'POST', token, body: data }),
   tickets: {
     list: (status?: string) => {
       const q = status ? `?status=${status}` : '';
@@ -296,6 +358,10 @@ export const salesApi = {
     void: (id: string, operatorId: string, token: string) =>
       apiFetch<SalesTicket>(`/sales/tickets/${id}/void`, {
         method: 'POST', token, body: { operatorId },
+      }),
+    updateItems: (id: string, data: UpdateTicketItemsPayload, token: string) =>
+      apiFetch<SalesTicket>(`/sales/tickets/${id}/items`, {
+        method: 'PUT', token, body: data,
       }),
   },
   kitchens: {
@@ -685,7 +751,7 @@ export interface CheckoutItem {
 
 export interface CheckoutPayload {
   items: CheckoutItem[];
-  operatorId: string;
+  operatorId?: string;
   note?: string;
   idempotencyKey?: string;
 }
@@ -698,8 +764,20 @@ export interface CheckoutResult {
 
 export interface ReturnPayload {
   ticketId: string;
-  operatorId: string;
+  operatorId?: string;
   idempotencyKey?: string;
+}
+
+export interface ReturnItemsPayload {
+  items: CheckoutItem[];
+  operatorId?: string;
+  note?: string;
+  idempotencyKey?: string;
+}
+
+export interface UpdateTicketItemsPayload {
+  items: CheckoutItem[];
+  operatorId?: string;
 }
 
 export interface ReturnResult {

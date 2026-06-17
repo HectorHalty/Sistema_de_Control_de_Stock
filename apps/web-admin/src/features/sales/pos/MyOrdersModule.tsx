@@ -129,7 +129,7 @@ export function MyOrdersModule() {
           ticket={orderModal}
           products={products}
           onClose={() => setOrderModal(null)}
-          onSave={(id, items) => replaceTicketItems(id, items)}
+          onSave={async (id, items) => { await replaceTicketItems(id, items); }}
           onVoid={(id) => voidTicket(id)}
           setToast={setToast}
         />

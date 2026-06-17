@@ -216,9 +216,11 @@ npm run electron:public   # builds apps/web-public/release/
 - `POST /sales/products` - Create menu product
 - `PUT /sales/products/:id` - Update menu product
 - `POST /sales/checkout` - **Transactional checkout** (idempotent)
-- `POST /sales/return` - **Transactional return** (idempotent)
+- `POST /sales/return` - **Full ticket return** (idempotent)
+- `POST /sales/return-items` - **Partial return by products** (idempotent)
 - `GET /sales/tickets` - List tickets
 - `POST /sales/tickets/:id/void` - Void ticket
+- `PUT /sales/tickets/:id/items` - Replace items on issued ticket
 - `GET /sales/kitchens` - List kitchens
 
 ### Kitchen Display
@@ -326,14 +328,27 @@ npm run test:admin
 npm run test:public
 ```
 
+## Production deployment
+
+```bash
+cp .env.production.example .env.production
+# Editar secretos (JWT_SECRET, POSTGRES_PASSWORD, ALLOWED_ORIGINS, VITE_API_URL)
+
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+- Admin: `http://localhost:8080` (o `ADMIN_PORT`)
+- API: `http://localhost:3001`
+- Migraciones Prisma se aplican al arrancar el contenedor `api`.
+
 ## Known Limitations
 
 - No pagination on list endpoints yet
 - Stock deduction uses raw SQL for composite key updates (Prisma limitation — now uses parameterized `$queryRaw`/`$executeRaw`)
-- Frontend components still use localStorage directly — adapters exist but not yet wired into all components
+- Offline fallback remains for when API health check fails; in production keep API always reachable
 - SSE does not handle reconnection backoff (browser handles basic retry)
-- Admin "Ver sitio publico" button opens the public app in a new browser tab (native builds open system browser)
 - Login attempt tracking is in-memory (use Redis for multi-instance deployments)
+- Sales audit log for product/printer config remains device-local; ticket history syncs from API
 - 28 npm audit vulnerabilities remain (mostly in dev dependencies; see `npm audit` output)
 
 ## Security Hardening (Applied 2026-05-19)

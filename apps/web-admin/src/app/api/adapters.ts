@@ -8,27 +8,47 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
-  API_BASE_URL, ApiError,
+  API_BASE_URL, getApiErrorMessage,
 } from './client';
 import type {
-  CheckoutPayload, ReturnPayload, KitchenOrderStatus,
+  CheckoutPayload, ReturnPayload, ReturnItemsPayload, UpdateTicketItemsPayload,
+  KitchenOrderStatus,
   PresignPayload, ConfirmMediaPayload,
   TestPrinterPayload, PrintTicketPayload,
 } from './client';
 
 /**
- * Check if the API is reachable.
+ * Check if the API is reachable (result cached briefly to avoid duplicate health probes).
  */
+let reachabilityCache: { promise: Promise<boolean>; at: number } | null = null;
+const REACHABILITY_TTL_MS = 30_000;
+const HEALTH_TIMEOUT_MS = 1500;
+
 export async function isApiReachable(): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
-    clearTimeout(timeout);
-    return res.ok;
-  } catch {
-    return false;
+  const now = Date.now();
+  if (reachabilityCache && now - reachabilityCache.at < REACHABILITY_TTL_MS) {
+    return reachabilityCache.promise;
   }
+
+  const promise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
+      const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  })();
+
+  reachabilityCache = { promise, at: now };
+  return promise;
+}
+
+/** Limpia la caché de reachability (útil tras errores de red). */
+export function clearApiReachabilityCache(): void {
+  reachabilityCache = null;
 }
 
 /**
@@ -70,7 +90,7 @@ export function useSalesApiAdapter() {
       if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
-      const msg = e instanceof ApiError ? e.message : 'Checkout failed';
+      const msg = getApiErrorMessage(e, 'No se pudo completar la venta');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -79,7 +99,7 @@ export function useSalesApiAdapter() {
   }, [apiAvailable]);
 
   const returnSale = useCallback(async (payload: ReturnPayload) => {
-    if (!apiAvailable) {
+    if (apiAvailable === false) {
       return { ok: false, apiUnavailable: true } as const;
     }
     setLoading(true);
@@ -91,7 +111,28 @@ export function useSalesApiAdapter() {
       if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
-      const msg = e instanceof ApiError ? e.message : 'Return failed';
+      const msg = getApiErrorMessage(e, 'No se pudo registrar la devolución');
+      setError(msg);
+      return { ok: false, apiUnavailable: false, error: msg } as const;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiAvailable]);
+
+  const returnItems = useCallback(async (payload: ReturnItemsPayload) => {
+    if (apiAvailable === false) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await salesApi.returnItems(payload, '');
+      return { ok: true, apiUnavailable: false, result } as const;
+    } catch (e) {
+      if (shouldFallbackToLocal(e)) {
+        return { ok: false, apiUnavailable: true } as const;
+      }
+      const msg = getApiErrorMessage(e, 'No se pudo registrar la devolución');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -100,7 +141,7 @@ export function useSalesApiAdapter() {
   }, [apiAvailable]);
 
   const voidTicket = useCallback(async (ticketId: string, operatorId: string) => {
-    if (!apiAvailable) {
+    if (apiAvailable === false) {
       return { ok: false, apiUnavailable: true } as const;
     }
     setLoading(true);
@@ -112,7 +153,7 @@ export function useSalesApiAdapter() {
       if (shouldFallbackToLocal(e)) {
         return { ok: false, apiUnavailable: true } as const;
       }
-      const msg = e instanceof ApiError ? e.message : 'Void failed';
+      const msg = getApiErrorMessage(e, 'No se pudo anular el ticket');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -120,7 +161,28 @@ export function useSalesApiAdapter() {
     }
   }, [apiAvailable]);
 
-  return { checkout, returnSale, voidTicket, loading, error, apiAvailable };
+  const updateTicketItems = useCallback(async (ticketId: string, payload: UpdateTicketItemsPayload) => {
+    if (apiAvailable === false) {
+      return { ok: false, apiUnavailable: true } as const;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await salesApi.tickets.updateItems(ticketId, payload, '');
+      return { ok: true, apiUnavailable: false, result } as const;
+    } catch (e) {
+      if (shouldFallbackToLocal(e)) {
+        return { ok: false, apiUnavailable: true } as const;
+      }
+      const msg = getApiErrorMessage(e, 'No se pudo actualizar el ticket');
+      setError(msg);
+      return { ok: false, apiUnavailable: false, error: msg } as const;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiAvailable]);
+
+  return { checkout, returnSale, returnItems, voidTicket, updateTicketItems, loading, error, apiAvailable };
 }
 
 // ==================== Printing Adapter ====================
@@ -143,7 +205,7 @@ export function usePrintingApiAdapter() {
       return {
         ok: false,
         apiUnavailable: false,
-        error: e instanceof ApiError ? e.message : 'No se pudo probar la impresora',
+        error: getApiErrorMessage(e, 'No se pudo probar la impresora'),
       } as const;
     }
   }, [apiAvailable]);
@@ -159,7 +221,7 @@ export function usePrintingApiAdapter() {
       return {
         ok: false,
         apiUnavailable: false,
-        error: e instanceof ApiError ? e.message : 'No se pudo imprimir',
+        error: getApiErrorMessage(e, 'No se pudo imprimir'),
       } as const;
     }
   }, [apiAvailable]);
@@ -188,7 +250,7 @@ export function useKitchenApiAdapter(kitchenId?: string) {
       setOrders(result);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to fetch orders');
+      setError(getApiErrorMessage(e, 'No se pudieron cargar los pedidos'));
     } finally {
       setLoading(false);
     }
@@ -227,7 +289,7 @@ export function useKitchenApiAdapter(kitchenId?: string) {
       const result = await kitchenApi.orders.transition(orderId, status);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      return { ok: false, apiUnavailable: false, error: e instanceof ApiError ? e.message : 'Transition failed' } as const;
+      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo cambiar el estado') } as const;
     }
   }, [apiAvailable]);
 
@@ -253,7 +315,7 @@ export function useMediaApiAdapter() {
       const result = await mediaApi.presign(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Presign failed';
+      const msg = getApiErrorMessage(e, 'No se pudo preparar la subida');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -269,7 +331,7 @@ export function useMediaApiAdapter() {
       const result = await mediaApi.confirm(payload, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Confirm failed';
+      const msg = getApiErrorMessage(e, 'No se pudo confirmar la subida');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -292,7 +354,7 @@ export function useMediaApiAdapter() {
       await mediaApi.remove(id, '');
       return { ok: true, apiUnavailable: false } as const;
     } catch (e) {
-      return { ok: false, apiUnavailable: false, error: e instanceof ApiError ? e.message : 'Delete failed' } as const;
+      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;
     }
   }, [apiAvailable]);
 
@@ -327,7 +389,7 @@ export function useSponsorsApiAdapter() {
       const result = await sponsorsApi.create(data, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Create failed';
+      const msg = getApiErrorMessage(e, 'No se pudo crear');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -343,7 +405,7 @@ export function useSponsorsApiAdapter() {
       const result = await sponsorsApi.update(id, data, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Update failed';
+      const msg = getApiErrorMessage(e, 'No se pudo actualizar');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -357,7 +419,7 @@ export function useSponsorsApiAdapter() {
       await sponsorsApi.remove(id, '');
       return { ok: true, apiUnavailable: false } as const;
     } catch (e) {
-      return { ok: false, apiUnavailable: false, error: e instanceof ApiError ? e.message : 'Delete failed' } as const;
+      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;
     }
   }, [apiAvailable]);
 
@@ -392,7 +454,7 @@ export function useOnlineCatalogApiAdapter() {
       const result = await onlineCatalogApi.products.create(data, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Create failed';
+      const msg = getApiErrorMessage(e, 'No se pudo crear');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -408,7 +470,7 @@ export function useOnlineCatalogApiAdapter() {
       const result = await onlineCatalogApi.products.update(id, data, '');
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Update failed';
+      const msg = getApiErrorMessage(e, 'No se pudo actualizar');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
@@ -422,7 +484,7 @@ export function useOnlineCatalogApiAdapter() {
       await onlineCatalogApi.products.remove(id, '');
       return { ok: true, apiUnavailable: false } as const;
     } catch (e) {
-      return { ok: false, apiUnavailable: false, error: e instanceof ApiError ? e.message : 'Delete failed' } as const;
+      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;
     }
   }, [apiAvailable]);
 

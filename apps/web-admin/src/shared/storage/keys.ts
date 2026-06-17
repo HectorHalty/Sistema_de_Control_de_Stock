@@ -41,6 +41,7 @@ export const storageKeys = {
     ticketTemplate: 'sales-ticket-template',
     validateStockOnSale: 'sales-validate-stock',
     raceConditionProtection: 'sales-race-protection',
+    teamAccounts: 'sales-team-accounts',
   },
   futbol: {
     showPublicFixture: 'futbol-public-fixture',

@@ -1,0 +1,116 @@
+# Producción — Sistema de Gestión LCH
+# Uso: copiar .env.production.example → .env.production y ajustar secretos.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# El admin se sirve en :8080 (nginx). La API en :3001.
+# Para HTTPS, poner un reverse proxy (Caddy/Traefik) delante.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-lch_stock}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lch} -d ${POSTGRES_DB:-lch_stock}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      sh -c 'redis-server --requirepass "$${REDIS_PASSWORD}" --appendonly yes'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+      mc mb local/lch-media || true;
+      mc mb local/lch-sponsors || true;
+      mc mb local/lch-football || true;
+      "
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lch}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lch_stock}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET_MEDIA: lch-media
+      MINIO_BUCKET_SPONSORS: lch-sponsors
+      MINIO_BUCKET_FOOTBALL: lch-football
+      PORT: 3001
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/main"
+
+  web-admin:
+    build:
+      context: .
+      dockerfile: apps/web-admin/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
