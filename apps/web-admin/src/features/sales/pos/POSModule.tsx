@@ -63,7 +63,7 @@ export function POSModule() {
   const finalizeOrder = async (print: boolean) => {
     if (order.length === 0 || saleBusy) return;
     if (print && !defaultPrinter) {
-      setToast("⚠️ No hay impresora conectada. Configurala en Configuración → Ventas.");
+      setToast("⚠️ No hay impresora configurada. Agregala en Ventas → Configuración → Impresoras.");
       setTimeout(() => setToast(null), 2500);
       return;
     }
@@ -94,15 +94,13 @@ export function POSModule() {
     }
 
     if (ticketToPrint && defaultPrinter) {
-      void printToPrinter(ticketToPrint, defaultPrinter).then(result => {
-        if (!result.ok) {
-          const reason = result.apiUnavailable
-            ? 'el servidor de impresión no está disponible'
-            : result.error || 'no se pudo conectar con la impresora';
-          setToast(`⚠️ Ticket #${ticketToPrint!.number} registrado, pero no se imprimió: ${reason}`);
-          setTimeout(() => setToast(null), 3500);
-        }
-      });
+      const result = await printToPrinter(ticketToPrint, defaultPrinter);
+      if (!result.ok) {
+        const reason = result.apiUnavailable
+          ? 'el servidor de impresión no está disponible'
+          : result.error || 'no se pudo conectar con la impresora';
+        setToast(`⚠️ Ticket #${ticketToPrint.number} registrado, pero no se imprimió: ${reason}`);
+      }
     }
     setTimeout(() => setToast(null), 3500);
   };
@@ -219,9 +217,9 @@ export function POSModule() {
           </button>
           <div className="text-xs text-muted-foreground text-center">
             {defaultPrinter ? (
-              <>Imprime en <span className="text-emerald-600 dark:text-emerald-400">{defaultPrinter.name}</span></>
+              <>Imprime en <span className="text-emerald-600 dark:text-emerald-400">{defaultPrinter.name}</span> ({defaultPrinter.ip})</>
             ) : (
-              <span className="text-red-500 dark:text-red-400">Sin impresora conectada</span>
+              <span className="text-red-500 dark:text-red-400">Sin impresora configurada</span>
             )}
           </div>
         </div>

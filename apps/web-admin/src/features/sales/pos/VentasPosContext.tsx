@@ -885,14 +885,14 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       for (const split of splits) {
         const result = await printingApi.printTicket({
           ip: printer.ip,
-          port: printer.port,
-          paperWidth: printer.paperWidth,
+          port: Number(printer.port) || 9100,
+          paperWidth: Number(printer.paperWidth) === 58 ? 58 : 80,
           ticketNumber: split.number,
           createdAt: split.createdAt,
           items: split.items.map(i => ({
             name: i.name,
-            quantity: i.qty,
-            unitPrice: i.price,
+            quantity: Math.max(1, Math.round(i.qty)),
+            unitPrice: Number(i.price) || 0,
           })),
           total: split.total,
           header: template.header,

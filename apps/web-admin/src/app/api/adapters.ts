@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
-  API_BASE_URL, getApiErrorMessage,
+  API_BASE_URL, getApiErrorMessage, isApiError,
 } from './client';
 import type {
   CheckoutPayload, ReturnPayload, ReturnItemsPayload, UpdateTicketItemsPayload,
@@ -187,44 +187,64 @@ export function useSalesApiAdapter() {
 
 // ==================== Printing Adapter ====================
 
+function isPrintingNetworkError(e: unknown): boolean {
+  if (e instanceof TypeError) return true;
+  if (isApiError(e) && (e.status === 0 || e.status >= 502)) return true;
+  return false;
+}
+
 export function usePrintingApiAdapter() {
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
-    isApiReachable().then(setApiAvailable);
+    let cancelled = false;
+    const probe = async () => {
+      const ok = await isApiReachable();
+      if (!cancelled) setApiAvailable(ok);
+    };
+    void probe();
+    const timer = window.setInterval(() => void probe(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const testPrinter = useCallback(async (payload: TestPrinterPayload) => {
-    if (!apiAvailable) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     try {
       const result = await printingApi.test(payload);
+      setApiAvailable(true);
       return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
     } catch (e) {
+      if (isPrintingNetworkError(e)) {
+        setApiAvailable(false);
+        return { ok: false, apiUnavailable: true, error: getApiErrorMessage(e, 'No se pudo probar la impresora') } as const;
+      }
       return {
         ok: false,
         apiUnavailable: false,
         error: getApiErrorMessage(e, 'No se pudo probar la impresora'),
       } as const;
     }
-  }, [apiAvailable]);
+  }, []);
 
   const printTicket = useCallback(async (payload: PrintTicketPayload) => {
-    if (!apiAvailable) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     try {
       const result = await printingApi.print(payload);
+      setApiAvailable(true);
       return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
     } catch (e) {
+      if (isPrintingNetworkError(e)) {
+        setApiAvailable(false);
+        return { ok: false, apiUnavailable: true, error: getApiErrorMessage(e, 'No se pudo imprimir') } as const;
+      }
       return {
         ok: false,
         apiUnavailable: false,
         error: getApiErrorMessage(e, 'No se pudo imprimir'),
       } as const;
     }
-  }, [apiAvailable]);
+  }, []);
 
   return { testPrinter, printTicket, apiAvailable };
 }
