@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY apps/web-admin/package*.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 COPY apps/web-admin ./
 ARG VITE_API_URL=http://localhost:3001
 ENV VITE_API_URL=$VITE_API_URL

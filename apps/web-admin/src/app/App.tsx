@@ -2,23 +2,34 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { ErrorBoundary } from '@/app/layout/ErrorBoundary';
-import { setAccessToken } from '@/app/api/client';
+import { authApi, setAccessToken } from '@/app/api/client';
 import { attachNumberInputScrollGuard } from '@/shared/utils/number-input-scroll';
 import { storageKeys } from '@/shared/storage/keys';
 import { LoginPage } from '@/features/platform/pages/LoginPage';
 import type { CurrentUser } from '@/features/platform/types';
 
-function readStoredSession(): CurrentUser | null {
+function readStoredSession(): { user: CurrentUser; token: string } | null {
   try {
     const token = localStorage.getItem(storageKeys.auth.accessToken);
     const rawUser = localStorage.getItem(storageKeys.auth.user);
     if (!token || !rawUser) return null;
     const user = JSON.parse(rawUser) as CurrentUser;
-    setAccessToken(token);
-    return user;
+    return { user, token };
   } catch {
     return null;
   }
+}
+
+function persistSession(user: CurrentUser, token: string) {
+  setAccessToken(token);
+  localStorage.setItem(storageKeys.auth.accessToken, token);
+  localStorage.setItem(storageKeys.auth.user, JSON.stringify(user));
+}
+
+function clearSession() {
+  setAccessToken(null);
+  localStorage.removeItem(storageKeys.auth.accessToken);
+  localStorage.removeItem(storageKeys.auth.user);
 }
 
 const AuthenticatedApp = lazy(() => import('@/app/AuthenticatedApp'));
@@ -32,31 +43,63 @@ function AppLoading() {
 }
 
 function AppShell() {
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => readStoredSession());
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [booting, setBooting] = useState(true);
+
+  const handleLogout = useCallback(() => {
+    clearSession();
+    setCurrentUser(null);
+  }, []);
 
   const handleLogin = useCallback((user: CurrentUser, token: string) => {
-    setAccessToken(token);
     try {
-      localStorage.setItem(storageKeys.auth.accessToken, token);
-      localStorage.setItem(storageKeys.auth.user, JSON.stringify(user));
+      persistSession(user, token);
     } catch {
-      // Si el almacenamiento falla, la sesión sigue activa en memoria.
+      setAccessToken(token);
     }
     setCurrentUser(user);
   }, []);
 
-  const handleLogout = useCallback(() => {
-    setAccessToken(null);
-    try {
-      localStorage.removeItem(storageKeys.auth.accessToken);
-      localStorage.removeItem(storageKeys.auth.user);
-    } catch {
-      // ignorar errores de almacenamiento
-    }
-    setCurrentUser(null);
-  }, []);
-
   useEffect(() => attachNumberInputScrollGuard(), []);
+
+  useEffect(() => {
+    const onInvalid = () => handleLogout();
+    window.addEventListener('auth:session-invalid', onInvalid);
+    return () => window.removeEventListener('auth:session-invalid', onInvalid);
+  }, [handleLogout]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function boot() {
+      const stored = readStoredSession();
+      if (!stored) {
+        if (!cancelled) setBooting(false);
+        return;
+      }
+
+      setAccessToken(stored.token);
+      try {
+        const res = await authApi.me();
+        const user: CurrentUser = {
+          id: res.user.id,
+          username: res.user.username,
+          role: res.user.role as CurrentUser['role'],
+        };
+        if (!cancelled) {
+          persistSession(user, stored.token);
+          setCurrentUser(user);
+        }
+      } catch {
+        if (!cancelled) handleLogout();
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+    }
+
+    void boot();
+    return () => { cancelled = true; };
+  }, [handleLogout]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -70,10 +113,12 @@ function AppShell() {
     return () => { void listener.then(l => l.remove()); };
   }, []);
 
+  if (booting) {
+    return <AppLoading />;
+  }
+
   if (!currentUser) {
-    return (
-      <LoginPage onLogin={handleLogin} />
-    );
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (

@@ -1,7 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
-import { initialUsers } from './types';
 import type { AppUser, CurrentUser } from './types';
 
 export function usePlatformState() {
@@ -19,10 +18,10 @@ export function usePlatformState() {
   );
   const [notificationSound, setNotificationSound] = useLocalStorage<boolean>(storageKeys.platform.notificationSound, true);
   const [currentUser, setCurrentUser] = useLocalStorage<CurrentUser>(storageKeys.inventory.currentUser, {
-    username: 'admin',
-    role: 'Admin',
+    username: '',
+    role: 'Vendedor',
   });
-  const [users, setUsers] = useLocalStorage<AppUser[]>(storageKeys.inventory.users, initialUsers);
+  const [users, setUsers] = useLocalStorage<AppUser[]>(storageKeys.inventory.users, []);
 
   const applyTheme = (value: boolean) => {
     const root = document.documentElement;

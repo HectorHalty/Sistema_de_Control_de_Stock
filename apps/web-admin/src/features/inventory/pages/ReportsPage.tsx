@@ -1,5 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
+import {
+  canAccessStockReportTab,
+  getDefaultStockReportTab,
+  type StockReportTab,
+} from '@/features/platform/config/modules';
 import { ClipboardCheck, AlertTriangle, Clock, Download, TrendingDown, TrendingUp, ArrowLeftRight, Search } from 'lucide-react';
 import { getUnitLabel } from '@/app/components/store';
 import type { StockMovementType, StockCountSession } from '@/app/components/store';
@@ -11,7 +16,7 @@ import { getStockAuditEntries } from '@/shared/utils/audit-log';
 import { AuditHistoryTable } from '@/shared/components/AuditHistoryTable';
 import { buildReconciliation, findPreviousSession, sortCountSessionsDesc } from '@/features/inventory/reconciliation';
 
-type ReportTab = 'control' | 'movimientos' | 'alertas' | 'historial';
+type ReportTab = StockReportTab;
 
 const LIVE_SESSION_ID = 'current';
 
@@ -53,6 +58,7 @@ export function ReportsPage() {
     getTotalStock,
     stockMovements,
     stockCountSessions,
+    currentUser,
   } = useAppContext();
 
   const stockAuditEntries = useMemo(
@@ -71,12 +77,16 @@ export function ReportsPage() {
     { id: 'movimientos', label: 'Movimientos', icon: ArrowLeftRight },
     { id: 'alertas', label: 'Alertas Semanales', icon: AlertTriangle },
     { id: 'historial', label: 'Historial', icon: Clock },
-  ];
+  ].filter(item => canAccessStockReportTab(currentUser.role, item.id));
 
   useEffect(() => {
-    const qpTab = searchParams.get('tab');
-    if (qpTab === 'alertas' || qpTab === 'historial' || qpTab === 'movimientos') setTab(qpTab);
-    else if (qpTab === 'control' || qpTab === 'consumo') setTab('control');
+    const qpTab = searchParams.get('tab') as ReportTab | null;
+    if (qpTab && canAccessStockReportTab(currentUser.role, qpTab)) {
+      setTab(qpTab);
+      return;
+    }
+    if (qpTab === 'control' || qpTab === 'consumo') setTab('control');
+    else setTab(getDefaultStockReportTab(currentUser.role));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

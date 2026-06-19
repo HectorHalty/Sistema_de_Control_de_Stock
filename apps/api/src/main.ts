@@ -81,20 +81,23 @@ async function bootstrap() {
     maxAge: isDev ? undefined : 86400, // 24h cache for preflight in prod
   });
 
-  // Swagger docs (dev only recommended)
-  const config = new DocumentBuilder()
-    .setTitle('LCH API — Sistema de Gestión')
-    .setDescription('Sistema de Gestión LCH — La Chacra Fútbol')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (isDev) {
+    const config = new DocumentBuilder()
+      .setTitle('LCH API — Sistema de Gestión')
+      .setDescription('Sistema de Gestión LCH — La Chacra Fútbol')
+      .setVersion('0.1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`API running on http://localhost:${port}`);
-  console.log(`Swagger docs at http://localhost:${port}/api/docs`);
+  if (isDev) {
+    console.log(`Swagger docs at http://localhost:${port}/api/docs`);
+  }
   if (!isDev) {
     console.log('Running in PRODUCTION mode with security hardening enabled');
   }

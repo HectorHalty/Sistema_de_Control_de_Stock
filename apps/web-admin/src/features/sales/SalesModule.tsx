@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { WifiOff } from 'lucide-react';
+import { useAppContext } from '@/app/providers/AppContext';
+import {
+  canAccessVentasTab,
+  getDefaultVentasTab,
+  type VentasTab,
+} from '@/features/platform/config/modules';
 import { VentasPosProvider, useVentasPos } from './pos/VentasPosContext';
 import { POSModule } from './pos/POSModule';
 import { ProductsModule } from './pos/ProductsModule';
@@ -9,15 +15,7 @@ import { ReturnsModule } from './pos/ReturnsModule';
 import { TablesModule } from './pos/TablesModule';
 import { InicioModule } from './pos/InicioModule';
 import { ReportesModule } from './pos/ReportesModule';
-
-type VentasTab =
-  | 'inicio'
-  | 'mostrador'
-  | 'pedidos'
-  | 'devoluciones'
-  | 'productos'
-  | 'mesas'
-  | 'reportes';
+import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlaceholderPage';
 
 const VALID_TABS: VentasTab[] = [
   'mostrador',
@@ -39,8 +37,12 @@ function resolveTab(tabParam: string | null): VentasTab {
 }
 
 function VentasPosShell() {
+  const { currentUser } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = resolveTab(searchParams.get('tab'));
+  const requestedTab = resolveTab(searchParams.get('tab'));
+  const tab = canAccessVentasTab(currentUser.role, requestedTab)
+    ? requestedTab
+    : getDefaultVentasTab(currentUser.role);
   const { apiOnline, toast, setToast } = useVentasPos();
 
   useEffect(() => {
@@ -50,8 +52,14 @@ function VentasPosShell() {
       sp.set('tab', 'reportes');
       sp.set('section', tabParam);
       setSearchParams(sp, { replace: true });
+      return;
     }
-  }, [searchParams, setSearchParams]);
+    if (tabParam !== tab) {
+      const sp = new URLSearchParams(searchParams);
+      sp.set('tab', tab);
+      setSearchParams(sp, { replace: true });
+    }
+  }, [searchParams, setSearchParams, tab]);
 
   useEffect(() => {
     if (!toast) return;
@@ -59,6 +67,16 @@ function VentasPosShell() {
     const t = setTimeout(() => setToast(null), duration);
     return () => clearTimeout(t);
   }, [toast, setToast]);
+
+  if (!canAccessVentasTab(currentUser.role, tab)) {
+    return (
+      <ModulePlaceholderPage
+        title="Ventas"
+        description="Tu perfil no tiene acceso a esta sección de ventas."
+        denied
+      />
+    );
+  }
 
   return (
     <div className="h-full min-h-[calc(100vh-12rem)]">

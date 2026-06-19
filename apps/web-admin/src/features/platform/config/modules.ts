@@ -1,9 +1,32 @@
 import type { CurrentUser } from '@/features/platform/types';
+import {
+  getAllowedModules,
+  type ModuleId,
+} from '@/features/platform/config/permissions';
 
-export type PlatformRole = 'SuperAdmin' | 'Gerente_Operaciones' | 'Encargado_Stock' | 'Encargado_Futbol';
-
-/** Identificador interno de módulo (rutas y permisos). */
-export type ModuleId = 'dashboard' | 'stock' | 'ventas' | 'online' | 'futbol';
+export type { ModuleId, PlatformRole, StockRoute, StockReportTab, VentasTab, VentasReportSection, SettingsTab } from '@/features/platform/config/permissions';
+export {
+  ASSIGNABLE_ROLES,
+  ROLE_LABELS,
+  normalizeRole,
+  canAccessModule,
+  canManageUsers,
+  canAccessStockRoute,
+  canAccessStockReportTab,
+  stockRouteFromPath,
+  canAccessVentasTab,
+  canAccessVentasReportSection,
+  getDefaultVentasTab,
+  getDefaultStockReportTab,
+  getDefaultVentasReportSection,
+  canAccessSettings,
+  canConfigurePrinters,
+  getSettingsTabs,
+  ventasSettingsPrintersOnly,
+  getRoleLabel,
+  canSeeStockMetrics,
+  canSeeStockHistory,
+} from '@/features/platform/config/permissions';
 
 export interface ModuleDefinition {
   id: ModuleId;
@@ -21,45 +44,11 @@ export const platformModules: ModuleDefinition[] = [
   { id: 'stock', label: 'Inventario', shortLabel: 'Inventario', route: '/stock', ready: true },
 ];
 
-const roleModules: Record<PlatformRole, ModuleId[]> = {
-  SuperAdmin: ['stock', 'ventas', 'online', 'futbol'],
-  Gerente_Operaciones: ['stock', 'ventas'],
-  Encargado_Stock: ['stock'],
-  Encargado_Futbol: ['futbol'],
-};
-
-const roleLabels: Record<PlatformRole, string> = {
-  SuperAdmin: 'Super Admin LCH',
-  Gerente_Operaciones: 'Gerente de Operaciones',
-  Encargado_Stock: 'Encargado de Inventario',
-  Encargado_Futbol: 'Encargado de Fútbol',
-};
-
-export function normalizeRole(role: CurrentUser['role']): PlatformRole {
-  if (role === 'SuperAdmin' || role === 'Gerente_Operaciones' || role === 'Encargado_Stock' || role === 'Encargado_Futbol') {
-    return role;
-  }
-  if (role === 'Admin') return 'SuperAdmin';
-  if (role === 'Operador') return 'Gerente_Operaciones';
-  if (role === 'Viewer') return 'Encargado_Stock';
-  return 'Encargado_Stock';
-}
-
-export function getAllowedModules(role: CurrentUser['role']): ModuleId[] {
-  return roleModules[normalizeRole(role)];
-}
-
-export function canAccessModule(role: CurrentUser['role'], moduleId: Exclude<ModuleId, 'dashboard'>): boolean {
-  return getAllowedModules(role).includes(moduleId);
-}
+export { getAllowedModules };
 
 export function isModuleReady(moduleId: ModuleId): boolean {
   const mod = platformModules.find(m => m.id === moduleId);
   return mod?.ready ?? false;
-}
-
-export function getRoleLabel(role: CurrentUser['role']): string {
-  return roleLabels[normalizeRole(role)];
 }
 
 export function getInitials(username: string): string {

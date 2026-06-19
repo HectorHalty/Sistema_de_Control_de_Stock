@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import { getStockAuditEntries } from '@/shared/utils/audit-log';
 import { useAppContext } from '@/app/providers/AppContext';
+import { canSeeStockHistory, canSeeStockMetrics } from '@/features/platform/config/modules';
 import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, UserMinus, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import logoIcon from '@/assets/logo-LCH.png';
@@ -8,7 +9,7 @@ import { getUnitLabel } from '@/app/components/store';
 import type { AuditEntry } from '@/app/components/store';
 
 export function DashboardPage() {
-  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, employeeConsumptionLogs } = useAppContext();
+  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, employeeConsumptionLogs, currentUser } = useAppContext();
 
   const stockAuditEntries = useMemo(
     () => getStockAuditEntries(auditLog, salesAuditLog),
@@ -54,14 +55,16 @@ export function DashboardPage() {
       sub: `${orders.length} totales`,
       to: '/pedidos?status=Pendiente',
     },
-    {
-      label: 'Alertas',
-      value: lowStockProducts.length,
-      icon: AlertTriangle,
-      color: lowStockProducts.length > 0 ? 'bg-red-600' : 'bg-green-600',
-      sub: lowStockProducts.length > 0 ? 'Stock bajo' : 'Todo ok',
-      to: '/reportes?tab=alertas',
-    },
+    ...(canSeeStockMetrics(currentUser.role)
+      ? [{
+          label: 'Alertas',
+          value: lowStockProducts.length,
+          icon: AlertTriangle,
+          color: lowStockProducts.length > 0 ? 'bg-red-600' : 'bg-green-600',
+          sub: lowStockProducts.length > 0 ? 'Stock bajo' : 'Todo ok',
+          to: '/reportes?tab=alertas',
+        }]
+      : []),
   ];
 
   return (
@@ -101,8 +104,9 @@ export function DashboardPage() {
         ))}
       </div>
 
+      {(canSeeStockMetrics(currentUser.role) || canSeeStockHistory(currentUser.role)) && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Low Stock Alerts */}
+        {canSeeStockMetrics(currentUser.role) && (
         <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle size={20} className="text-amber-600" />
@@ -131,8 +135,9 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
-        {/* Recent Activity */}
+        {canSeeStockHistory(currentUser.role) && (
         <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={20} className="text-[#3d7a3d]" />
@@ -158,7 +163,9 @@ export function DashboardPage() {
             {stockAuditEntries.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Sin actividad reciente</p>}
           </div>
         </div>
+        )}
       </div>
+      )}
 
       {/* Audit Detail Modal */}
       {selectedAudit && (

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { UsersModule } from './users/users.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './common/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -21,6 +22,7 @@ import { HealthController } from './common/health.controller';
     }),
     PrismaModule,
     AuthModule,
+    UsersModule,
     StockModule,
     SalesModule,
     KitchenModule,

@@ -30,12 +30,14 @@ import {
  * y EFICIENCIA (transacción única, createMany batch, límites de consulta).
  */
 
-const MUTATING_ROLES = ['Admin', 'SuperAdmin'] as const;
-const READ_ONLY_ROLES = ['Operador', 'Viewer'] as const;
-
-function canMutateStock(role: string): boolean {
-  return (MUTATING_ROLES as readonly string[]).includes(role);
-}
+import {
+  hasAnyRole,
+  normalizeApiRole,
+  STOCK_MUTATION_ROLES,
+  SALES_CATALOG_ROLES,
+  FOOTBALL_MUTATION_ROLES,
+  ONLINE_MUTATION_ROLES,
+} from '../../src/common/roles';
 
 function createStockService(state = createEmptyStockState()) {
   const prisma = createPrismaMock(state);
@@ -109,20 +111,30 @@ describe('Seguridad — validación DTO del módulo stock', () => {
 // ============================================================
 
 describe('Seguridad — matriz RBAC inventario', () => {
-  it('solo Admin/SuperAdmin pueden mutar catálogo y pedidos', () => {
-    for (const role of MUTATING_ROLES) {
-      expect(canMutateStock(role)).toBe(true);
-    }
-    for (const role of READ_ONLY_ROLES) {
-      expect(canMutateStock(role)).toBe(false);
-    }
+  it('Operador_Stock puede mutar inventario', () => {
+    expect(hasAnyRole('Operador_Stock', STOCK_MUTATION_ROLES)).toBe(true);
+    expect(hasAnyRole('Encargado_Stock', STOCK_MUTATION_ROLES)).toBe(true);
+    expect(hasAnyRole('SuperAdmin', STOCK_MUTATION_ROLES)).toBe(true);
   });
 
-  it('Operador puede registrar conteo pero no crear proveedor', () => {
-    const operadorCanCount = true; // POST count-sessions permite Operador
-    const operadorCanCreateSupplier = canMutateStock('Operador');
-    expect(operadorCanCount).toBe(true);
-    expect(operadorCanCreateSupplier).toBe(false);
+  it('Vendedor no puede mutar catálogo de inventario', () => {
+    expect(hasAnyRole('Vendedor', STOCK_MUTATION_ROLES)).toBe(false);
+    expect(hasAnyRole('Operador', STOCK_MUTATION_ROLES)).toBe(false);
+  });
+
+  it('Gerente_Ventas puede mutar catálogo de ventas', () => {
+    expect(hasAnyRole('Gerente_Ventas', SALES_CATALOG_ROLES)).toBe(true);
+    expect(hasAnyRole('Gerente_Operaciones', SALES_CATALOG_ROLES)).toBe(true);
+  });
+
+  it('Operador_Futbol y Operador_Cocina tienen permisos de panel', () => {
+    expect(hasAnyRole('Operador_Futbol', FOOTBALL_MUTATION_ROLES)).toBe(true);
+    expect(hasAnyRole('Operador_Cocina', ONLINE_MUTATION_ROLES)).toBe(true);
+  });
+
+  it('normaliza roles legacy en la API', () => {
+    expect(normalizeApiRole('Operador')).toBe('Vendedor');
+    expect(normalizeApiRole('Encargado_Stock')).toBe('Operador_Stock');
   });
 });
 

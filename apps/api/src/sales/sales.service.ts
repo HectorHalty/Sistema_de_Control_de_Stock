@@ -797,21 +797,27 @@ export class SalesService {
 
   // ============ Tickets ============
 
-  async findAllTickets(status?: string) {
+  async findAllTickets(status?: string, operatorId?: string) {
     return this.prisma.salesTicket.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        ...(status ? { status } : {}),
+        ...(operatorId ? { operatorId } : {}),
+      },
       include: { items: true, operator: { select: { username: true } } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
   }
 
-  async findTicketById(id: string) {
+  async findTicketById(id: string, operatorId?: string) {
     const ticket = await this.prisma.salesTicket.findUnique({
       where: { id },
       include: { items: true, kitchenOrders: true },
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    if (operatorId && ticket.operatorId !== operatorId) {
+      throw new NotFoundException(`Ticket ${id} not found`);
+    }
     return ticket;
   }
 

@@ -332,14 +332,28 @@ npm run test:public
 
 ```bash
 cp .env.production.example .env.production
-# Editar secretos (JWT_SECRET, POSTGRES_PASSWORD, ALLOWED_ORIGINS, VITE_API_URL)
+# Completar secretos y dominios
 
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# En VPS Linux:
+chmod +x deploy/*.sh
+./deploy/deploy.sh
+./deploy/seed-prod.sh   # una vez; cambiar admin123
+
+# HTTPS:
+sudo bash deploy/install-caddy.sh
+sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+
+# Backups (cron diario):
+# 0 3 * * * /opt/lch/deploy/backup-db.sh
 ```
 
-- Admin: `http://localhost:8080` (o `ADMIN_PORT`)
-- API: `http://localhost:3001`
-- Migraciones Prisma se aplican al arrancar el contenedor `api`.
+- Admin: `https://admin.tudominio.com` (Caddy → `:8080`)
+- API: `https://api.tudominio.com` (Caddy → `:3001`)
+- APK release: `npm run build:apk:release`
+- Test local Docker: `npm run test:deploy`
+
+Ver carpeta `deploy/` para scripts detallados.
 
 ## Known Limitations
 

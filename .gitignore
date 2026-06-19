@@ -39,4 +39,7 @@ Thumbs.db
 
 # Environment files (keep examples)
 .env
+.env.production
+.env.production.local
 !.env.example
+!.env.production.example

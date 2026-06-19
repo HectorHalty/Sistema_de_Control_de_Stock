@@ -36,10 +36,11 @@ async function main() {
   await prisma.user.upsert({
     where: { username: 'admin' },
     update: {
-      // Migrate existing placeholder users
       password: adminHash,
+      role: 'SuperAdmin',
+      name: 'Super Admin',
     },
-    create: { username: 'admin', name: 'Admin', role: 'Admin', password: adminHash },
+    create: { username: 'admin', name: 'Super Admin', role: 'SuperAdmin', password: adminHash },
   });
 
   console.log('Seed complete. Default admin password: admin123');

@@ -281,6 +281,7 @@ export function createPrismaMock(state: StockTestState) {
       delete: async ({ where }: { where: { id: string } }) => {
         const idx = state.warehouses.findIndex(w => w.id === where.id);
         if (idx < 0) throw new Error('not found');
+        state.stockLevels = state.stockLevels.filter(s => s.warehouseId !== where.id);
         const [removed] = state.warehouses.splice(idx, 1);
         return removed;
       },

@@ -3,8 +3,16 @@ export type UserRole =
   | 'Operador'
   | 'Viewer'
   | 'SuperAdmin'
+  | 'Operador_Stock'
+  | 'Vendedor'
+  | 'Gerente_Ventas'
+  | 'Operador_Futbol'
+  | 'Operador_Cocina'
+  /** @deprecated Usar Gerente_Ventas */
   | 'Gerente_Operaciones'
+  /** @deprecated Usar Operador_Stock */
   | 'Encargado_Stock'
+  /** @deprecated Usar Operador_Futbol */
   | 'Encargado_Futbol';
 
 export interface CurrentUser {

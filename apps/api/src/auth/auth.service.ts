@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../common/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { createFailedLoginEntry, createSuccessfulLoginEntry } from '../common/security-logger';
+import { isKnownRole, assertAssignableRole, MIN_PASSWORD_LENGTH } from '../common/roles';
 
 const SALT_ROUNDS = 10;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -55,6 +55,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!isKnownRole(user.role)) {
+      throw new UnauthorizedException('Account is not authorized');
+    }
+
     // Reset attempts on success
     loginAttempts.delete(username.toLowerCase());
 
@@ -69,18 +73,22 @@ export class AuthService {
    * Create a new user with hashed password.
    * Used by admin endpoints or seed scripts — NOT auto-provisioned on login.
    */
-  async createUser(username: string, password: string, name: string, role: string = 'Operador') {
+  async createUser(username: string, password: string, name: string, role: string = 'Vendedor') {
     const existing = await this.prisma.user.findUnique({ where: { username: username.toLowerCase() } });
     if (existing) {
       throw new BadRequestException(`User ${username} already exists`);
     }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
 
+    const normalizedRole = assertAssignableRole(role);
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
     return this.prisma.user.create({
       data: {
         username: username.toLowerCase(),
         name,
-        role,
+        role: normalizedRole,
         password: hashedPassword,
       },
       select: { id: true, username: true, name: true, role: true },
@@ -96,6 +104,10 @@ export class AuthService {
 
     const match = await bcrypt.compare(currentPassword, user.password);
     if (!match) throw new UnauthorizedException('Current password is incorrect');
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
 
     const hashedNew = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await this.prisma.user.update({

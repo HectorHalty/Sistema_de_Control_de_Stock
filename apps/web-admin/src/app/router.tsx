@@ -1,8 +1,15 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { createHashRouter, RouterProvider } from 'react-router';
+import { createHashRouter, Navigate, RouterProvider, useLocation } from 'react-router';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { AppContext } from '@/app/providers/AppContext';
-import { canAccessModule, type ModuleId } from '@/features/platform/config/modules';
+import {
+  canAccessModule,
+  canAccessSettings,
+  canAccessStockRoute,
+  getAllowedModules,
+  stockRouteFromPath,
+  type ModuleId,
+} from '@/features/platform/config/modules';
 import { ConsumptionPage } from '@/features/inventory/pages/ConsumptionPage';
 import { DashboardPage } from '@/features/inventory/pages/DashboardPage';
 import { OrdersPage } from '@/features/inventory/pages/OrdersPage';
@@ -33,8 +40,11 @@ function LayoutWrapper() {
   return <AppLayout onLogout={logout} />;
 }
 
-function StockGuard({ children }: { children: ReactNode }) {
+function StockRouteGuard({ children }: { children: ReactNode }) {
   const { currentUser } = useAppStateFromContext();
+  const { pathname } = useLocation();
+  const route = stockRouteFromPath(pathname);
+
   if (!canAccessModule(currentUser.role, 'stock')) {
     return (
       <ModulePlaceholderPage
@@ -44,6 +54,17 @@ function StockGuard({ children }: { children: ReactNode }) {
       />
     );
   }
+
+  if (route && !canAccessStockRoute(currentUser.role, route)) {
+    return (
+      <ModulePlaceholderPage
+        title="Inventario"
+        description="Tu perfil no tiene acceso a esta sección del inventario."
+        denied
+      />
+    );
+  }
+
   return <>{children}</>;
 }
 
@@ -53,6 +74,20 @@ function VentasGuard() {
     return <ModulePlaceholderPage title="Ventas" description="Tu perfil no tiene acceso al módulo de Ventas." denied />;
   }
   return <SalesModule />;
+}
+
+function SettingsGuard() {
+  const { currentUser } = useAppStateFromContext();
+  if (!canAccessSettings(currentUser.role)) {
+    return (
+      <ModulePlaceholderPage
+        title="Configuración"
+        description="Tu perfil no tiene acceso a la configuración del sistema."
+        denied
+      />
+    );
+  }
+  return <SettingsPage />;
 }
 
 function ComingSoonModuleGuard({
@@ -77,24 +112,40 @@ function FutbolGuard() {
   return <ComingSoonModuleGuard moduleId="futbol" title="Fútbol" />;
 }
 
+function DefaultLandingRedirect() {
+  const { currentUser } = useAppStateFromContext();
+  const allowed = getAllowedModules(currentUser.role);
+
+  if (allowed.length >= 2) {
+    return <PlatformDashboardPage />;
+  }
+
+  const first = allowed[0];
+  if (first === 'stock') return <Navigate to="/stock" replace />;
+  if (first === 'ventas') return <Navigate to="/ventas" replace />;
+  if (first === 'online') return <Navigate to="/online" replace />;
+  if (first === 'futbol') return <Navigate to="/futbol" replace />;
+  return <PlatformDashboardPage />;
+}
+
 const router = createHashRouter([
   {
     path: '/',
     Component: LayoutWrapper,
     children: [
-      { index: true, Component: PlatformDashboardPage },
-      { path: 'stock', Component: () => <StockGuard><DashboardPage /></StockGuard> },
+      { index: true, Component: DefaultLandingRedirect },
+      { path: 'stock', Component: () => <StockRouteGuard><DashboardPage /></StockRouteGuard> },
       { path: 'ventas', Component: VentasGuard },
       { path: 'online', Component: OnlineGuard },
       { path: 'futbol', Component: FutbolGuard },
-      { path: 'productos', Component: () => <StockGuard><ProductsPage /></StockGuard> },
-      { path: 'almacenes', Component: () => <StockGuard><WarehousesPage /></StockGuard> },
-      { path: 'pedidos', Component: () => <StockGuard><OrdersPage /></StockGuard> },
-      { path: 'proveedores', Component: () => <StockGuard><SuppliersPage /></StockGuard> },
-      { path: 'consumo', Component: () => <StockGuard><ConsumptionPage /></StockGuard> },
-      { path: 'registrar-consumo', Component: () => <StockGuard><RegisterConsumptionPage /></StockGuard> },
-      { path: 'reportes', Component: () => <StockGuard><ReportsPage /></StockGuard> },
-      { path: 'configuracion', Component: SettingsPage },
+      { path: 'productos', Component: () => <StockRouteGuard><ProductsPage /></StockRouteGuard> },
+      { path: 'almacenes', Component: () => <StockRouteGuard><WarehousesPage /></StockRouteGuard> },
+      { path: 'pedidos', Component: () => <StockRouteGuard><OrdersPage /></StockRouteGuard> },
+      { path: 'proveedores', Component: () => <StockRouteGuard><SuppliersPage /></StockRouteGuard> },
+      { path: 'consumo', Component: () => <StockRouteGuard><ConsumptionPage /></StockRouteGuard> },
+      { path: 'registrar-consumo', Component: () => <StockRouteGuard><RegisterConsumptionPage /></StockRouteGuard> },
+      { path: 'reportes', Component: () => <StockRouteGuard><ReportsPage /></StockRouteGuard> },
+      { path: 'configuracion', Component: SettingsGuard },
     ],
   },
 ]);

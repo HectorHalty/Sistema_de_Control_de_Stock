@@ -20,7 +20,21 @@ import {
 import { useAppContext } from '@/app/providers/AppContext';
 import logoFull from '@/assets/baner-chacra.png';
 import logoIcon from '@/assets/logo-LCH.png';
-import { canAccessModule, getBottomNavModules, getInitials, getRoleLabel, getSidebarModules, shouldShowBottomNavigation, type ModuleId } from '@/features/platform/config/modules';
+import type { CurrentUser } from '@/features/platform/types';
+import {
+  canAccessModule,
+  canAccessSettings,
+  canAccessStockRoute,
+  canAccessVentasTab,
+  getBottomNavModules,
+  getInitials,
+  getRoleLabel,
+  getSidebarModules,
+  shouldShowBottomNavigation,
+  type ModuleId,
+  type StockRoute,
+  type VentasTab,
+} from '@/features/platform/config/modules';
 import { NotificationsMenu } from '@/features/platform/components/NotificationsMenu';
 
 interface AppLayoutProps {
@@ -55,23 +69,32 @@ interface ContextNavItem {
   icon: ComponentType<{ size?: number; className?: string }>;
 }
 
-function buildContextNavItems(pathname: string, search: string, activeModule: ModuleId): ContextNavItem[] {
+function buildContextNavItems(
+  pathname: string,
+  search: string,
+  activeModule: ModuleId,
+  role: CurrentUser['role'],
+): ContextNavItem[] {
   if (activeModule === 'stock') {
-    const stockRoutes = [
-      { label: 'Inicio', to: '/stock', icon: Home },
-      { label: 'Productos', to: '/productos', icon: Package },
-      { label: 'Almacenes', to: '/almacenes', icon: Warehouse },
-      { label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
-      { label: 'Proveedores', to: '/proveedores', icon: Users },
-      { label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
-      { label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
-      { label: 'Reportes', to: '/reportes', icon: BarChart3 },
+    const stockRoutes: { route: StockRoute; label: string; to: string; icon: ContextNavItem['icon'] }[] = [
+      { route: 'inicio', label: 'Inicio', to: '/stock', icon: Home },
+      { route: 'productos', label: 'Productos', to: '/productos', icon: Package },
+      { route: 'almacenes', label: 'Almacenes', to: '/almacenes', icon: Warehouse },
+      { route: 'pedidos', label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
+      { route: 'proveedores', label: 'Proveedores', to: '/proveedores', icon: Users },
+      { route: 'consumo', label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
+      { route: 'registrar-consumo', label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
+      { route: 'reportes', label: 'Reportes', to: '/reportes', icon: BarChart3 },
     ];
 
-    return stockRoutes.map(item => ({
-      ...item,
-      active: pathname === item.to,
-    }));
+    return stockRoutes
+      .filter(item => canAccessStockRoute(role, item.route))
+      .map(item => ({
+        label: item.label,
+        to: item.to,
+        active: pathname === item.to,
+        icon: item.icon,
+      }));
   }
 
   const currentTab = new URLSearchParams(search).get('tab') || '';
@@ -81,19 +104,21 @@ function buildContextNavItems(pathname: string, search: string, activeModule: Mo
     const normalizedTab =
       selectedTab === 'metricas' || selectedTab === 'historial' ? 'reportes' : selectedTab;
     return [
-      { key: 'inicio', label: 'Inicio', icon: Home },
-      { key: 'mostrador', label: 'Mostrador', icon: CircleDollarSign },
-      { key: 'pedidos', label: 'Mis Pedidos', icon: ShoppingCart },
-      { key: 'devoluciones', label: 'Devoluciones', icon: RotateCcw },
-      { key: 'productos', label: 'Productos', icon: Package },
-      { key: 'mesas', label: 'Mesas', icon: Warehouse },
-      { key: 'reportes', label: 'Reportes', icon: BarChart3 },
-    ].map(item => ({
-      label: item.label,
-      to: item.key === 'reportes' ? '/ventas?tab=reportes&section=ventas' : `/ventas?tab=${item.key}`,
-      active: pathname.startsWith('/ventas') && normalizedTab === item.key,
-      icon: item.icon,
-    }));
+      { key: 'inicio' as VentasTab, label: 'Inicio', icon: Home },
+      { key: 'mostrador' as VentasTab, label: 'Mostrador', icon: CircleDollarSign },
+      { key: 'pedidos' as VentasTab, label: 'Mis Pedidos', icon: ShoppingCart },
+      { key: 'devoluciones' as VentasTab, label: 'Devoluciones', icon: RotateCcw },
+      { key: 'productos' as VentasTab, label: 'Productos', icon: Package },
+      { key: 'mesas' as VentasTab, label: 'Mesas', icon: Warehouse },
+      { key: 'reportes' as VentasTab, label: 'Reportes', icon: BarChart3 },
+    ]
+      .filter(item => canAccessVentasTab(role, item.key))
+      .map(item => ({
+        label: item.label,
+        to: item.key === 'reportes' ? '/ventas?tab=reportes&section=ventas' : `/ventas?tab=${item.key}`,
+        active: pathname.startsWith('/ventas') && normalizedTab === item.key,
+        icon: item.icon,
+      }));
   }
 
   return [];
@@ -130,7 +155,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const activeModule = getActiveModule(location.pathname);
   const topbarTitle = getTopbarTitle(location.pathname);
   const showBottomNavigation = shouldShowBottomNavigation(currentUser.role);
-  const contextNavItems = buildContextNavItems(location.pathname, location.search, activeModule);
+  const contextNavItems = buildContextNavItems(location.pathname, location.search, activeModule, currentUser.role);
+  const showSettingsLink = canAccessSettings(currentUser.role);
 
   const sidebarModules = useMemo(() => getSidebarModules(currentUser.role), [currentUser.role]);
   const bottomNavModules = useMemo(() => getBottomNavModules(currentUser.role), [currentUser.role]);
@@ -245,14 +271,16 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         </nav>
 
         <div className="space-y-1 border-t border-border p-3">
-          <NavLink
-            to="/configuracion"
-            onClick={() => setDrawerOpen(false)}
-            className={sidebarItemClass(collapsed, 'text-foreground hover:bg-muted')}
-          >
-            <Settings size={24} />
-            {!collapsed && <span>Configuracion</span>}
-          </NavLink>
+          {showSettingsLink && (
+            <NavLink
+              to="/configuracion"
+              onClick={() => setDrawerOpen(false)}
+              className={sidebarItemClass(collapsed, 'text-foreground hover:bg-muted')}
+            >
+              <Settings size={24} />
+              {!collapsed && <span>Configuracion</span>}
+            </NavLink>
+          )}
 
           <button
             onClick={onLogout}

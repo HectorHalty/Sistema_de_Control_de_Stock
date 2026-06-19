@@ -1,7 +1,10 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SecurityLogger } from '../common/security-logger';
 import { Request } from 'express';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser, type AuthUser } from '../common/decorators/current-user.decorator';
+import { ChangePasswordDto } from '../users/dto';
 
 @Controller('auth')
 export class AuthController {
@@ -22,5 +25,18 @@ export class AuthController {
       this.securityLogger.failedLogin(body.username, ip);
       throw error;
     }
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@CurrentUser() user: AuthUser) {
+    return { user };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: AuthUser) {
+    await this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
   }
 }

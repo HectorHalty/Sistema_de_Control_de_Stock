@@ -127,6 +127,9 @@ async function apiFetch<T>(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: response.statusText })) as ApiErrorBody;
     const message = formatApiErrorMessage(response.status, error);
+    if (response.status === 401 || response.status === 403) {
+      window.dispatchEvent(new CustomEvent('auth:session-invalid', { detail: { status: response.status } }));
+    }
     throw new ApiError(response.status, message, error);
   }
 
@@ -181,6 +184,31 @@ export const authApi = {
       '/auth/login',
       { method: 'POST', body: { username, password } },
     ),
+  me: () =>
+    apiFetch<{ user: { id: string; username: string; role: string } }>('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiFetch<void>('/auth/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    }),
+};
+
+export interface ApiUser {
+  id: string;
+  username: string;
+  name: string;
+  role: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const usersApi = {
+  list: () => apiFetch<ApiUser[]>('/users'),
+  create: (data: { username: string; password: string; name: string; role: string }) =>
+    apiFetch<ApiUser>('/users', { method: 'POST', body: data }),
+  update: (id: string, data: { name: string; role: string }) =>
+    apiFetch<ApiUser>(`/users/${id}`, { method: 'PUT', body: data }),
+  remove: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
 };
 
 /**

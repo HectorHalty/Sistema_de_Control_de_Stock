@@ -1,0 +1,30 @@
+# Copiar a /etc/caddy/Caddyfile en el VPS y reemplazar dominios.
+#   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Requiere registros DNS A apuntando al IP del servidor.
+
+admin.lachacra.com {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+api.lachacra.com {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:3001
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+	}
+
+	# Bloquear Swagger en producción (por si la API lo expone)
+	@swagger path /api/docs*
+	respond @swagger 404
+}
