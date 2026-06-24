@@ -78,7 +78,7 @@ export function TicketPreview({
       {pickupStation && (
         <div className="flex justify-between">
           <span>Retirar en</span>
-          <span className="uppercase">{pickupStation}</span>
+          <span className="uppercase font-bold">{pickupStation}</span>
         </div>
       )}
 

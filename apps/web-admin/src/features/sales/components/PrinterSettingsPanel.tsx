@@ -8,6 +8,7 @@ import {
 import { useAppContext } from '@/app/providers/AppContext';
 import { usePrintingApiAdapter } from '@/app/api/adapters';
 import { buildTestTicketPayload } from '@/features/sales/lib/test-ticket';
+import { isNativeLanPrinting } from '@/features/sales/lib/native-printer';
 import { PrinterCard } from '@/features/sales/components/PrinterCard';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
 import { TicketPreview } from '@/features/sales/pos/TicketPreview';
@@ -71,15 +72,18 @@ export function PrinterSettingsPanel() {
   const [testError, setTestError] = useState<string | null>(null);
   const [testInfo, setTestInfo] = useState<string | null>(null);
 
-  const refreshStatus = async (printer: SalesPrinter) => {
-    if (!printingApi.apiAvailable) return;
+  const refreshStatus = async (printer: SalesPrinter, force = false) => {
+    if (!printingApi.apiAvailable && !isNativeLanPrinting()) return;
     if (!isValidIpv4(printer.ip) || printer.port < 1 || printer.port > 65535) {
       updatePrinter(printer.id, { connected: false });
       return;
     }
     setCheckingIds(prev => new Set(prev).add(printer.id));
     try {
-      const result = await printingApi.testPrinter({ ip: printer.ip, port: printer.port });
+      const result = await printingApi.testPrinter(
+        { ip: printer.ip, port: printer.port },
+        force,
+      );
       updatePrinter(printer.id, { connected: result.ok });
     } finally {
       setCheckingIds(prev => {
@@ -91,16 +95,16 @@ export function PrinterSettingsPanel() {
   };
 
   useEffect(() => {
-    if (!printingApi.apiAvailable) return;
+    if ((!printingApi.apiAvailable && !isNativeLanPrinting()) || salesPrinters.length === 0) return;
     let cancelled = false;
-    (async () => {
-      for (const p of salesPrinters) {
-        if (cancelled) break;
-        await refreshStatus(p);
-      }
-    })();
+    const timer = window.setTimeout(() => {
+      void Promise.all(
+        salesPrinters.map(p => (cancelled ? Promise.resolve() : refreshStatus(p))),
+      );
+    }, 400);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [salesPrinters.map(p => `${p.id}:${p.ip}:${p.port}`).join('|'), printingApi.apiAvailable]);
@@ -110,7 +114,7 @@ export function PrinterSettingsPanel() {
     setExpandedId(willExpand ? id : null);
     if (willExpand) {
       const printer = salesPrinters.find(p => p.id === id);
-      if (printer) void refreshStatus(printer);
+      if (printer) void refreshStatus(printer, true);
     }
   };
 

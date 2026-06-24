@@ -109,3 +109,75 @@ export class PrintTicketDto {
   @IsBoolean()
   showLogo?: boolean;
 }
+
+/** Mismo payload que PrintTicketDto pero sin destino TCP (solo genera bytes ESC/POS). */
+export class RenderTicketDto {
+  @IsIn([58, 80])
+  paperWidth: 58 | 80;
+
+  @IsInt()
+  ticketNumber: number;
+
+  @IsString()
+  createdAt: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PrintItemDto)
+  items: PrintItemDto[];
+
+  @IsNumber()
+  total: number;
+
+  @IsOptional()
+  @IsString()
+  header?: string;
+
+  @IsOptional()
+  @IsString()
+  subheader?: string;
+
+  @IsOptional()
+  @IsString()
+  footer?: string;
+
+  @IsOptional()
+  @IsString()
+  operatorName?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  context?: string;
+
+  @IsOptional()
+  @IsString()
+  pickupStation?: string;
+
+  @IsOptional()
+  @IsIn(['venta', 'devolucion'])
+  kind?: 'venta' | 'devolucion';
+
+  @IsOptional()
+  @IsBoolean()
+  showDate?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showOperator?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showItemDetails?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showLogo?: boolean;
+}

@@ -170,7 +170,7 @@ export function buildTicketBuffer(opts: BuildTicketOptions): Buffer {
     b.line(`Origen: ${origen}`);
   }
   if (opts.pickupStation) {
-    b.line(`Retirar en: ${opts.pickupStation}`);
+    b.text('Retirar en: ').bold(true).text(opts.pickupStation).bold(false).raw(0x0a);
   }
   if (opts.source || opts.pickupStation) {
     b.line(divider);

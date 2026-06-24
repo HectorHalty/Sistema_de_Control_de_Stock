@@ -16,6 +16,15 @@ import type {
   PresignPayload, ConfirmMediaPayload,
   TestPrinterPayload, PrintTicketPayload,
 } from './client';
+import {
+  getCachedPrinterTest,
+  setCachedPrinterTest,
+} from '@/features/sales/lib/printer-test-cache';
+import {
+  isNativeLanPrinting,
+  nativePingPrinter,
+  nativePrintEscPos,
+} from '@/features/sales/lib/native-printer';
 
 /**
  * Check if the API is reachable (result cached briefly to avoid duplicate health probes).
@@ -210,25 +219,82 @@ export function usePrintingApiAdapter() {
     };
   }, []);
 
-  const testPrinter = useCallback(async (payload: TestPrinterPayload) => {
+  const testPrinter = useCallback(async (payload: TestPrinterPayload, force = false) => {
+    if (!force) {
+      const cached = getCachedPrinterTest(payload);
+      if (cached) return cached;
+    }
+
+    if (isNativeLanPrinting()) {
+      const native = await nativePingPrinter(payload.ip, payload.port);
+      const outcome = {
+        ok: native.ok,
+        apiUnavailable: false,
+        error: native.ok ? undefined : native.error,
+      } as const;
+      setCachedPrinterTest(payload, outcome);
+      return outcome;
+    }
+
     try {
       const result = await printingApi.test(payload);
       setApiAvailable(true);
-      return { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+      const outcome = { ok: result.ok, apiUnavailable: false, error: result.error } as const;
+      setCachedPrinterTest(payload, outcome);
+      return outcome;
     } catch (e) {
       if (isPrintingNetworkError(e)) {
         setApiAvailable(false);
-        return { ok: false, apiUnavailable: true, error: getApiErrorMessage(e, 'No se pudo probar la impresora') } as const;
+        const outcome = {
+          ok: false,
+          apiUnavailable: true,
+          error: getApiErrorMessage(e, 'No se pudo probar la impresora'),
+        } as const;
+        setCachedPrinterTest(payload, outcome);
+        return outcome;
       }
-      return {
+      const outcome = {
         ok: false,
         apiUnavailable: false,
         error: getApiErrorMessage(e, 'No se pudo probar la impresora'),
       } as const;
+      setCachedPrinterTest(payload, outcome);
+      return outcome;
     }
   }, []);
 
   const printTicket = useCallback(async (payload: PrintTicketPayload) => {
+    if (isNativeLanPrinting()) {
+      const { ip, port, ...renderPayload } = payload;
+      try {
+        const rendered = await printingApi.render(renderPayload);
+        if (!rendered.ok || !rendered.data) {
+          return {
+            ok: false,
+            apiUnavailable: false,
+            error: rendered.error || 'No se pudo generar el ticket',
+          } as const;
+        }
+        setApiAvailable(true);
+        const native = await nativePrintEscPos(ip, port, rendered.data);
+        return {
+          ok: native.ok,
+          apiUnavailable: false,
+          error: native.ok ? undefined : native.error,
+        } as const;
+      } catch (e) {
+        if (isPrintingNetworkError(e)) {
+          setApiAvailable(false);
+          return { ok: false, apiUnavailable: true, error: getApiErrorMessage(e, 'No se pudo imprimir') } as const;
+        }
+        return {
+          ok: false,
+          apiUnavailable: false,
+          error: getApiErrorMessage(e, 'No se pudo imprimir'),
+        } as const;
+      }
+    }
+
     try {
       const result = await printingApi.print(payload);
       setApiAvailable(true);

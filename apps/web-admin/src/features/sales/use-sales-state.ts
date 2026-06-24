@@ -4,6 +4,7 @@ import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
 import { salesApi } from '@/app/api/client';
 import { isApiReachable } from '@/app/api/adapters';
+import { invalidatePrinterTestCache } from '@/features/sales/lib/printer-test-cache';
 import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal, normalizeSalesProduct } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
 import { initialKitchens, initialSalesProducts, initialTables } from './seeds';
@@ -371,9 +372,16 @@ export function useSalesState() {
   }, [setSalesPrinters]);
 
   const updatePrinter = useCallback((id: string, patch: Partial<SalesPrinter>) => {
-    setSalesPrinters(prev =>
-      prev.map(p => (p.id === id ? { ...p, ...patch } : p)),
-    );
+    setSalesPrinters(prev => {
+      const current = prev.find(p => p.id === id);
+      if (current && (patch.ip != null || patch.port != null)) {
+        invalidatePrinterTestCache(current.ip, current.port);
+        if (patch.ip != null || patch.port != null) {
+          invalidatePrinterTestCache(patch.ip ?? current.ip, patch.port ?? current.port);
+        }
+      }
+      return prev.map(p => (p.id === id ? { ...p, ...patch } : p));
+    });
   }, [setSalesPrinters]);
 
   const removePrinter = useCallback((id: string) => {

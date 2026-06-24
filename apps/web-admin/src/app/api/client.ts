@@ -409,6 +409,8 @@ export const salesApi = {
 export const printingApi = {
   test: (data: TestPrinterPayload) =>
     apiFetch<PrintResult>('/printing/test', { method: 'POST', body: data }),
+  render: (data: RenderTicketPayload) =>
+    apiFetch<RenderTicketResult>('/printing/render', { method: 'POST', body: data }),
   print: (data: PrintTicketPayload) =>
     apiFetch<PrintResult>('/printing/print', { method: 'POST', body: data }),
 };
@@ -861,6 +863,14 @@ export interface PrintTicketPayload {
 
 export interface PrintResult {
   ok: boolean;
+  error?: string;
+}
+
+export type RenderTicketPayload = Omit<PrintTicketPayload, 'ip' | 'port'>;
+
+export interface RenderTicketResult {
+  ok: boolean;
+  data?: string;
   error?: string;
 }
 

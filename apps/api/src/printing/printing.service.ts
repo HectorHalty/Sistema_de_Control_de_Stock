@@ -2,12 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'net';
 import { buildTicketBuffer } from './escpos';
 import { getLogoRaster } from './logo';
-import { PrintTicketDto, TestPrinterDto } from './dto';
+import { PrintTicketDto, RenderTicketDto, TestPrinterDto } from './dto';
 
-const CONNECT_TIMEOUT_MS = 4000;
+const TEST_CONNECT_TIMEOUT_MS = 1200;
+const PRINT_CONNECT_TIMEOUT_MS = 5000;
 
 export interface PrintResult {
   ok: boolean;
+  error?: string;
+}
+
+export interface RenderResult {
+  ok: boolean;
+  data?: string;
   error?: string;
 }
 
@@ -20,7 +27,39 @@ export class PrintingService {
    * Sends no data — used by the "Probar conexión" button.
    */
   testConnection(dto: TestPrinterDto): Promise<PrintResult> {
-    return this.withSocket(dto.ip, dto.port, () => Buffer.alloc(0), true);
+    return this.withSocket(dto.ip, dto.port, () => Buffer.alloc(0), true, TEST_CONNECT_TIMEOUT_MS);
+  }
+
+  /** Builds ESC/POS bytes (base64) for client-side printing on LAN (APK). */
+  async renderTicket(dto: RenderTicketDto): Promise<RenderResult> {
+    try {
+      const logoRaster = dto.showLogo ? await getLogoRaster(dto.paperWidth) : null;
+      const buffer = buildTicketBuffer({
+        paperWidth: dto.paperWidth,
+        header: dto.header,
+        subheader: dto.subheader,
+        footer: dto.footer,
+        showDate: dto.showDate,
+        showOperator: dto.showOperator,
+        showItemDetails: dto.showItemDetails,
+        ticketNumber: dto.ticketNumber,
+        createdAt: dto.createdAt,
+        operatorName: dto.operatorName,
+        items: dto.items,
+        total: dto.total,
+        note: dto.note,
+        source: dto.source,
+        context: dto.context,
+        pickupStation: dto.pickupStation,
+        kind: dto.kind,
+        logoRaster,
+      });
+      return { ok: true, data: buffer.toString('base64') };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo generar el ticket';
+      this.logger.warn(`renderTicket failed: ${message}`);
+      return { ok: false, error: message };
+    }
   }
 
   /** Formats the ticket as ESC/POS and streams it to the printer over TCP. */
@@ -46,7 +85,7 @@ export class PrintingService {
       kind: dto.kind,
       logoRaster,
     });
-    return this.withSocket(dto.ip, dto.port, () => buffer, false);
+    return this.withSocket(dto.ip, dto.port, () => buffer, false, PRINT_CONNECT_TIMEOUT_MS);
   }
 
   /**
@@ -58,6 +97,7 @@ export class PrintingService {
     port: number,
     getPayload: () => Buffer,
     testOnly: boolean,
+    timeoutMs: number,
   ): Promise<PrintResult> {
     return new Promise<PrintResult>((resolve) => {
       const socket = new Socket();
@@ -70,7 +110,8 @@ export class PrintingService {
         resolve(result);
       };
 
-      socket.setTimeout(CONNECT_TIMEOUT_MS);
+      socket.setNoDelay(true);
+      socket.setTimeout(timeoutMs);
 
       socket.on('timeout', () => {
         finish({ ok: false, error: `Tiempo de espera agotado conectando a ${ip}:${port}` });

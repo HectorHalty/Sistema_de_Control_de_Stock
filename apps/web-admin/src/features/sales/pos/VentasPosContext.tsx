@@ -25,6 +25,7 @@ import { createKitchenOrdersFromTicket } from '@/features/kitchen/domain';
 import { isLocalOnlyTicketId } from '../sales-metrics';
 import { buildTestTicketPayload } from '../lib/test-ticket';
 import { splitTicketByStation } from '../lib/split-ticket-by-station';
+import { isNativeLanPrinting } from '../lib/native-printer';
 import { mapApiTicketToLocal } from '../api/sales-mappers';
 import type { Kitchen, Product as StoreProduct, SalesHistoryEntry, SalesProduct, SalesTicket } from '@/app/components/store';
 import type { SalesPrinter, TicketTemplate } from '@/features/sales/types';
@@ -111,6 +112,7 @@ type VentasPosStore = {
   togglePrinter: (id: string) => void;
   testPrinter: (
     printer: Printer,
+    force?: boolean,
   ) => Promise<{ ok: boolean; error?: string; apiUnavailable?: boolean }>;
   printTestTicket: (
     printer: Printer,
@@ -819,8 +821,11 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const testPrinter = useCallback<VentasPosStore['testPrinter']>(
-    async printer => {
-      const result = await printingApi.testPrinter({ ip: printer.ip, port: printer.port });
+    async (printer, force = false) => {
+      const result = await printingApi.testPrinter(
+        { ip: printer.ip, port: printer.port },
+        force,
+      );
       return result;
     },
     [printingApi],
@@ -834,47 +839,50 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
   );
 
   const printerFingerprint = ctx.salesPrinters
-    .map(p => `${p.id}:${p.ip}:${p.port}`)
+    .map(p => `${p.id}:${p.ip}:${p.port}:${p.isDefault}`)
     .join('|');
   const printerConnectedRef = useRef<Map<string, boolean>>(new Map());
   const printerMonitorReadyRef = useRef(false);
 
   useEffect(() => {
-    if (printingApi.apiAvailable !== true || ctx.salesPrinters.length === 0) return;
+    if (ctx.salesPrinters.length === 0) return;
 
-    const printers = ctx.salesPrinters;
+    if (printingApi.apiAvailable !== true && !isNativeLanPrinting()) return;
+
+    const defaultPrinter =
+      ctx.salesPrinters.find(p => p.isDefault) || ctx.salesPrinters[0];
+    if (!defaultPrinter) return;
+
     printerMonitorReadyRef.current = false;
-    for (const printer of printers) {
-      if (!printerConnectedRef.current.has(printer.id)) {
-        printerConnectedRef.current.set(printer.id, printer.connected);
-      }
+    if (!printerConnectedRef.current.has(defaultPrinter.id)) {
+      printerConnectedRef.current.set(defaultPrinter.id, defaultPrinter.connected);
     }
 
-    const checkPrinters = async () => {
-      for (const printer of printers) {
-        const prevConnected = printerConnectedRef.current.has(printer.id)
-          ? printerConnectedRef.current.get(printer.id)!
-          : printer.connected;
+    const checkDefaultPrinter = async () => {
+      if (document.visibilityState === 'hidden') return;
 
-        const result = await testPrinter(printer);
-        const connected = result.ok;
-        ctx.updatePrinter(printer.id, { connected });
+      const prevConnected = printerConnectedRef.current.has(defaultPrinter.id)
+        ? printerConnectedRef.current.get(defaultPrinter.id)!
+        : defaultPrinter.connected;
 
-        if (printerMonitorReadyRef.current && prevConnected && !connected) {
-          const label = printer.isDefault
-            ? `La impresora predeterminada "${printer.name}" se desconectó`
-            : `La impresora "${printer.name}" se desconectó`;
-          setToast(`⚠️ ${label}`);
-        }
+      const result = await testPrinter(defaultPrinter);
+      const connected = result.ok;
+      ctx.updatePrinter(defaultPrinter.id, { connected });
 
-        printerConnectedRef.current.set(printer.id, connected);
+      if (printerMonitorReadyRef.current && prevConnected && !connected) {
+        setToast(`⚠️ La impresora predeterminada "${defaultPrinter.name}" se desconectó`);
       }
+
+      printerConnectedRef.current.set(defaultPrinter.id, connected);
       printerMonitorReadyRef.current = true;
     };
 
-    void checkPrinters();
-    const timer = window.setInterval(() => void checkPrinters(), 30_000);
-    return () => window.clearInterval(timer);
+    const initialTimer = window.setTimeout(() => void checkDefaultPrinter(), 2500);
+    const timer = window.setInterval(() => void checkDefaultPrinter(), 60_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [printingApi.apiAvailable, printerFingerprint, testPrinter, ctx.updatePrinter, setToast]);
 
   const printToPrinter = useCallback<VentasPosStore['printToPrinter']>(
