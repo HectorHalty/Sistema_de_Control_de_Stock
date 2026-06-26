@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { ErrorBoundary } from '@/app/layout/ErrorBoundary';
-import { authApi, setAccessToken } from '@/app/api/client';
+import { authApi, isApiError, setAccessToken } from '@/app/api/client';
 import { attachNumberInputScrollGuard } from '@/shared/utils/number-input-scroll';
 import { storageKeys } from '@/shared/storage/keys';
 import { LoginPage } from '@/features/platform/pages/LoginPage';
@@ -90,8 +90,15 @@ function AppShell() {
           persistSession(user, stored.token);
           setCurrentUser(user);
         }
-      } catch {
-        if (!cancelled) handleLogout();
+      } catch (e) {
+        if (!cancelled) {
+          // 401 = token inválido. 429/red transitoria: mantener sesión local (no mandar al login).
+          if (isApiError(e) && e.status === 401) {
+            handleLogout();
+          } else {
+            setCurrentUser(stored.user);
+          }
+        }
       } finally {
         if (!cancelled) setBooting(false);
       }

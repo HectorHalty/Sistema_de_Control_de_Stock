@@ -33,22 +33,24 @@ async function bootstrap() {
     }),
   );
 
-  // Rate limiting - auth endpoints (stricter)
+  // Login brute-force protection only — NOT /auth/me (runs on every SPA reload).
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 20, // 20 login attempts per window
     message: { message: 'Too many login attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
   });
 
-  // Rate limiting - general API (skip health checks used by the panel on every load)
+  // SPA boot hydrates ~12 GET endpoints per reload; 100/15min blocked normal use.
   const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 1000,
     message: { message: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
     skip: (req) => req.path === '/health',
   });
 
@@ -56,10 +58,10 @@ async function bootstrap() {
   if (isDev) {
     (authLimiter as any).windowMs = 60 * 1000;
     (authLimiter as any).max = 200;
-    app.use('/auth', authLimiter);
-    console.log('Rate limiting: auth only (general limiter disabled in development)');
+    app.use('/auth/login', authLimiter);
+    console.log('Rate limiting: login only (general limiter disabled in development)');
   } else {
-    app.use('/auth', authLimiter);
+    app.use('/auth/login', authLimiter);
     app.use(generalLimiter);
   }
 
@@ -82,7 +84,15 @@ async function bootstrap() {
   const envOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
     : ['http://localhost:5173', 'http://localhost:5174'];
-  const productionOrigins = [...new Set([...envOrigins, ...CAPACITOR_ORIGINS])];
+  const adminDomain = process.env.ADMIN_DOMAIN?.trim();
+  const adminWebOrigins = adminDomain
+    ? [`https://${adminDomain}`, `http://${adminDomain}`]
+    : [];
+  const productionOrigins = [...new Set([...envOrigins, ...CAPACITOR_ORIGINS, ...adminWebOrigins])];
+
+  if (!isDev) {
+    console.log(`CORS allowlist: ${productionOrigins.join(', ')}`);
+  }
 
   app.enableCors({
     origin: isDev

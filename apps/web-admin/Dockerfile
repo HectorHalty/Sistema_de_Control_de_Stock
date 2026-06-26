@@ -6,9 +6,12 @@ RUN npm install --no-audit --no-fund
 COPY apps/web-admin ./
 ARG VITE_API_URL=http://localhost:3001
 ENV VITE_API_URL=$VITE_API_URL
-RUN npm run build
+RUN echo ">>> Building admin with VITE_API_URL=${VITE_API_URL}" && npm run build
 
 FROM nginx:alpine
 COPY apps/web-admin/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/web-admin/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
+ENTRYPOINT ["/docker-entrypoint.sh"]

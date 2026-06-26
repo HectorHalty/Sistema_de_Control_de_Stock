@@ -30,7 +30,7 @@ echo "=== Rebuild web-admin ==="
 echo "VITE_API_URL=$VITE_API_URL"
 
 COMPOSE="docker compose -f docker-compose.prod.yml --env-file $ENV_FILE"
-$COMPOSE build --no-cache web-admin
+$COMPOSE build --no-cache web-admin --build-arg VITE_API_URL="$VITE_API_URL"
 $COMPOSE up -d web-admin
 
 echo ""

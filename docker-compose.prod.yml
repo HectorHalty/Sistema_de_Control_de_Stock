@@ -78,6 +78,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:8080}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
@@ -112,6 +113,8 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:?set VITE_API_URL in .env.production e.g. https://lachacra-api.duckdns.org}
     restart: unless-stopped
+    environment:
+      LCH_API_URL: ${VITE_API_URL:?set VITE_API_URL in .env.production}
     ports:
       - "127.0.0.1:${ADMIN_PORT:-8080}:80"
     depends_on:

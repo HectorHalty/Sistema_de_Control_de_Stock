@@ -20,6 +20,17 @@
       html.dark, html.dark body { background-color: #0a0a0a; color: #fafafa; }
     </style>
     <title>Sistema de Gestión LCH</title>
+    <script src="/lch-config.js"></script>
+    <script>
+      (function () {
+        var h = location.hostname;
+        if (h === 'lachacrafutbol.duckdns.org') {
+          window.__LCH_API_URL__ = 'https://lachacra-api.duckdns.org';
+        } else if (h.indexOf('admin.') === 0) {
+          window.__LCH_API_URL__ = location.protocol + '//api.' + h.slice(6);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

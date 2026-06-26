@@ -1,3 +1,9 @@
+declare global {
+  interface Window {
+    __LCH_API_URL__?: string;
+  }
+}
+
 import { Capacitor } from '@capacitor/core';
 
 /** URLs baked at build time that only work on the dev machine, not in prod browsers/APK. */
@@ -38,6 +44,11 @@ function inferApiUrlFromContext(): string | null {
 }
 
 export function resolveApiBaseUrl(): string {
+  const runtime = typeof window !== 'undefined' ? window.__LCH_API_URL__?.trim() : '';
+  if (runtime && !isLocalDevApiUrl(runtime)) {
+    return runtime.replace(/\/$/, '');
+  }
+
   const built = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
 
   if (built && !isLocalDevApiUrl(built)) {
