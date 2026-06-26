@@ -4,9 +4,13 @@
  */
 import { resolveApiBaseUrl } from './resolve-api-base-url';
 
-const API_BASE_URL = resolveApiBaseUrl();
+/** Resuelve en cada llamada para respetar window.__LCH_API_URL__ (lch-config.js). */
+export function getApiBaseUrl(): string {
+  return resolveApiBaseUrl();
+}
 
-export { API_BASE_URL };
+/** @deprecated Prefer getApiBaseUrl() — puede quedar desactualizado si se lee al importar el módulo. */
+export const API_BASE_URL = getApiBaseUrl();
 
 export interface ApiOptions {
   token?: string;
@@ -111,7 +115,7 @@ async function apiFetch<T>(
   path: string,
   options?: Omit<RequestInit, 'body'> & { token?: string; body?: unknown },
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${getApiBaseUrl()}${path}`;
   const { token: tokenOpt, body, ...fetchOpts } = options ?? {};
   const token = tokenOpt || accessToken;
   const headers: Record<string, string> = {
@@ -129,7 +133,8 @@ async function apiFetch<T>(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: response.statusText })) as ApiErrorBody;
     const message = formatApiErrorMessage(response.status, error);
-    if (response.status === 401 || response.status === 403) {
+    // 403 = sin permiso para este recurso; no invalidar sesión (p. ej. hidratación de ventas con Operador_Stock).
+    if (response.status === 401) {
       window.dispatchEvent(new CustomEvent('auth:session-invalid', { detail: { status: response.status } }));
     }
     throw new ApiError(response.status, message, error);
@@ -173,7 +178,14 @@ export function isApiError(e: unknown): e is ApiError {
 export function getApiErrorMessage(e: unknown, fallback: string): string {
   if (isApiError(e)) return e.message;
   if (e instanceof TypeError && e.message === 'Failed to fetch') {
-    return `No se pudo conectar con el servidor (${API_BASE_URL}). Verificá internet y que la API esté en línea.`;
+    const base = getApiBaseUrl();
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const pageIsLocal = host === 'localhost' || host === '127.0.0.1';
+    const apiIsLocal = base.includes('localhost') || base.includes('127.0.0.1');
+    if (!pageIsLocal && apiIsLocal) {
+      return `No se pudo conectar con la API. El panel intenta usar ${base} pero estás en ${host}. Recargá con ?reset o pedí que recompilen el admin con la URL pública.`;
+    }
+    return `No se pudo conectar con el servidor (${base}). Verificá internet y que la API esté en línea.`;
   }
   if (e instanceof Error && e.message) return e.message;
   if (typeof e === 'string' && e.trim()) return e;

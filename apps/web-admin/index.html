@@ -24,7 +24,7 @@
     <script>
       (function () {
         var h = location.hostname;
-        if (h === 'lachacrafutbol.duckdns.org') {
+        if (h === 'lachacrafutbol.duckdns.org' || h === 'www.lachacrafutbol.duckdns.org') {
           window.__LCH_API_URL__ = 'https://lachacra-api.duckdns.org';
         } else if (h.indexOf('admin.') === 0) {
           window.__LCH_API_URL__ = location.protocol + '//api.' + h.slice(6);

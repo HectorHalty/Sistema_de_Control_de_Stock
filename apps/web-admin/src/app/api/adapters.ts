@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
-  API_BASE_URL, getApiErrorMessage, isApiError,
+  getApiBaseUrl, getApiErrorMessage, isApiError,
 } from './client';
 import type {
   CheckoutPayload, ReturnPayload, ReturnItemsPayload, UpdateTicketItemsPayload,
@@ -43,7 +43,7 @@ export async function isApiReachable(): Promise<boolean> {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
-      const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+      const res = await fetch(`${getApiBaseUrl()}/health`, { signal: controller.signal });
       clearTimeout(timeout);
       return res.ok;
     } catch {
@@ -350,7 +350,7 @@ export function useKitchenApiAdapter(kitchenId?: string) {
   useEffect(() => {
     if (!apiAvailable) return;
 
-    const url = `${API_BASE_URL}/sse/events${kitchenId ? `?kitchenId=${kitchenId}` : ''}`;
+    const url = `${getApiBaseUrl()}/sse/events${kitchenId ? `?kitchenId=${kitchenId}` : ''}`;
     const eventSource = new EventSource(url);
 
     eventSource.addEventListener('kitchen-order-updated', () => {

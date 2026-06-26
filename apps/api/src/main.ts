@@ -14,68 +14,7 @@ async function bootstrap() {
     app.getHttpAdapter().getInstance().set('trust proxy', 1);
   }
 
-  // Security headers with Helmet
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"], // Required for Swagger
-          styleSrc: ["'self'", "'unsafe-inline'"],  // Required for Swagger
-          imgSrc: ["'self'", 'data:', 'blob:'],
-          connectSrc: ["'self'"],
-          fontSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          frameSrc: ["'none'"],
-        },
-      },
-      crossOriginEmbedderPolicy: false, // Required for some frontend dev setups
-    }),
-  );
-
-  // Login brute-force protection only — NOT /auth/me (runs on every SPA reload).
-  const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // 20 login attempts per window
-    message: { message: 'Too many login attempts, please try again later' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
-  });
-
-  // SPA boot hydrates ~12 GET endpoints per reload; 100/15min blocked normal use.
-  const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 1000,
-    message: { message: 'Too many requests, please try again later' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { xForwardedForHeader: false },
-    skip: (req) => req.path === '/health',
-  });
-
-  // Relax limits in dev mode; disable general limiter entirely while developing
-  if (isDev) {
-    (authLimiter as any).windowMs = 60 * 1000;
-    (authLimiter as any).max = 200;
-    app.use('/auth/login', authLimiter);
-    console.log('Rate limiting: login only (general limiter disabled in development)');
-  } else {
-    app.use('/auth/login', authLimiter);
-    app.use(generalLimiter);
-  }
-
-  // Global validation pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
-
-  // CORS with env-based allowlist + Capacitor APK origins (androidScheme: https → https://localhost)
+  // CORS before rate limit — 429 without ACAO makes browsers report "Failed to fetch".
   const CAPACITOR_ORIGINS = [
     'https://localhost',
     'capacitor://localhost',
@@ -110,6 +49,72 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: isDev ? undefined : 86400, // 24h cache for preflight in prod
   });
+
+  // Security headers with Helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"], // Required for Swagger
+          styleSrc: ["'self'", "'unsafe-inline'"],  // Required for Swagger
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          frameSrc: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false, // Required for some frontend dev setups
+    }),
+  );
+
+  const skipHeavyReadPaths = (req: { method: string; path: string }) =>
+    req.method === 'OPTIONS'
+    || req.path === '/health'
+    || req.path === '/auth/me';
+
+  // Login brute-force protection only — NOT /auth/me (runs on every SPA reload).
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // 20 login attempts per window
+    message: { message: 'Too many login attempts, please try again later' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
+  });
+
+  // SPA boot hydrates ~12 GET endpoints per reload; 100/15min blocked normal use.
+  const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    message: { message: 'Too many requests, please try again later' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
+    skip: skipHeavyReadPaths,
+  });
+
+  // Relax limits in dev mode; disable general limiter entirely while developing
+  if (isDev) {
+    (authLimiter as any).windowMs = 60 * 1000;
+    (authLimiter as any).max = 200;
+    app.use('/auth/login', authLimiter);
+    console.log('Rate limiting: login only (general limiter disabled in development)');
+  } else {
+    app.use('/auth/login', authLimiter);
+    app.use(generalLimiter);
+  }
+
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
 
   if (isDev) {
     const config = new DocumentBuilder()

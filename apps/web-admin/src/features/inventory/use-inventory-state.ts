@@ -3,7 +3,7 @@ import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import { stockApi, isApiError } from '@/app/api/client';
-import { isApiReachable } from '@/app/api/adapters';
+import { clearApiReachabilityCache, isApiReachable } from '@/app/api/adapters';
 import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
@@ -478,7 +478,9 @@ export function useInventoryState() {
         await stockApi.warehouses.remove(id, '');
         markApiSynced();
         stripFromLocal();
+        clearApiReachabilityCache();
         await refreshCatalog();
+        setInventoryApiAvailable(true);
       } catch (e) {
         const alreadyGone = isApiError(e) && e.status === 404;
         if (alreadyGone) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { formatApiErrorMessage, getApiErrorMessage } from '@/app/api/client';
 
 describe('formatApiErrorMessage', () => {
@@ -54,7 +54,21 @@ describe('getApiErrorMessage', () => {
     expect(msg).toBe('Stock insuficiente');
   });
 
-  it('usa el mensaje de Error genérico', () => {
+  it('uses el mensaje de Error genérico', () => {
     expect(getApiErrorMessage(new TypeError('Network failed'), 'fallback')).toBe('Network failed');
+  });
+
+  it('detecta API localhost abierta desde sitio público', async () => {
+    vi.stubEnv('VITE_API_URL', 'http://localhost:3001');
+    vi.stubGlobal('window', {
+      location: { hostname: 'panel.miempresa.com', protocol: 'https:' },
+    });
+    vi.resetModules();
+    const { getApiErrorMessage } = await import('./client');
+    const msg = getApiErrorMessage(new TypeError('Failed to fetch'), 'fallback');
+    expect(msg).toContain('panel.miempresa.com');
+    expect(msg).toContain('localhost:3001');
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 });

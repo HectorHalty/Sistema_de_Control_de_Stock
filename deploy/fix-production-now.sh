@@ -70,10 +70,18 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-echo ">> Test CORS desde admin web..."
-curl -sI -X OPTIONS "https://lachacra-api.duckdns.org/auth/login" \
+echo ">> Test CORS + rate limit desde admin web..."
+CORS_HEADERS=$(curl -sI -X OPTIONS "https://lachacra-api.duckdns.org/auth/login" \
   -H "Origin: https://lachacrafutbol.duckdns.org" \
-  -H "Access-Control-Request-Method: POST" | grep -i access-control-allow-origin || true
+  -H "Access-Control-Request-Method: POST")
+echo "$CORS_HEADERS" | grep -iE 'access-control-allow-origin|ratelimit-limit|HTTP/' || true
+if echo "$CORS_HEADERS" | grep -q '429'; then
+  echo "WARN: API respondió 429 — esperá ~15 min o reiniciá el contenedor api para limpiar el límite."
+fi
+if echo "$CORS_HEADERS" | grep -qi 'ratelimit-limit: 100'; then
+  echo "ERROR: Sigue el rate limit viejo (100). Verificá que el rebuild de api usó el código nuevo."
+  exit 1
+fi
 
 echo ""
 echo "=== Listo ==="

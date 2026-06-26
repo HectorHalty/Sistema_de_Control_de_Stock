@@ -25,7 +25,14 @@ function inferApiUrlFromContext(): string | null {
 
   const { hostname, protocol } = window.location;
 
-  if (hostname === 'lachacrafutbol.duckdns.org') {
+  if (
+    hostname === 'lachacrafutbol.duckdns.org'
+    || hostname === 'www.lachacrafutbol.duckdns.org'
+  ) {
+    return 'https://lachacra-api.duckdns.org';
+  }
+
+  if (hostname.endsWith('.duckdns.org') && hostname.includes('lachacra') && !hostname.startsWith('lachacra-api.')) {
     return 'https://lachacra-api.duckdns.org';
   }
 
