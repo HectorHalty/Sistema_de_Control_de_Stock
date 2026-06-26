@@ -353,7 +353,7 @@ sudo systemctl reload caddy
 - APK release: `npm run build:apk:release`
 - Test local Docker: `npm run test:deploy`
 
-Ver carpeta `deploy/` para scripts detallados.
+Ver carpeta `deploy/` para scripts detallados. **Oracle Cloud:** `deploy/ORACLE.md` · **Google Cloud:** `deploy/GCP.md`
 
 ## Known Limitations
 

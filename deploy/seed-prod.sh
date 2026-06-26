@@ -16,5 +16,5 @@ if [[ "${ans:-}" != "y" && "${ans:-}" != "Y" ]]; then
   exit 0
 fi
 
-$COMPOSE exec api npx prisma db seed
+$COMPOSE exec api npx --yes tsx prisma/seed.ts
 echo "Seed completado."

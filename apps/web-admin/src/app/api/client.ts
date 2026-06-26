@@ -1,8 +1,10 @@
 /**
  * API client configuration.
- * Reads base URL from Vite env var VITE_API_URL, falls back to localhost:3001.
+ * Resolves public API URL at runtime when the build used localhost by mistake.
  */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { resolveApiBaseUrl } from './resolve-api-base-url';
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export { API_BASE_URL };
 
@@ -170,6 +172,9 @@ export function isApiError(e: unknown): e is ApiError {
 
 export function getApiErrorMessage(e: unknown, fallback: string): string {
   if (isApiError(e)) return e.message;
+  if (e instanceof TypeError && e.message === 'Failed to fetch') {
+    return `No se pudo conectar con el servidor (${API_BASE_URL}). Verificá internet y que la API esté en línea.`;
+  }
   if (e instanceof Error && e.message) return e.message;
   if (typeof e === 'string' && e.trim()) return e;
   return fallback;

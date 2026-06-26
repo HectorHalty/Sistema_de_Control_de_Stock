@@ -1,5 +1,5 @@
 FROM node:20-alpine AS builder
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl vips-dev
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --no-audit --no-fund
@@ -8,7 +8,7 @@ RUN npx prisma generate
 RUN npm run build
 
 FROM node:20-alpine
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl vips-dev
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund

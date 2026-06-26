@@ -63,8 +63,11 @@ if [[ "${VITE_API_URL:-}" != https://* ]]; then
   echo "WARN: VITE_API_URL no usa HTTPS — la APK en producción debería usar https://"
 fi
 
+if [[ "${ALLOWED_ORIGINS:-}" != *"https://localhost"* ]]; then
+  echo "WARN: ALLOWED_ORIGINS no incluye https://localhost (origen real de la APK Capacitor)"
+fi
 if [[ "${ALLOWED_ORIGINS:-}" != *"capacitor://localhost"* ]]; then
-  echo "WARN: ALLOWED_ORIGINS no incluye capacitor://localhost (requerido para APK)"
+  echo "WARN: ALLOWED_ORIGINS no incluye capacitor://localhost (APK legacy / iOS)"
 fi
 
 if [[ "$errors" -gt 0 ]]; then

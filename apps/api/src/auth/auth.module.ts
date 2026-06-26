@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import type { StringValue } from 'ms';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -45,7 +46,7 @@ function validateJwtSecret(secret: string | undefined, isDev: boolean): void {
         return {
           secret,
           signOptions: {
-            expiresIn: (config.get('JWT_EXPIRES_IN') as string) ?? '1h',
+            expiresIn: ((config.get('JWT_EXPIRES_IN') as string) ?? '1h') as StringValue,
             issuer: 'lch-stock-api',
           },
         };

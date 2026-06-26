@@ -31,7 +31,7 @@ import {
  */
 let reachabilityCache: { promise: Promise<boolean>; at: number } | null = null;
 const REACHABILITY_TTL_MS = 30_000;
-const HEALTH_TIMEOUT_MS = 1500;
+const HEALTH_TIMEOUT_MS = 5000;
 
 export async function isApiReachable(): Promise<boolean> {
   const now = Date.now();

@@ -7,6 +7,12 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  // Caddy sits in front in production and sets X-Forwarded-For; rate-limit needs this.
+  if (!isDev) {
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
 
   // Security headers with Helmet
   app.use(
@@ -47,7 +53,6 @@ async function bootstrap() {
   });
 
   // Relax limits in dev mode; disable general limiter entirely while developing
-  const isDev = process.env.NODE_ENV !== 'production';
   if (isDev) {
     (authLimiter as any).windowMs = 60 * 1000;
     (authLimiter as any).max = 200;
@@ -68,15 +73,30 @@ async function bootstrap() {
     }),
   );
 
-  // CORS with env-based allowlist
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  // CORS with env-based allowlist + Capacitor APK origins (androidScheme: https → https://localhost)
+  const CAPACITOR_ORIGINS = [
+    'https://localhost',
+    'capacitor://localhost',
+    'http://localhost',
+  ];
+  const envOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
     : ['http://localhost:5173', 'http://localhost:5174'];
+  const productionOrigins = [...new Set([...envOrigins, ...CAPACITOR_ORIGINS])];
 
   app.enableCors({
-    origin: isDev ? true : allowedOrigins,
+    origin: isDev
+      ? true
+      : (origin, callback) => {
+          if (!origin || productionOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: isDev ? undefined : 86400, // 24h cache for preflight in prod
   });

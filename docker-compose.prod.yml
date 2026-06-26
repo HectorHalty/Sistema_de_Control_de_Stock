@@ -110,7 +110,7 @@ services:
       context: .
       dockerfile: apps/web-admin/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:3001}
+        VITE_API_URL: ${VITE_API_URL:?set VITE_API_URL in .env.production e.g. https://lachacra-api.duckdns.org}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${ADMIN_PORT:-8080}:80"

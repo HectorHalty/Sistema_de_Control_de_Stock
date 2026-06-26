@@ -28,7 +28,9 @@
     "deploy:validate": "bash deploy/validate-env.sh",
     "deploy:smoke": "bash deploy/smoke-test.sh",
     "test:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-deploy-local.ps1",
+    "oracle:retry": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/oracle-retry-saopaulo.ps1 -ReminderOnly -IntervalMinutes 30",
     "build:apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-release.ps1",
+    "security:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/security-audit.ps1",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",
     "electron:public": "npm run electron:build --workspace=apps/web-public",
     "cap:sync:admin": "cd apps/web-admin && npx cap sync",
@@ -42,9 +44,34 @@
     "concurrently": "^9.1.0",
     "jsdom": "^29.1.1"
   },
-  "pnpm": {
-    "overrides": {
-      "vite": "6.3.5"
-    }
+  "overrides": {
+    "multer": "2.2.0",
+    "@nestjs/platform-express": {
+      "multer": "2.2.0"
+    },
+    "lodash": "^4.17.24",
+    "js-yaml": "4.2.0",
+    "@nestjs/swagger": {
+      "js-yaml": "4.2.0"
+    },
+    "file-type": "^21.3.2",
+    "express": "^4.22.2",
+    "qs": "^6.15.2",
+    "body-parser": "^1.20.5",
+    "form-data": "^4.0.6",
+    "shell-quote": "^1.8.4",
+    "undici": "^7.27.3",
+    "tar": "^7.5.16",
+    "dompurify": "^3.4.11",
+    "esbuild": "^0.25.0",
+    "vite": {
+      "esbuild": "^0.25.0"
+    },
+    "glob": "^11.0.0",
+    "picomatch": "^4.0.4",
+    "tmp": "^0.2.6",
+    "@babel/core": "^7.29.1",
+    "webpack": "^5.105.0",
+    "xlsx": "npm:@stackline/xlsx@^1.0.3"
   }
 }

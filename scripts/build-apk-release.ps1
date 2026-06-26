@@ -56,6 +56,16 @@ if ($ApiUrl -notmatch '^https://') {
 Write-Host "=== Build APK Release - LCH Admin ===" -ForegroundColor Cyan
 Write-Host "API URL: $ApiUrl" -ForegroundColor Yellow
 
+if (-not (Test-Path (Join-Path $Root "node_modules\esc-pos-proxy-capacitor-plugin"))) {
+    Write-Host ">> Instalando dependencias (falta esc-pos-proxy-capacitor-plugin)..." -ForegroundColor Yellow
+    Push-Location $Root
+    try {
+        npm install
+        if ($LASTEXITCODE -ne 0) { throw "npm install fallo." }
+    }
+    finally { Pop-Location }
+}
+
 Push-Location $AdminDir
 try {
     $env:VITE_API_URL = $ApiUrl

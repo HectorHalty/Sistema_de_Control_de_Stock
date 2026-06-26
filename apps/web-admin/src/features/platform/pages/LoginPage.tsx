@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import type { CurrentUser } from '@/app/components/store';
-import { authApi, ApiError } from '@/app/api/client';
+import { authApi, ApiError, getApiErrorMessage } from '@/app/api/client';
 import { clearAllAppData } from '@/shared/storage/clear-app-data';
 
 import logo from '@/assets/logo-chacra.png';
@@ -51,7 +51,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           setError(err.message);
         }
       } else {
-        setError('No se pudo conectar con el servidor. Verificá que la API esté corriendo en http://localhost:3001');
+        setError(getApiErrorMessage(err, 'No se pudo conectar con el servidor'));
       }
     } finally {
       setLoading(false);

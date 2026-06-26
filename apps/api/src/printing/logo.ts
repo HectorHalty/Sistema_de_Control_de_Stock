@@ -4,7 +4,7 @@
  * stay self-contained across dev/prod builds. The result is cached per paper
  * width because the conversion is relatively expensive.
  */
-import Jimp from 'jimp';
+import sharp from 'sharp';
 import { LOGO_PNG_BASE64 } from './logo-data';
 
 const GS = 0x1d;
@@ -26,28 +26,21 @@ export async function getLogoRaster(paperWidth: 58 | 80): Promise<Buffer | null>
 
   try {
     const targetDots = DOTS_BY_WIDTH[paperWidth];
-    const image = await Jimp.read(Buffer.from(LOGO_PNG_BASE64, 'base64'));
+    const { data, info } = await sharp(Buffer.from(LOGO_PNG_BASE64, 'base64'))
+      .resize({ width: targetDots, withoutEnlargement: true })
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
-    // Fit within printable width, keep aspect ratio, then flatten on white.
-    if (image.bitmap.width > targetDots) {
-      image.resize(targetDots, Jimp.AUTO);
-    }
-    image.background(0xffffffff);
-    image.grayscale();
-
-    const width = image.bitmap.width;
-    const height = image.bitmap.height;
+    const width = info.width;
+    const height = info.height;
     const bytesPerRow = Math.ceil(width / 8);
 
     const raster = Buffer.alloc(bytesPerRow * height, 0);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        const r = image.bitmap.data[idx];
-        const g = image.bitmap.data[idx + 1];
-        const b = image.bitmap.data[idx + 2];
-        const a = image.bitmap.data[idx + 3];
-        const luminance = (r * 0.299 + g * 0.587 + b * 0.114) * (a / 255) + (255 - a);
+        const luminance = data[y * width + x];
         if (luminance < THRESHOLD) {
           raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
         }
