@@ -3,8 +3,10 @@
  * so it can be printed on thermal printers. The PNG is embedded as base64 to
  * stay self-contained across dev/prod builds. The result is cached per paper
  * width because the conversion is relatively expensive.
+ *
+ * Uses jimp (pure JS, no native deps) so it compiles on any platform.
  */
-import sharp from 'sharp';
+import Jimp from 'jimp';
 import { LOGO_PNG_BASE64 } from './logo-data';
 
 const GS = 0x1d;
@@ -26,21 +28,26 @@ export async function getLogoRaster(paperWidth: 58 | 80): Promise<Buffer | null>
 
   try {
     const targetDots = DOTS_BY_WIDTH[paperWidth];
-    const { data, info } = await sharp(Buffer.from(LOGO_PNG_BASE64, 'base64'))
-      .resize({ width: targetDots, withoutEnlargement: true })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    const img = await Jimp.read(Buffer.from(LOGO_PNG_BASE64, 'base64'));
 
-    const width = info.width;
-    const height = info.height;
+    // Only shrink — never enlarge
+    if (img.bitmap.width > targetDots) {
+      img.resize(targetDots, Jimp.AUTO);
+    }
+
+    // Flatten transparency onto white background, then grayscale
+    img.background(0xffffffff).grayscale();
+
+    const width = img.bitmap.width;
+    const height = img.bitmap.height;
     const bytesPerRow = Math.ceil(width / 8);
 
+    // jimp stores pixels as RGBA; after grayscale R=G=B=luminance
     const raster = Buffer.alloc(bytesPerRow * height, 0);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const luminance = data[y * width + x];
+        const idx = (y * width + x) * 4;
+        const luminance = img.bitmap.data[idx];
         if (luminance < THRESHOLD) {
           raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
         }
