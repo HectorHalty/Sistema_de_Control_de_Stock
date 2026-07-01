@@ -72,7 +72,9 @@ async function bootstrap() {
   const skipHeavyReadPaths = (req: { method: string; path: string }) =>
     req.method === 'OPTIONS'
     || req.path === '/health'
-    || req.path === '/auth/me';
+    || req.path === '/auth/me'
+    // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.
+    || req.path.startsWith('/users');
 
   // Login brute-force protection only — NOT /auth/me (runs on every SPA reload).
   const authLimiter = rateLimit({
