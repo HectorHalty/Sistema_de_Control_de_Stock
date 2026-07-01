@@ -51,9 +51,9 @@ export function GeneralSettingsTab({ canManageUsers }: GeneralSettingsTabProps) 
         </SettingsRow>
       </SettingsPanel>
 
-      <SettingsPanel title="Administracion de Usuarios" description="Gestion de cuentas y roles del personal LCH.">
+      <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
         <UsersSettingsSection canManageUsers={canManageUsers} />
-      </SettingsPanel>
+      </div>
     </div>
   );
 }

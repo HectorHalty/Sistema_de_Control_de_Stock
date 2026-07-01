@@ -98,28 +98,32 @@ export function UsersSettingsSection({ canManageUsers }: UsersSettingsSectionPro
   };
 
   return (
-    <>
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-          {error}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-foreground">Administracion de Usuarios</h3>
+          <p className="text-sm text-muted-foreground mt-1">Gestion de cuentas y roles del personal LCH.</p>
         </div>
-      )}
-
-      <div className="flex justify-end">
         {canManageUsers ? (
           <button
             onClick={() => { setEditing(null); setShowModal(true); }}
-            className="flex items-center gap-2 bg-[#3d7a3d] hover:bg-[#2f5f2f] text-white px-4 py-2.5 rounded-lg text-sm"
+            className="flex items-center gap-2 bg-[#3d7a3d] hover:bg-[#2f5f2f] text-white px-4 py-2.5 rounded-lg text-sm self-start"
           >
             <Plus size={18} />
             Nuevo Usuario
           </button>
         ) : (
-          <p className="text-xs text-muted-foreground self-center">
+          <p className="text-xs text-muted-foreground sm:pt-1">
             Solo Super Admin puede crear usuarios y asignar roles.
           </p>
         )}
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </div>
+      )}
 
       {loading && (
         <p className="text-sm text-muted-foreground">Cargando usuarios…</p>
@@ -235,7 +239,7 @@ export function UsersSettingsSection({ canManageUsers }: UsersSettingsSectionPro
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
