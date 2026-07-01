@@ -73,6 +73,7 @@ async function bootstrap() {
     req.method === 'OPTIONS'
     || req.path === '/health'
     || req.path === '/auth/me'
+    || req.path === '/auth/login'
     // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.
     || req.path.startsWith('/users');
 
