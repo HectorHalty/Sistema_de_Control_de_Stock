@@ -76,10 +76,23 @@ async function bootstrap() {
     // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.
     || req.path.startsWith('/users');
 
+  const defaultAuthWindowMs = 15 * 60 * 1000;
+  const defaultAuthMax = isDev ? 200 : 100;
+  const authWindowMsRaw = Number(process.env.AUTH_LIMIT_WINDOW_MS);
+  const authMaxRaw = Number(process.env.AUTH_LIMIT_MAX);
+  const authWindowMs = Number.isFinite(authWindowMsRaw) && authWindowMsRaw > 0
+    ? authWindowMsRaw
+    : defaultAuthWindowMs;
+  const authMax = Number.isFinite(authMaxRaw) && authMaxRaw > 0
+    ? authMaxRaw
+    : defaultAuthMax;
+
   // Login brute-force protection only — NOT /auth/me (runs on every SPA reload).
+  // Count only failed logins so normal operator usage doesn't exhaust the limit.
   const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // 20 login attempts per window
+    windowMs: authWindowMs,
+    max: authMax,
+    skipSuccessfulRequests: true,
     message: { message: 'Too many login attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -99,10 +112,8 @@ async function bootstrap() {
 
   // Relax limits in dev mode; disable general limiter entirely while developing
   if (isDev) {
-    (authLimiter as any).windowMs = 60 * 1000;
-    (authLimiter as any).max = 200;
     app.use('/auth/login', authLimiter);
-    console.log('Rate limiting: login only (general limiter disabled in development)');
+    console.log(`Rate limiting: login only (window=${authWindowMs}ms max=${authMax}, only failed attempts)`);
   } else {
     app.use('/auth/login', authLimiter);
     app.use(generalLimiter);

@@ -31,9 +31,11 @@ upsert_env "VITE_API_URL" "https://lachacra-api.duckdns.org"
 upsert_env "ADMIN_DOMAIN" "lachacrafutbol.duckdns.org"
 upsert_env "API_DOMAIN" "lachacra-api.duckdns.org"
 upsert_env "ALLOWED_ORIGINS" "https://lachacrafutbol.duckdns.org,https://localhost,capacitor://localhost,http://localhost"
+upsert_env "AUTH_LIMIT_MAX" "200"
+upsert_env "AUTH_LIMIT_WINDOW_MS" "900000"
 
 echo ">> .env.production (claves relevantes):"
-grep -E '^(VITE_API_URL|ADMIN_DOMAIN|ALLOWED_ORIGINS)=' "$ENV_FILE"
+grep -E '^(VITE_API_URL|ADMIN_DOMAIN|ALLOWED_ORIGINS|AUTH_LIMIT_MAX|AUTH_LIMIT_WINDOW_MS)=' "$ENV_FILE"
 
 # trust proxy en main.ts (si falta)
 if [[ -f "$MAIN_TS" ]] && ! grep -q "trust proxy" "$MAIN_TS"; then
