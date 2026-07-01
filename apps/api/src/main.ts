@@ -69,13 +69,23 @@ async function bootstrap() {
     }),
   );
 
-  const skipHeavyReadPaths = (req: { method: string; path: string }) =>
-    req.method === 'OPTIONS'
+  const skipGeneralLimiter = (req: { method: string; path: string }) =>
+    // Keep rate-limit focused on read traffic; never block writes/mutations.
+    req.method !== 'GET'
     || req.path === '/health'
-    || req.path === '/auth/me'
-    || req.path === '/auth/login'
+    // Auth endpoints have their own dedicated limiter.
+    || req.path.startsWith('/auth/')
     // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.
     || req.path.startsWith('/users');
+
+  const generalLimitWindowMsRaw = Number(process.env.GENERAL_LIMIT_WINDOW_MS);
+  const generalLimitMaxRaw = Number(process.env.GENERAL_LIMIT_MAX);
+  const generalLimitWindowMs = Number.isFinite(generalLimitWindowMsRaw) && generalLimitWindowMsRaw > 0
+    ? generalLimitWindowMsRaw
+    : 15 * 60 * 1000;
+  const generalLimitMax = Number.isFinite(generalLimitMaxRaw) && generalLimitMaxRaw > 0
+    ? generalLimitMaxRaw
+    : 5000;
 
   const defaultAuthWindowMs = 15 * 60 * 1000;
   const defaultAuthMax = isDev ? 200 : 100;
@@ -102,13 +112,13 @@ async function bootstrap() {
 
   // SPA boot hydrates ~12 GET endpoints per reload; 100/15min blocked normal use.
   const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 1000,
+    windowMs: generalLimitWindowMs,
+    max: generalLimitMax,
     message: { message: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
     validate: { xForwardedForHeader: false },
-    skip: skipHeavyReadPaths,
+    skip: skipGeneralLimiter,
   });
 
   // Relax limits in dev mode; disable general limiter entirely while developing
