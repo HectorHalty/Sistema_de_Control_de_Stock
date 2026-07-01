@@ -6,6 +6,7 @@
  * the hook returns safe defaults and the component falls back to localStorage.
  */
 import { useState, useCallback, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
   getApiBaseUrl, getApiErrorMessage, isApiError,
@@ -32,6 +33,21 @@ import {
 let reachabilityCache: { promise: Promise<boolean>; at: number } | null = null;
 const REACHABILITY_TTL_MS = 30_000;
 const HEALTH_TIMEOUT_MS = 5000;
+
+/**
+ * Local fallback is useful only while developing on localhost.
+ * In production web/APK we keep API as source of truth to avoid silent data divergence.
+ */
+export function shouldAllowLocalFallback(): boolean {
+  const forced = (import.meta.env.VITE_ALLOW_LOCAL_FALLBACK as string | undefined)?.trim().toLowerCase();
+  if (forced === 'true') return true;
+  if (forced === 'false') return false;
+
+  if (Capacitor.isNativePlatform()) return false;
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+}
 
 export async function isApiReachable(): Promise<boolean> {
   const now = Date.now();
@@ -78,13 +94,14 @@ function shouldFallbackToLocal(_e: unknown): boolean {
 // ==================== Sales Adapter ====================
 
 export function useSalesApiAdapter() {
+  const allowLocalFallback = shouldAllowLocalFallback();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(allowLocalFallback ? null : true);
 
   useEffect(() => {
-    isApiReachable().then(setApiAvailable);
-  }, []);
+    isApiReachable().then(ok => setApiAvailable(ok || !allowLocalFallback));
+  }, [allowLocalFallback]);
 
   const checkout = useCallback(async (payload: CheckoutPayload) => {
     if (apiAvailable === false) {

@@ -3,7 +3,7 @@ import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import { stockApi, isApiError } from '@/app/api/client';
-import { clearApiReachabilityCache, isApiReachable } from '@/app/api/adapters';
+import { clearApiReachabilityCache, isApiReachable, shouldAllowLocalFallback } from '@/app/api/adapters';
 import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
@@ -41,6 +41,7 @@ function appendAudit(
 }
 
 export function useInventoryState() {
+  const allowLocalFallback = shouldAllowLocalFallback();
   const [products, setProducts] = useLocalStorage<Product[]>(storageKeys.inventory.products, initialProducts);
   const [warehouses, setWarehouses] = useLocalStorage<Warehouse[]>(storageKeys.inventory.warehouses, initialWarehouses);
   const [orders, setOrders] = useLocalStorage<Order[]>(storageKeys.inventory.orders, initialOrders);
@@ -56,7 +57,10 @@ export function useInventoryState() {
   const [stockCountSessions, setStockCountSessions] = useLocalStorage<StockCountSession[]>(storageKeys.inventory.countSessions, []);
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
-  const [inventoryApiAvailable, setInventoryApiAvailable] = useState<boolean | null>(null);
+  // En producción usamos API estricta (sin fallback silencioso) para evitar desincronización.
+  const [inventoryApiAvailable, setInventoryApiAvailable] = useState<boolean | null>(
+    allowLocalFallback ? null : true,
+  );
   // Evita que una hidratación inicial en vuelo pise cambios hechos mientras carga.
   const mountHydrationGen = useRef(0);
 
@@ -150,7 +154,7 @@ export function useInventoryState() {
     isApiReachable().then(async ok => {
       if (cancelled) return;
       if (!ok) {
-        setInventoryApiAvailable(false);
+        setInventoryApiAvailable(allowLocalFallback ? false : true);
         return;
       }
       try {
@@ -169,7 +173,7 @@ export function useInventoryState() {
         }
       } catch {
         if (!cancelled && mountGen === mountHydrationGen.current) {
-          setInventoryApiAvailable(false);
+          setInventoryApiAvailable(allowLocalFallback ? false : true);
         }
       }
     });
@@ -185,6 +189,7 @@ export function useInventoryState() {
     hydrateCountSessions,
     hydrateSuppliers,
     hydrateOrders,
+    allowLocalFallback,
   ]);
 
   const createProduct = useCallback(
@@ -194,12 +199,17 @@ export function useInventoryState() {
         id: input.id || `p${Date.now()}`,
         code: input.code || '',
       };
-      setProducts(prev => reassignProductCodes([
-        ...prev.filter(p => p.id !== localProduct.id),
-        localProduct,
-      ]));
+      if (allowLocalFallback) {
+        setProducts(prev => reassignProductCodes([
+          ...prev.filter(p => p.id !== localProduct.id),
+          localProduct,
+        ]));
+      }
 
-      if (inventoryApiAvailable !== true) return;
+      if (inventoryApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         const categoryId = categories.find(c => c.name === input.category)?.id;
@@ -225,17 +235,25 @@ export function useInventoryState() {
         markApiSynced();
         await hydrateProducts();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateProducts(); } catch {}
+        }
         throw e;
       }
     },
-    [inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
+    [allowLocalFallback, inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
   );
 
   const updateProduct = useCallback(
     async (input: Product, previous: Product): Promise<void> => {
-      setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
+      if (allowLocalFallback) {
+        setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
+      }
 
-      if (inventoryApiAvailable !== true) return;
+      if (inventoryApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         const categoryId = categories.find(c => c.name === input.category)?.id;
@@ -288,10 +306,13 @@ export function useInventoryState() {
         markApiSynced();
         await hydrateProducts();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateProducts(); } catch {}
+        }
         throw e;
       }
     },
-    [inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
+    [allowLocalFallback, inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
   );
 
   const deleteProduct = useCallback(
@@ -322,12 +343,17 @@ export function useInventoryState() {
         name,
         icon: input.icon,
       };
-      setCategories(prev => {
-        const without = prev.filter(c => c.name.toLowerCase() !== name.toLowerCase());
-        return [...without, localCategory].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-      });
+      if (allowLocalFallback) {
+        setCategories(prev => {
+          const without = prev.filter(c => c.name.toLowerCase() !== name.toLowerCase());
+          return [...without, localCategory].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        });
+      }
 
-      if (inventoryApiAvailable !== true) return;
+      if (inventoryApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         const created = await stockApi.categories.create(
@@ -344,10 +370,13 @@ export function useInventoryState() {
         });
         await hydrateCategories();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateCategories(); } catch {}
+        }
         throw e;
       }
     },
-    [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+    [allowLocalFallback, inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
   );
 
   const updateCategory = useCallback(

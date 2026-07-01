@@ -3,7 +3,7 @@ import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
 import { salesApi } from '@/app/api/client';
-import { isApiReachable } from '@/app/api/adapters';
+import { isApiReachable, shouldAllowLocalFallback } from '@/app/api/adapters';
 import { invalidatePrinterTestCache } from '@/features/sales/lib/printer-test-cache';
 import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal, normalizeSalesProduct } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
@@ -75,6 +75,7 @@ function toApiSalesProductBody(input: SalesProduct) {
 }
 
 export function useSalesState() {
+  const allowLocalFallback = shouldAllowLocalFallback();
   const [salesCategories, setSalesCategories] = useLocalStorage<string[]>(
     storageKeys.sales.categories,
     [...DEFAULT_SALES_CATEGORIES],
@@ -138,7 +139,10 @@ export function useSalesState() {
   }, [setSalesProducts]);
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
-  const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(null);
+  // En producción usamos API estricta para evitar cambios solo locales.
+  const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(
+    allowLocalFallback ? null : true,
+  );
   const mountHydrationGen = useRef(0);
 
   const invalidateMountHydration = useCallback(() => {
@@ -197,7 +201,7 @@ export function useSalesState() {
     isApiReachable().then(async ok => {
       if (cancelled) return;
       if (!ok) {
-        setSalesApiAvailable(false);
+        setSalesApiAvailable(allowLocalFallback ? false : true);
         return;
       }
       try {
@@ -208,14 +212,14 @@ export function useSalesState() {
         }
       } catch {
         if (!cancelled && mountGen === mountHydrationGen.current) {
-          setSalesApiAvailable(false);
+          setSalesApiAvailable(allowLocalFallback ? false : true);
         }
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrateKitchens, hydrateSalesProducts, hydrateTickets]);
+  }, [allowLocalFallback, hydrateKitchens, hydrateSalesProducts, hydrateTickets]);
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
@@ -226,26 +230,35 @@ export function useSalesState() {
         ...input,
         id: input.id || `p${Date.now()}`,
       };
-      upsertSalesProduct(setSalesProducts, product);
+      if (allowLocalFallback) upsertSalesProduct(setSalesProducts, product);
 
-      if (salesApiAvailable !== true) return;
+      if (salesApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         await salesApi.products.create(toApiSalesProductBody(product), '');
         markApiSynced();
         await hydrateSalesProducts();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateSalesProducts(); } catch {}
+        }
         throw e;
       }
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      upsertSalesProduct(setSalesProducts, input);
+      if (allowLocalFallback) upsertSalesProduct(setSalesProducts, input);
 
-      if (salesApiAvailable !== true) return;
+      if (salesApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         const body = { ...toApiSalesProductBody(input), active: input.active };
@@ -257,17 +270,25 @@ export function useSalesState() {
         markApiSynced();
         await hydrateSalesProducts();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateSalesProducts(); } catch {}
+        }
         throw e;
       }
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const deleteSalesProduct = useCallback(
     async (id: string): Promise<void> => {
-      setSalesProducts(prev => prev.filter(p => p.id !== id));
+      if (allowLocalFallback) {
+        setSalesProducts(prev => prev.filter(p => p.id !== id));
+      }
 
-      if (salesApiAvailable !== true) return;
+      if (salesApiAvailable !== true) {
+        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
+        return;
+      }
 
       try {
         if (!isLocalOnlyId(id)) {
@@ -276,10 +297,13 @@ export function useSalesState() {
         markApiSynced();
         await hydrateSalesProducts();
       } catch (e) {
+        if (!allowLocalFallback) {
+          try { await hydrateSalesProducts(); } catch {}
+        }
         throw e;
       }
     },
-    [salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const createKitchen = useCallback(
