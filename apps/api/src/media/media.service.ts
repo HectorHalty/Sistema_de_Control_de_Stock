@@ -104,7 +104,7 @@ export class MediaService {
    * Called by client after successful direct upload to MinIO.
    */
   async confirmUpload(key: string, dto: CreateMediaDto) {
-    return this.prisma.mediaItem.create({
+    return this.prisma.medio.create({
       data: {
         title: dto.title,
         type: dto.type,
@@ -119,7 +119,7 @@ export class MediaService {
   }
 
   async findAll(type?: string, matchDate?: string) {
-    return this.prisma.mediaItem.findMany({
+    return this.prisma.medio.findMany({
       where: {
         ...(type ? { type } : {}),
         ...(matchDate ? { matchDate } : {}),
@@ -129,13 +129,13 @@ export class MediaService {
   }
 
   async findById(id: string) {
-    const item = await this.prisma.mediaItem.findUnique({ where: { id } });
+    const item = await this.prisma.medio.findUnique({ where: { id } });
     if (!item) throw new NotFoundException(`Media item ${id} not found`);
     return item;
   }
 
   async delete(id: string) {
     await this.findById(id);
-    return this.prisma.mediaItem.delete({ where: { id } });
+    return this.prisma.medio.delete({ where: { id } });
   }
 }

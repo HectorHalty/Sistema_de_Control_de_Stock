@@ -6,7 +6,7 @@ export class OnlineCatalogService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(active?: boolean, category?: string) {
-    return this.prisma.onlineProduct.findMany({
+    return this.prisma.productoOnline.findMany({
       where: {
         ...(active !== undefined ? { active } : {}),
         ...(category ? { category } : {}),
@@ -16,7 +16,7 @@ export class OnlineCatalogService {
   }
 
   async findById(id: string) {
-    const product = await this.prisma.onlineProduct.findUnique({ where: { id } });
+    const product = await this.prisma.productoOnline.findUnique({ where: { id } });
     if (!product) throw new NotFoundException(`Online product ${id} not found`);
     return product;
   }
@@ -26,7 +26,7 @@ export class OnlineCatalogService {
     images?: string[]; category: string; attributes?: Record<string, any>;
     stockProductId?: string;
   }) {
-    return this.prisma.onlineProduct.create({
+    return this.prisma.productoOnline.create({
       data: {
         name: data.name,
         description: data.description,
@@ -48,7 +48,7 @@ export class OnlineCatalogService {
   }) {
     await this.findById(id);
     const { attributes, ...rest } = data;
-    return this.prisma.onlineProduct.update({
+    return this.prisma.productoOnline.update({
       where: { id },
       data: {
         ...rest,
@@ -59,6 +59,6 @@ export class OnlineCatalogService {
 
   async delete(id: string) {
     await this.findById(id);
-    return this.prisma.onlineProduct.delete({ where: { id } });
+    return this.prisma.productoOnline.delete({ where: { id } });
   }
 }

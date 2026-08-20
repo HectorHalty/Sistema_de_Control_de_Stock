@@ -35,7 +35,7 @@ export class AuthService {
       loginAttempts.delete(username.toLowerCase());
     }
 
-    const user = await this.prisma.user.findUnique({ where: { username: username.toLowerCase() } });
+    const user = await this.prisma.usuario.findUnique({ where: { username: username.toLowerCase() } });
 
     if (!user) {
       this.recordFailedAttempt(username, ip);
@@ -74,7 +74,7 @@ export class AuthService {
    * Used by admin endpoints or seed scripts — NOT auto-provisioned on login.
    */
   async createUser(username: string, password: string, name: string, role: string = 'Vendedor') {
-    const existing = await this.prisma.user.findUnique({ where: { username: username.toLowerCase() } });
+    const existing = await this.prisma.usuario.findUnique({ where: { username: username.toLowerCase() } });
     if (existing) {
       throw new BadRequestException(`User ${username} already exists`);
     }
@@ -84,7 +84,7 @@ export class AuthService {
 
     const normalizedRole = assertAssignableRole(role);
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    return this.prisma.user.create({
+    return this.prisma.usuario.create({
       data: {
         username: username.toLowerCase(),
         name,
@@ -99,7 +99,7 @@ export class AuthService {
    * Change user password.
    */
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException('User not found');
 
     const match = await bcrypt.compare(currentPassword, user.password);
@@ -110,14 +110,14 @@ export class AuthService {
     }
 
     const hashedNew = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.prisma.user.update({
+    await this.prisma.usuario.update({
       where: { id: userId },
       data: { password: hashedNew },
     });
   }
 
   async validateUser(userId: string) {
-    return this.prisma.user.findUnique({
+    return this.prisma.usuario.findUnique({
       where: { id: userId },
       select: { id: true, username: true, role: true },
     });

@@ -311,6 +311,21 @@ export function createPrismaMock(state: StockTestState) {
     },
   };
 
+  // Accessors Prisma en español (mismo comportamiento)
+  Object.assign(client, {
+    proveedor: client.supplier,
+    proveedorProducto: client.supplierProduct,
+    ordenCompra: client.purchaseOrder,
+    itemOrdenCompra: client.purchaseOrderItem,
+    nivelStock: client.stockLevel,
+    movimientoStock: client.stockMovement,
+    producto: client.product,
+    deposito: client.warehouse,
+    consumoEmpleado: client.employeeConsumption,
+    sesionConteo: client.stockCountSession,
+    categoria: client.category,
+  });
+
   return client;
 }
 

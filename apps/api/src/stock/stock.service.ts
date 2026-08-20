@@ -18,7 +18,7 @@ export class StockService {
 
   // Products
   async findAllProducts(categoryId?: string) {
-    return this.prisma.product.findMany({
+    return this.prisma.producto.findMany({
       where: categoryId ? { categoryId } : undefined,
       include: {
         category: true,
@@ -29,7 +29,7 @@ export class StockService {
   }
 
   async findProductById(id: string) {
-    const product = await this.prisma.product.findUnique({
+    const product = await this.prisma.producto.findUnique({
       where: { id },
       include: {
         category: true,
@@ -43,7 +43,7 @@ export class StockService {
 
   async createProduct(dto: CreateProductDto) {
     return this.prisma.$transaction(async (tx) => {
-      const product = await tx.product.create({
+      const product = await tx.producto.create({
         data: {
           name: dto.name,
           code: dto.code,
@@ -59,7 +59,7 @@ export class StockService {
       // Set initial stock if provided
       if (dto.initialStock && dto.initialStock > 0) {
         const warehouseId = dto.warehouseId || (await this.getDefaultWarehouse(tx));
-        await tx.stockLevel.create({
+        await tx.nivelStock.create({
           data: {
             productId: product.id,
             warehouseId,
@@ -74,7 +74,7 @@ export class StockService {
 
   async updateProduct(id: string, dto: UpdateProductDto) {
     await this.findProductById(id); // throws if not found
-    return this.prisma.product.update({
+    return this.prisma.producto.update({
       where: { id },
       data: dto,
       include: { stockLevels: { include: { warehouse: true } } },
@@ -83,13 +83,13 @@ export class StockService {
 
   async deleteProduct(id: string) {
     await this.findProductById(id);
-    return this.prisma.product.delete({ where: { id } });
+    return this.prisma.producto.delete({ where: { id } });
   }
 
   // Stock levels
   async getStockLevels(productId: string) {
     await this.findProductById(productId);
-    return this.prisma.stockLevel.findMany({
+    return this.prisma.nivelStock.findMany({
       where: { productId },
       include: { warehouse: true },
     });
@@ -98,12 +98,12 @@ export class StockService {
   async adjustStock(productId: string, dto: AdjustStockDto) {
     return this.prisma.$transaction(async (tx) => {
       // Find or create stock level for this product/warehouse
-      let stockLevel = await tx.stockLevel.findUnique({
+      let stockLevel = await tx.nivelStock.findUnique({
         where: { productId_warehouseId: { productId, warehouseId: dto.warehouseId } },
       });
 
       if (!stockLevel) {
-        stockLevel = await tx.stockLevel.create({
+        stockLevel = await tx.nivelStock.create({
           data: { productId, warehouseId: dto.warehouseId, quantity: 0 },
         });
       }
@@ -118,7 +118,7 @@ export class StockService {
         );
       }
 
-      const updated = await tx.stockLevel.update({
+      const updated = await tx.nivelStock.update({
         where: { id: stockLevel.id },
         data: { quantity: newQuantity },
         include: { warehouse: true },
@@ -154,17 +154,17 @@ export class StockService {
 
   async createEmployeeConsumption(dto: CreateEmployeeConsumptionDto) {
     return this.prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({ where: { id: dto.productId } });
+      const product = await tx.producto.findUnique({ where: { id: dto.productId } });
       if (!product) throw new NotFoundException(`Product ${dto.productId} not found`);
 
-      const warehouse = await tx.warehouse.findUnique({ where: { id: dto.warehouseId } });
+      const warehouse = await tx.deposito.findUnique({ where: { id: dto.warehouseId } });
       if (!warehouse) throw new NotFoundException(`Warehouse ${dto.warehouseId} not found`);
 
-      let stockLevel = await tx.stockLevel.findUnique({
+      let stockLevel = await tx.nivelStock.findUnique({
         where: { productId_warehouseId: { productId: dto.productId, warehouseId: dto.warehouseId } },
       });
       if (!stockLevel) {
-        stockLevel = await tx.stockLevel.create({
+        stockLevel = await tx.nivelStock.create({
           data: { productId: dto.productId, warehouseId: dto.warehouseId, quantity: 0 },
         });
       }
@@ -178,13 +178,13 @@ export class StockService {
         );
       }
 
-      await tx.stockLevel.update({
+      await tx.nivelStock.update({
         where: { id: stockLevel.id },
         data: { quantity: newStock },
       });
 
       const day = new Date().toISOString().slice(0, 10);
-      const entry = await tx.employeeConsumption.create({
+      const entry = await tx.consumoEmpleado.create({
         data: {
           day,
           productId: dto.productId,
@@ -218,7 +218,7 @@ export class StockService {
   }
 
   findAllEmployeeConsumptions(limit = 200) {
-    return this.prisma.employeeConsumption.findMany({
+    return this.prisma.consumoEmpleado.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -227,7 +227,7 @@ export class StockService {
   // ============ Stock count sessions ============
 
   async createStockCountSession(dto: CreateStockCountSessionDto) {
-    return this.prisma.stockCountSession.create({
+    return this.prisma.sesionConteo.create({
       data: {
         date: dto.date,
         dateType: dto.dateType ?? 'regular',
@@ -248,7 +248,7 @@ export class StockService {
   }
 
   findAllStockCountSessions(limit = 100) {
-    return this.prisma.stockCountSession.findMany({
+    return this.prisma.sesionConteo.findMany({
       include: { entries: true },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -258,14 +258,14 @@ export class StockService {
   // ============ Suppliers ============
 
   findAllSuppliers() {
-    return this.prisma.supplier.findMany({
+    return this.prisma.proveedor.findMany({
       include: { products: true },
       orderBy: { name: 'asc' },
     });
   }
 
   async createSupplier(dto: CreateSupplierDto) {
-    return this.prisma.supplier.create({
+    return this.prisma.proveedor.create({
       data: {
         name: dto.name,
         products: dto.productIds?.length
@@ -277,19 +277,19 @@ export class StockService {
   }
 
   async updateSupplier(id: string, dto: UpdateSupplierDto) {
-    const existing = await this.prisma.supplier.findUnique({ where: { id } });
+    const existing = await this.prisma.proveedor.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Supplier ${id} not found`);
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.productIds !== undefined) {
-        await tx.supplierProduct.deleteMany({ where: { supplierId: id } });
+        await tx.proveedorProducto.deleteMany({ where: { supplierId: id } });
         if (dto.productIds.length > 0) {
-          await tx.supplierProduct.createMany({
+          await tx.proveedorProducto.createMany({
             data: dto.productIds.map(productId => ({ supplierId: id, productId })),
           });
         }
       }
-      return tx.supplier.update({
+      return tx.proveedor.update({
         where: { id },
         data: { name: dto.name },
         include: { products: true },
@@ -298,15 +298,15 @@ export class StockService {
   }
 
   async deleteSupplier(id: string) {
-    const existing = await this.prisma.supplier.findUnique({ where: { id } });
+    const existing = await this.prisma.proveedor.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Supplier ${id} not found`);
-    return this.prisma.supplier.delete({ where: { id } });
+    return this.prisma.proveedor.delete({ where: { id } });
   }
 
   // ============ Purchase orders ============
 
   findAllPurchaseOrders(status?: string) {
-    return this.prisma.purchaseOrder.findMany({
+    return this.prisma.ordenCompra.findMany({
       where: status ? { status } : undefined,
       include: { items: true },
       orderBy: { createdAt: 'desc' },
@@ -314,7 +314,7 @@ export class StockService {
   }
 
   async findPurchaseOrderById(id: string) {
-    const order = await this.prisma.purchaseOrder.findFirst({
+    const order = await this.prisma.ordenCompra.findFirst({
       where: { OR: [{ id }, { orderNumber: id }] },
       include: { items: true },
     });
@@ -327,20 +327,16 @@ export class StockService {
   }
 
   private async nextOrderNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const orders = await tx.purchaseOrder.findMany({
-      select: { orderNumber: true },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
+    await tx.contadorPedido.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', valor: 0 },
+      update: {},
     });
-    let max = 0;
-    for (const o of orders) {
-      const m = o.orderNumber.match(/^PED-(\d+)$/);
-      if (m) {
-        const n = parseInt(m[1], 10);
-        if (n > max) max = n;
-      }
-    }
-    return `PED-${String(max + 1).padStart(3, '0')}`;
+    const updated = await tx.contadorPedido.update({
+      where: { id: 'default' },
+      data: { valor: { increment: 1 } },
+    });
+    return `PED-${String(updated.valor).padStart(3, '0')}`;
   }
 
   async createPurchaseOrder(dto: CreatePurchaseOrderDto) {
@@ -354,12 +350,12 @@ export class StockService {
 
       let provider = dto.provider;
       if (dto.supplierId) {
-        const supplier = await tx.supplier.findUnique({ where: { id: dto.supplierId } });
+        const supplier = await tx.proveedor.findUnique({ where: { id: dto.supplierId } });
         if (!supplier) throw new NotFoundException(`Supplier ${dto.supplierId} not found`);
         provider = supplier.name;
       }
 
-      return tx.purchaseOrder.create({
+      return tx.ordenCompra.create({
         data: {
           orderNumber,
           date,
@@ -379,7 +375,7 @@ export class StockService {
   }
 
   async receivePurchaseOrder(idOrNumber: string, dto: ReceivePurchaseOrderDto) {
-    const order = await this.prisma.purchaseOrder.findFirst({
+    const order = await this.prisma.ordenCompra.findFirst({
       where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] },
       include: { items: true },
     });
@@ -414,7 +410,7 @@ export class StockService {
           );
         }
 
-        await tx.purchaseOrderItem.update({
+        await tx.itemOrdenCompra.update({
           where: { id: line.id },
           data: { quantityReceived: qtyReceived },
         });
@@ -422,7 +418,7 @@ export class StockService {
         for (const alloc of recv.allocations) {
           if (alloc.quantity <= 0) continue;
 
-          let stockLevel = await tx.stockLevel.findUnique({
+          let stockLevel = await tx.nivelStock.findUnique({
             where: {
               productId_warehouseId: {
                 productId: recv.productId,
@@ -431,7 +427,7 @@ export class StockService {
             },
           });
           if (!stockLevel) {
-            stockLevel = await tx.stockLevel.create({
+            stockLevel = await tx.nivelStock.create({
               data: {
                 productId: recv.productId,
                 warehouseId: alloc.warehouseId,
@@ -444,7 +440,7 @@ export class StockService {
           const delta = Math.round(alloc.quantity * 1000) / 1000;
           const newQuantity = Math.round((current + delta) * 1000) / 1000;
 
-          await tx.stockLevel.update({
+          await tx.nivelStock.update({
             where: { id: stockLevel.id },
             data: { quantity: newQuantity },
           });
@@ -463,7 +459,7 @@ export class StockService {
 
       await this.movements.recordMany(tx, movementEntries);
 
-      return tx.purchaseOrder.update({
+      return tx.ordenCompra.update({
         where: { id: order.id },
         data: { status: 'Recibido', receivedAt },
         include: { items: true },
@@ -473,43 +469,43 @@ export class StockService {
 
   // Warehouses
   async findAllWarehouses() {
-    return this.prisma.warehouse.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.deposito.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createWarehouse(dto: { name: string; location: string; icon?: string }) {
-    return this.prisma.warehouse.create({ data: dto });
+    return this.prisma.deposito.create({ data: dto });
   }
 
   async updateWarehouse(id: string, dto: { name?: string; location?: string; icon?: string }) {
-    const existing = await this.prisma.warehouse.findUnique({ where: { id } });
+    const existing = await this.prisma.deposito.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Warehouse ${id} not found`);
-    return this.prisma.warehouse.update({ where: { id }, data: dto });
+    return this.prisma.deposito.update({ where: { id }, data: dto });
   }
 
   async deleteWarehouse(id: string) {
-    const existing = await this.prisma.warehouse.findUnique({ where: { id } });
+    const existing = await this.prisma.deposito.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Warehouse ${id} not found`);
     // StockLevel tiene onDelete: Cascade — no hace falta borrar niveles a mano.
-    return this.prisma.warehouse.delete({ where: { id } });
+    return this.prisma.deposito.delete({ where: { id } });
   }
 
   // Categories
   async findAllCategories() {
-    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.categoria.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createCategory(dto: { name: string; icon?: string }) {
-    return this.prisma.category.create({ data: dto });
+    return this.prisma.categoria.create({ data: dto });
   }
 
   async updateCategory(id: string, dto: { name?: string; icon?: string }) {
-    const existing = await this.prisma.category.findUnique({ where: { id } });
+    const existing = await this.prisma.categoria.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Category ${id} not found`);
-    return this.prisma.category.update({ where: { id }, data: dto });
+    return this.prisma.categoria.update({ where: { id }, data: dto });
   }
 
   async deleteCategory(id: string) {
-    const existing = await this.prisma.category.findUnique({
+    const existing = await this.prisma.categoria.findUnique({
       where: { id },
       include: { _count: { select: { products: true } } },
     });
@@ -519,12 +515,12 @@ export class StockService {
         `No se puede eliminar la categoría: tiene ${existing._count.products} producto(s) asociado(s).`,
       );
     }
-    return this.prisma.category.delete({ where: { id } });
+    return this.prisma.categoria.delete({ where: { id } });
   }
 
   // Internal helpers
   private async getDefaultWarehouse(tx: any): Promise<string> {
-    const wh = await tx.warehouse.findFirst({ orderBy: { createdAt: 'asc' } });
+    const wh = await tx.deposito.findFirst({ orderBy: { createdAt: 'asc' } });
     if (!wh) throw new ConflictException('No warehouses configured. Create one first.');
     return wh.id;
   }

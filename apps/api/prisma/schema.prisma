@@ -1,5 +1,5 @@
-// Prisma schema — Sistema de Gestión LCH (La Chacra Fútbol)
-// Local-first modular backend with PostgreSQL
+// Esquema Prisma — Sistema de Gestión LCH (La Chacra Fútbol)
+// PostgreSQL · modelos en español · optimizado para ventas + stock
 
 generator client {
   provider = "prisma-client-js"
@@ -13,326 +13,393 @@ datasource db {
 
 // ==================== AUTH ====================
 
-model User {
+model Usuario {
   id        String   @id @default(uuid())
   username  String   @unique
   name      String
-  role      String   @default("Operador") // Admin, Operador, Viewer, SuperAdmin, etc.
-  password  String   // bcrypt hash
+  role      String   @default("Operador")
+  password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  salesTickets   SalesTicket[]
-  auditEntries   AuditEntry[]
+  salesTickets TicketVenta[] @relation("TicketsOperador")
+  auditEntries EntradaAuditoria[]
+
+  @@map("usuarios")
 }
 
-// ==================== STOCK / INVENTORY ====================
+// ==================== STOCK / INVENTARIO ====================
 
-model Category {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  icon        String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model Categoria {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  products    Product[]
+  products Producto[]
+
+  @@map("categorias")
 }
 
-model Warehouse {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  location    String
-  icon        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Deposito {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  location  String
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  stockLevels StockLevel[]
+  stockLevels     NivelStock[]
+  movimientos     MovimientoStock[]
+  consumos        ConsumoEmpleado[]
+
+  @@map("depositos")
 }
 
-model Product {
+model Producto {
   id          String   @id @default(uuid())
   name        String
   code        String   @unique
   description String?
   categoryId  String
-  unit        String   @default("unidades") // unidades, kg
-  orderUnit   Int?     // pack size for ordering
+  unit        String   @default("unidades")
+  orderUnit   Int?
   image       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category         Category        @relation(fields: [categoryId], references: [id])
-  stockLevels      StockLevel[]
-  recipeItems        RecipeItem[]
-  supplierProducts   SupplierProduct[]
-  purchaseOrderItems PurchaseOrderItem[]
+  category           Categoria          @relation(fields: [categoryId], references: [id])
+  stockLevels        NivelStock[]
+  recipeItems        ItemReceta[]
+  supplierProducts   ProveedorProducto[]
+  purchaseOrderItems ItemOrdenCompra[]
+  movimientos        MovimientoStock[]
+  consumos           ConsumoEmpleado[]
+  conteoEntradas     EntradaConteo[]
+  productosOnline    ProductoOnline[]
 
   @@index([categoryId])
+  @@index([name])
+  @@map("productos")
 }
 
-model StockLevel {
+model NivelStock {
   id          String   @id @default(uuid())
   productId   String
   warehouseId String
-  quantity    Decimal  @default(0) @db.Decimal(12, 3) // soporta fracciones (kg, litros)
+  quantity    Decimal  @default(0) @db.Decimal(12, 3)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product   Producto @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Deposito @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([productId, warehouseId])
   @@index([productId])
   @@index([warehouseId])
+  @@map("niveles_stock")
 }
 
-model Supplier {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Proveedor {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  products       SupplierProduct[]
-  purchaseOrders PurchaseOrder[]
+  products       ProveedorProducto[]
+  purchaseOrders OrdenCompra[]
+
+  @@map("proveedores")
 }
 
-model SupplierProduct {
+model ProveedorProducto {
   id         String   @id @default(uuid())
   supplierId String
   productId  String
   createdAt  DateTime @default(now())
 
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Proveedor @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product  Producto  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([supplierId, productId])
+  @@index([productId])
+  @@map("proveedores_productos")
 }
 
-// ==================== SALES ====================
+// ==================== VENTAS ====================
 
-model SalesProduct {
-  id          String   @id @default(uuid())
-  name        String
-  category    String   @default("Comidas")
-  kitchenId   String
-  price       Decimal  @db.Decimal(10, 2)
-  emoji       String?
-  kind        String   @default("simple") // simple | promo
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model ProductoVenta {
+  id        String   @id @default(uuid())
+  name      String
+  category  String   @default("Comidas")
+  kitchenId String
+  price     Decimal  @db.Decimal(10, 2)
+  emoji     String?
+  kind      String   @default("simple") // simple | promo
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  recipe        RecipeItem[]
-  bundleItems   SalesProductBundleItem[] @relation("PromoProduct")
-  usedInBundles SalesProductBundleItem[] @relation("BundleComponent")
-  ticketItems   SalesTicketItem[]
-  kitchen       Kitchen    @relation(fields: [kitchenId], references: [id])
+  recipe        ItemReceta[]
+  bundleItems   ItemComboVenta[] @relation("PromoProduct")
+  usedInBundles ItemComboVenta[] @relation("BundleComponent")
+  ticketItems   ItemTicketVenta[]
+  kitchen       Cocina           @relation(fields: [kitchenId], references: [id])
+  kitchenItems  ItemOrdenCocina[]
+
+  // Evita el mismo nombre de carta duplicado en la misma cocina
+  @@unique([name, kitchenId])
+  @@index([kitchenId])
+  @@index([active, kitchenId])
+  @@index([active, name])
+  @@map("productos_venta")
 }
 
-model SalesProductBundleItem {
-  id                 String       @id @default(uuid())
+model ItemComboVenta {
+  id                 String @id @default(uuid())
   promoProductId     String
   componentProductId String
-  quantity           Int          @default(1)
-  createdAt          DateTime     @default(now())
+  quantity           Int    @default(1)
+  createdAt          DateTime @default(now())
 
-  promoProduct       SalesProduct @relation("PromoProduct", fields: [promoProductId], references: [id], onDelete: Cascade)
-  componentProduct   SalesProduct @relation("BundleComponent", fields: [componentProductId], references: [id], onDelete: Restrict)
+  promoProduct     ProductoVenta @relation("PromoProduct", fields: [promoProductId], references: [id], onDelete: Cascade)
+  componentProduct ProductoVenta @relation("BundleComponent", fields: [componentProductId], references: [id], onDelete: Restrict)
 
   @@unique([promoProductId, componentProductId])
   @@index([promoProductId])
   @@index([componentProductId])
+  @@map("items_combo_venta")
 }
 
-model RecipeItem {
-  id                String        @id @default(uuid())
-  salesProductId    String
-  stockProductId    String
-  quantity          Decimal       @db.Decimal(12, 3) // soporta fracciones (ej. 0.2 kg por unidad)
-  createdAt         DateTime      @default(now())
+model ItemReceta {
+  id             String  @id @default(uuid())
+  salesProductId String
+  stockProductId String
+  quantity       Decimal @db.Decimal(12, 3)
+  createdAt      DateTime @default(now())
 
-  salesProduct      SalesProduct  @relation(fields: [salesProductId], references: [id], onDelete: Cascade)
-  stockProduct      Product       @relation(fields: [stockProductId], references: [id], onDelete: Cascade)
+  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id], onDelete: Cascade)
+  stockProduct Producto      @relation(fields: [stockProductId], references: [id], onDelete: Cascade)
 
   @@unique([salesProductId, stockProductId])
   @@index([salesProductId])
   @@index([stockProductId])
+  @@map("items_receta")
 }
 
-model SalesTicket {
-  id            String              @id @default(uuid())
-  number        Int                 @unique
-  createdAt     DateTime            @default(now())
-  status        String              @default("emitido") // emitido, anulado, devuelto
-  total         Decimal             @db.Decimal(10, 2)
-  operatorId    String
-  note          String?
-  idempotencyKey String?            @unique
+model TicketVenta {
+  id             String   @id @default(uuid())
+  number         Int      @unique
+  createdAt      DateTime @default(now())
+  status         String   @default("emitido") // emitido, anulado, devuelto
+  total          Decimal  @db.Decimal(10, 2)
+  operatorId     String
+  note           String?
+  idempotencyKey String?  @unique
 
-  operator      User                @relation(fields: [operatorId], references: [id])
-  items         SalesTicketItem[]
-  kitchenOrders KitchenOrder[]
+  operator      Usuario           @relation("TicketsOperador", fields: [operatorId], references: [id])
+  items         ItemTicketVenta[]
+  kitchenOrders OrdenCocina[]
 
   @@index([operatorId])
   @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@map("tickets_venta")
 }
 
-model SalesTicketItem {
-  id              String       @id @default(uuid())
-  ticketId        String
-  salesProductId  String
-  name            String
-  unitPrice       Decimal      @db.Decimal(10, 2)
-  quantity        Int
-  createdAt       DateTime     @default(now())
+model ItemTicketVenta {
+  id             String  @id @default(uuid())
+  ticketId       String
+  salesProductId String
+  name           String // snapshot al momento de la venta (intencional)
+  unitPrice      Decimal @db.Decimal(10, 2) // snapshot
+  quantity       Int
+  createdAt      DateTime @default(now())
 
-  ticket          SalesTicket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  salesProduct    SalesProduct @relation(fields: [salesProductId], references: [id])
+  ticket       TicketVenta   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id])
 
   @@index([ticketId])
   @@index([salesProductId])
+  @@map("items_ticket_venta")
 }
 
-// ==================== KITCHEN DISPLAY SYSTEM ====================
+/// Contador atómico para números de ticket (evita MAX+1 y duplicados bajo concurrencia)
+model ContadorTicket {
+  id    String @id @default("default")
+  valor Int    @default(1000)
 
-model Kitchen {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  emoji       String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  salesProducts SalesProduct[]
-  orders        KitchenOrder[]
+  @@map("contadores_ticket")
 }
 
-model KitchenOrder {
-  id            String   @id @default(uuid())
-  ticketId      String
-  ticketNumber  Int
-  kitchenId     String
-  status        String   @default("pending") // pending, preparing, ready, delivered
-  operatorName  String
-  tableId       String?
-  tableName     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+/// Contador atómico para pedidos de compra (PED-001…)
+model ContadorPedido {
+  id    String @id @default("default")
+  valor Int    @default(0)
 
-  ticket        SalesTicket @relation(fields: [ticketId], references: [id])
-  kitchen       Kitchen     @relation(fields: [kitchenId], references: [id])
-  items         KitchenOrderItem[]
+  @@map("contadores_pedido")
+}
+
+// ==================== COCINA (KDS) ====================
+
+model Cocina {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  emoji     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  salesProducts ProductoVenta[]
+  orders        OrdenCocina[]
+
+  @@index([active])
+  @@map("cocinas")
+}
+
+model OrdenCocina {
+  id           String   @id @default(uuid())
+  ticketId     String
+  ticketNumber Int // snapshot del número de ticket (consulta KDS rápida)
+  kitchenId    String
+  status       String   @default("pending") // pending, preparing, ready, delivered
+  operatorName String
+  tableId      String?
+  tableName    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ticket  TicketVenta       @relation(fields: [ticketId], references: [id])
+  kitchen Cocina            @relation(fields: [kitchenId], references: [id])
+  items   ItemOrdenCocina[]
 
   @@index([ticketId])
   @@index([kitchenId])
   @@index([status])
+  @@index([kitchenId, status, createdAt])
+  @@map("ordenes_cocina")
 }
 
-model KitchenOrderItem {
-  id              String       @id @default(uuid())
-  kitchenOrderId  String
-  salesProductId  String
-  name            String
-  quantity        Int
-  emoji           String?
-  createdAt       DateTime     @default(now())
+model ItemOrdenCocina {
+  id             String  @id @default(uuid())
+  kitchenOrderId String
+  salesProductId String
+  name           String // snapshot
+  quantity       Int
+  emoji          String?
+  createdAt      DateTime @default(now())
 
-  kitchenOrder    KitchenOrder @relation(fields: [kitchenOrderId], references: [id], onDelete: Cascade)
+  kitchenOrder OrdenCocina   @relation(fields: [kitchenOrderId], references: [id], onDelete: Cascade)
+  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id])
 
   @@index([kitchenOrderId])
+  @@index([salesProductId])
+  @@map("items_orden_cocina")
 }
 
 // ==================== MEDIA / UPLOADS ====================
 
-model MediaItem {
-  id          String   @id @default(uuid())
-  title       String
-  type        String   // image, video
-  url         String
-  mimeType    String
-  size        Int      // bytes
-  bucket      String   @default("lch-media")
-  key         String   @unique // S3 object key
-  matchDate   String?  // YYYY-MM-DD for football media
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Medio {
+  id        String   @id @default(uuid())
+  title     String
+  type      String
+  url       String
+  mimeType  String
+  size      Int
+  bucket    String   @default("lch-media")
+  key       String   @unique
+  matchDate String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([matchDate])
+  @@map("medios")
 }
 
-// ==================== SPONSORS ====================
+// ==================== PATROCINADORES ====================
 
-model Sponsor {
-  id          String   @id @default(uuid())
-  name        String
-  imageUrl    String
-  placement   String   @default("banner") // banner, fullscreen, sidebar
-  active      Boolean  @default(true)
-  linkUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Patrocinador {
+  id        String   @id @default(uuid())
+  name      String
+  imageUrl  String
+  placement String   @default("banner")
+  active    Boolean  @default(true)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([active])
   @@index([placement])
+  @@map("patrocinadores")
 }
 
-// ==================== ONLINE CATALOG ====================
+// ==================== CATÁLOGO ONLINE ====================
 
-model OnlineProduct {
-  id              String   @id @default(uuid())
-  name            String
-  description     String?
-  price           Decimal  @db.Decimal(10, 2)
-  image           String?
-  images          String[] @default([])
-  category        String
-  attributes      Json?
-  active          Boolean  @default(true)
-  stockProductId  String?  // linkage to stock product
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model ProductoOnline {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  price          Decimal  @db.Decimal(10, 2)
+  image          String?
+  images         String[] @default([])
+  category       String
+  attributes     Json?
+  active         Boolean  @default(true)
+  stockProductId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stockProduct Producto? @relation(fields: [stockProductId], references: [id], onDelete: SetNull)
 
   @@index([active])
   @@index([category])
+  @@index([stockProductId])
+  @@map("productos_online")
 }
 
-// ==================== FOOTBALL ====================
+// ==================== FÚTBOL ====================
 
-model FootballTeam {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  shortName   String?
-  logo        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model EquipoFutbol {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  shortName String?
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  homeMatches FootballMatch[] @relation("HomeTeam")
-  awayMatches FootballMatch[] @relation("AwayTeam")
+  homeMatches PartidoFutbol[] @relation("HomeTeam")
+  awayMatches PartidoFutbol[] @relation("AwayTeam")
+
+  @@map("equipos_futbol")
 }
 
-model FootballMatch {
-  id          String   @id @default(uuid())
-  homeTeamId  String
-  awayTeamId  String
-  date        DateTime
-  status      String   @default("pendiente") // pendiente, jugado, suspendido
-  homeGoals   Int?
-  awayGoals   Int?
-  venue       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model PartidoFutbol {
+  id         String   @id @default(uuid())
+  homeTeamId String
+  awayTeamId String
+  date       DateTime
+  status     String   @default("pendiente")
+  homeGoals  Int?
+  awayGoals  Int?
+  venue      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  homeTeam    FootballTeam @relation("HomeTeam", fields: [homeTeamId], references: [id])
-  awayTeam    FootballTeam @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeTeam EquipoFutbol @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam EquipoFutbol @relation("AwayTeam", fields: [awayTeamId], references: [id])
 
   @@index([status])
   @@index([date])
+  @@index([status, date])
+  @@map("partidos_futbol")
 }
 
-// ==================== AUDIT ====================
+// ==================== AUDITORÍA ====================
 
-model AuditEntry {
+model EntradaAuditoria {
   id            String   @id @default(uuid())
   userId        String
   action        String
@@ -341,40 +408,49 @@ model AuditEntry {
   newValue      String?
   createdAt     DateTime @default(now())
 
-  user          User     @relation(fields: [userId], references: [id])
+  user Usuario @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("entradas_auditoria")
 }
 
-// ==================== STOCK MOVEMENTS & OPERATIONS ====================
+// ==================== MOVIMIENTOS Y OPERACIONES DE STOCK ====================
 
-model StockMovement {
+model MovimientoStock {
   id           String   @id @default(uuid())
   createdAt    DateTime @default(now())
-  type         String   // venta, venta_anulada, devolucion, consumo, entrada, ajuste_manual
+  type         String
   productId    String
   warehouseId  String?
-  quantity     Decimal  @db.Decimal(12, 3) // signado: salida negativa, entrada positiva
+  quantity     Decimal  @db.Decimal(12, 3)
   reference    String?
-  operatorId   String?
+  operatorId   String? // puede ser id de usuario o valor legacy; sin FK rígida
   operatorName String?
+
+  product   Producto  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse Deposito? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
   @@index([productId])
   @@index([warehouseId])
   @@index([type])
   @@index([createdAt])
+  @@index([productId, createdAt])
+  @@index([type, createdAt])
+  @@index([reference])
+  @@map("movimientos_stock")
 }
 
-model EmployeeConsumption {
+model ConsumoEmpleado {
   id            String   @id @default(uuid())
-  day           String   // YYYY-MM-DD
+  day           String
   createdAt     DateTime @default(now())
   productId     String
-  productName   String
+  productName   String // snapshot
   productCode   String?
   warehouseId   String
-  warehouseName String
+  warehouseName String // snapshot
   quantity      Decimal  @db.Decimal(12, 3)
   unit          String   @default("unidades")
   previousStock Decimal  @db.Decimal(12, 3)
@@ -384,103 +460,120 @@ model EmployeeConsumption {
   operatorRole  String?
   note          String?
 
+  product   Producto @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse Deposito @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
   @@index([productId])
+  @@index([warehouseId])
   @@index([day])
   @@index([createdAt])
+  @@index([day, productId])
+  @@map("consumos_empleado")
 }
 
-model StockCountSession {
+model SesionConteo {
   id           String   @id @default(uuid())
   createdAt    DateTime @default(now())
   date         String
-  dateType     String   @default("regular") // regular, after
+  dateType     String   @default("regular")
   operatorId   String?
   operatorName String?
 
-  entries      StockCountEntry[]
+  entries EntradaConteo[]
 
   @@index([date])
   @@index([createdAt])
+  @@map("sesiones_conteo")
 }
 
-model PurchaseOrder {
+model EntradaConteo {
+  id          String   @id @default(uuid())
+  sessionId   String
+  productId   String
+  productName String // snapshot
+  unit        String   @default("unidades")
+  expected    Decimal  @db.Decimal(12, 3)
+  counted     Decimal  @db.Decimal(12, 3)
+  createdAt   DateTime @default(now())
+
+  session SesionConteo @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Producto     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, productId])
+  @@index([sessionId])
+  @@index([productId])
+  @@map("entradas_conteo")
+}
+
+model OrdenCompra {
   id          String    @id @default(uuid())
-  orderNumber String    @unique // PED-001 (visible en UI)
-  date        String    // YYYY-MM-DD
+  orderNumber String    @unique
+  date        String
   provider    String
   supplierId  String?
-  status      String    @default("Pendiente") // Pendiente, Recibido
+  status      String    @default("Pendiente")
   receivedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  items    PurchaseOrderItem[]
+  supplier Proveedor?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items    ItemOrdenCompra[]
 
   @@index([status])
   @@index([date])
   @@index([createdAt])
+  @@index([status, createdAt])
+  @@map("ordenes_compra")
 }
 
-model PurchaseOrderItem {
+model ItemOrdenCompra {
   id               String   @id @default(uuid())
   purchaseOrderId  String
   productId        String
   quantityOrdered  Decimal  @db.Decimal(12, 3)
   quantityReceived Decimal? @db.Decimal(12, 3)
 
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  product       Product       @relation(fields: [productId], references: [id])
+  purchaseOrder OrdenCompra @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Producto    @relation(fields: [productId], references: [id])
 
+  @@unique([purchaseOrderId, productId])
   @@index([purchaseOrderId])
   @@index([productId])
+  @@map("items_orden_compra")
 }
 
-model StockCountEntry {
-  id          String   @id @default(uuid())
-  sessionId   String
-  productId   String
-  productName String
-  unit        String   @default("unidades")
-  expected    Decimal  @db.Decimal(12, 3)
-  counted     Decimal  @db.Decimal(12, 3)
-  createdAt   DateTime @default(now())
+// ==================== CONSUMOS (legacy) ====================
 
-  session     StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+model LogConsumo {
+  id        String   @id @default(uuid())
+  day       String
+  dateType  String   @default("regular")
+  createdAt DateTime @default(now())
 
-  @@index([sessionId])
-  @@index([productId])
-}
-
-// ==================== CONSUMPTION LOGS (legacy) ====================
-
-model ConsumptionLog {
-  id          String   @id @default(uuid())
-  day         String   // YYYY-MM-DD
-  dateType    String   @default("regular") // regular, after
-  createdAt   DateTime @default(now())
-
-  entries     ConsumptionEntry[]
+  entries EntradaConsumo[]
 
   @@index([day])
   @@index([dateType])
+  @@index([day, dateType])
+  @@map("logs_consumo")
 }
 
-model ConsumptionEntry {
-  id              String          @id @default(uuid())
-  logId           String
-  productId       String
-  productName     String
-  warehouseId     String
-  warehouseName   String
-  previousStock   Decimal         @db.Decimal(12, 3)
-  newStock        Decimal         @db.Decimal(12, 3)
-  consumed        Decimal         @db.Decimal(12, 3)
-  unit            String          @default("unidades")
-  createdAt       DateTime        @default(now())
+model EntradaConsumo {
+  id            String  @id @default(uuid())
+  logId         String
+  productId     String
+  productName   String
+  warehouseId   String
+  warehouseName String
+  previousStock Decimal @db.Decimal(12, 3)
+  newStock      Decimal @db.Decimal(12, 3)
+  consumed      Decimal @db.Decimal(12, 3)
+  unit          String  @default("unidades")
+  createdAt     DateTime @default(now())
 
-  log             ConsumptionLog  @relation(fields: [logId], references: [id], onDelete: Cascade)
+  log LogConsumo @relation(fields: [logId], references: [id], onDelete: Cascade)
 
   @@index([logId])
   @@index([productId])
+  @@map("entradas_consumo")
 }

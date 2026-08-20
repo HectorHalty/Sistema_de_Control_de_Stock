@@ -38,7 +38,7 @@ export async function loadSalesProductsForStock(
     const batch = queue.splice(0, queue.length).filter(id => !collected.has(id));
     if (batch.length === 0) continue;
 
-    const rows = await tx.salesProduct.findMany({
+    const rows = await tx.productoVenta.findMany({
       where: { id: { in: batch } },
       include: SALES_PRODUCT_STOCK_INCLUDE,
     });

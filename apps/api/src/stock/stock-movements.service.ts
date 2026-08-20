@@ -44,7 +44,7 @@ export class StockMovementsService {
         operatorName: e.operatorName ?? null,
       }));
     if (data.length === 0) return;
-    await tx.stockMovement.createMany({ data });
+    await tx.movimientoStock.createMany({ data });
   }
 
   async findAll(filters?: {
@@ -54,7 +54,7 @@ export class StockMovementsService {
     to?: string;
     limit?: number;
   }) {
-    const where: Prisma.StockMovementWhereInput = {};
+    const where: Prisma.MovimientoStockWhereInput = {};
     if (filters?.productId) where.productId = filters.productId;
     if (filters?.type) where.type = filters.type;
     if (filters?.from || filters?.to) {
@@ -62,7 +62,7 @@ export class StockMovementsService {
       if (filters.from) where.createdAt.gte = new Date(filters.from);
       if (filters.to) where.createdAt.lte = new Date(filters.to);
     }
-    return this.prisma.stockMovement.findMany({
+    return this.prisma.movimientoStock.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: filters?.limit ?? 500,

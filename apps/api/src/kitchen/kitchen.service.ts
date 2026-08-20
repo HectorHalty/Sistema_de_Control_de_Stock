@@ -21,7 +21,7 @@ export class KitchenService {
   ) {}
 
   async findAllOrders(kitchenId?: string, status?: string) {
-    return this.prisma.kitchenOrder.findMany({
+    return this.prisma.ordenCocina.findMany({
       where: {
         ...(kitchenId ? { kitchenId } : {}),
         ...(status ? { status } : {}),
@@ -36,7 +36,7 @@ export class KitchenService {
   }
 
   async findOrderById(id: string) {
-    const order = await this.prisma.kitchenOrder.findUnique({
+    const order = await this.prisma.ordenCocina.findUnique({
       where: { id },
       include: { kitchen: true, items: true },
     });
@@ -46,7 +46,7 @@ export class KitchenService {
 
   async transitionOrder(id: string, nextStatus: KitchenOrderStatus) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.kitchenOrder.findUnique({ where: { id } });
+      const order = await tx.ordenCocina.findUnique({ where: { id } });
       if (!order) throw new NotFoundException(`Kitchen order ${id} not found`);
 
       const allowed = VALID_TRANSITIONS[order.status as KitchenOrderStatus];
@@ -56,7 +56,7 @@ export class KitchenService {
         );
       }
 
-      const updated = await tx.kitchenOrder.update({
+      const updated = await tx.ordenCocina.update({
         where: { id },
         data: { status: nextStatus },
         include: { items: true, kitchen: true },
@@ -76,7 +76,7 @@ export class KitchenService {
   }
 
   async getActiveOrdersForKitchen(kitchenId: string) {
-    return this.prisma.kitchenOrder.findMany({
+    return this.prisma.ordenCocina.findMany({
       where: { kitchenId, status: { not: 'delivered' } },
       include: { items: true },
       orderBy: { createdAt: 'asc' },

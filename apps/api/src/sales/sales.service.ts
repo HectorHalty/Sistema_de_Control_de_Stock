@@ -25,7 +25,7 @@ interface MissingStockItem {
   available: number;
 }
 
-interface TicketItemData extends Omit<Prisma.SalesTicketItemUncheckedCreateWithoutTicketInput, 'createdAt'> {}
+interface TicketItemData extends Omit<Prisma.ItemTicketVentaUncheckedCreateWithoutTicketInput, 'createdAt'> {}
 
 @Injectable()
 export class SalesService {
@@ -42,7 +42,7 @@ export class SalesService {
     const operatorId = dto.operatorId ?? 'local';
     // Idempotency check
     if (dto.idempotencyKey) {
-      const existing = await this.prisma.salesTicket.findUnique({
+      const existing = await this.prisma.ticketVenta.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
         include: { items: true, operator: { select: { name: true, username: true } } },
       });
@@ -53,7 +53,7 @@ export class SalesService {
 
     // Validate sales products exist and are active
     const salesProductIds = [...new Set(dto.items.map(i => i.salesProductId))];
-    const salesProducts = await this.prisma.salesProduct.findMany({
+    const salesProducts = await this.prisma.productoVenta.findMany({
       where: { id: { in: salesProductIds }, active: true },
     });
 
@@ -73,8 +73,8 @@ export class SalesService {
       const stockProductIds = Object.keys(requiredByStockProduct);
       const lockedLevels = await tx.$queryRaw`
         SELECT sl.*, p.name as "productName"
-        FROM "StockLevel" sl
-        JOIN "Product" p ON p.id = sl."productId"
+        FROM "niveles_stock" sl
+        JOIN "productos" p ON p.id = sl."productId"
         WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
         FOR UPDATE
       ` as Array<{ productId: string; quantity: number; warehouseId: string; productName: string }>;
@@ -122,7 +122,7 @@ export class SalesService {
         remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
 
         await tx.$executeRaw`
-          UPDATE "StockLevel" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
+          UPDATE "niveles_stock" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
           WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
         `;
 
@@ -136,11 +136,8 @@ export class SalesService {
         });
       }
 
-      // Get next ticket number atomically
-      const counter = await tx.$queryRaw`
-        SELECT COALESCE(MAX(number), 999) + 1 as next_num FROM "SalesTicket"
-      ` as Array<{ next_num: number }>;
-      const ticketNumber = counter[0].next_num;
+      // Número de ticket atómico (evita MAX+1 y colisiones concurrentes)
+      const ticketNumber = await this.nextTicketNumber(tx);
 
       // Calculate total
       let total = 0;
@@ -158,7 +155,7 @@ export class SalesService {
       }
 
       // Create ticket
-      const ticket = await tx.salesTicket.create({
+      const ticket = await tx.ticketVenta.create({
         data: {
           number: ticketNumber,
           status: 'emitido',
@@ -171,7 +168,7 @@ export class SalesService {
         include: { items: true, operator: { select: { name: true, username: true } } },
       });
 
-      const operatorName = ticket.operator?.name ?? ticket.operator?.username;
+      const operatorName = ticket.operator?.name ?? ticket.operator?.username ?? operatorId;
       await this.movements.recordMany(
         tx,
         movementEntries.map(m => ({
@@ -190,7 +187,7 @@ export class SalesService {
         kitchenGroups[kitchenId].push(item);
       }
 
-      const kitchens = await tx.kitchen.findMany({
+      const kitchens = await tx.cocina.findMany({
         where: { id: { in: Object.keys(kitchenGroups) }, active: true },
       });
       const kitchenMap = new Map(kitchens.map(k => [k.id, k]));
@@ -199,13 +196,13 @@ export class SalesService {
         const kitchen = kitchenMap.get(kitchenId);
         if (!kitchen) continue;
 
-        const ko = await tx.kitchenOrder.create({
+        await tx.ordenCocina.create({
           data: {
             ticketId: ticket.id,
             ticketNumber: ticket.number,
             kitchenId,
             status: 'pending',
-            operatorName: operatorId, // simplified
+            operatorName,
             items: {
               create: items.map(i => ({
                 salesProductId: i.salesProductId,
@@ -232,7 +229,7 @@ export class SalesService {
     const operatorId = dto.operatorId ?? 'local';
     // Idempotency check
     if (dto.idempotencyKey) {
-      const existing = await this.prisma.salesTicket.findFirst({
+      const existing = await this.prisma.ticketVenta.findFirst({
         where: { idempotencyKey: dto.idempotencyKey },
       });
       if (existing) {
@@ -241,7 +238,7 @@ export class SalesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const ticket = await tx.salesTicket.findUnique({
+      const ticket = await tx.ticketVenta.findUnique({
         where: { id: dto.ticketId },
         include: { items: true },
       });
@@ -268,14 +265,14 @@ export class SalesService {
       }> = [];
 
       for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-        const levels = await tx.stockLevel.findMany({
+        const levels = await tx.nivelStock.findMany({
           where: { productId: stockProductId },
           orderBy: { warehouseId: 'asc' },
         });
 
         if (levels.length > 0) {
           await tx.$executeRaw`
-            UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
+            UPDATE "niveles_stock" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
             WHERE id::text = ${levels[0].id}
           `;
           restoreMovements.push({
@@ -289,7 +286,7 @@ export class SalesService {
         }
       }
 
-      const operator = await tx.user.findUnique({ where: { id: operatorId } });
+      const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
       await this.movements.recordMany(
         tx,
         restoreMovements.map(m => ({
@@ -299,7 +296,7 @@ export class SalesService {
       );
 
       // Update ticket status
-      const updated = await tx.salesTicket.update({
+      const updated = await tx.ticketVenta.update({
         where: { id: dto.ticketId },
         data: { status: 'devuelto' },
         include: { items: true },
@@ -317,7 +314,7 @@ export class SalesService {
   async returnItems(dto: ReturnItemsDto) {
     const operatorId = dto.operatorId ?? 'local';
     if (dto.idempotencyKey) {
-      const existing = await this.prisma.salesTicket.findUnique({
+      const existing = await this.prisma.ticketVenta.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
       });
       if (existing) {
@@ -350,7 +347,7 @@ export class SalesService {
       }
 
       const salesProductIds = aggregated.map(i => i.salesProductId);
-      const salesProducts = await tx.salesProduct.findMany({
+      const salesProducts = await tx.productoVenta.findMany({
         where: { id: { in: salesProductIds }, active: true },
       });
       if (salesProducts.length !== salesProductIds.length) {
@@ -359,10 +356,7 @@ export class SalesService {
       const spMap = await loadSalesProductsForStock(tx, salesProductIds);
       const spMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
-      const counter = await tx.$queryRaw`
-        SELECT COALESCE(MAX(number), 999) + 1 as next_num FROM "SalesTicket"
-      ` as Array<{ next_num: number }>;
-      const ticketNumber = counter[0].next_num;
+      const ticketNumber = await this.nextTicketNumber(tx);
 
       let total = 0;
       const ticketItems: TicketItemData[] = [];
@@ -377,7 +371,7 @@ export class SalesService {
         });
       }
 
-      const ticket = await tx.salesTicket.create({
+      const ticket = await tx.ticketVenta.create({
         data: {
           number: ticketNumber,
           status: 'devuelto',
@@ -418,10 +412,10 @@ export class SalesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
-        SELECT id FROM "SalesTicket" WHERE id::text = ${ticketId} FOR UPDATE
+        SELECT id FROM "tickets_venta" WHERE id::text = ${ticketId} FOR UPDATE
       `;
 
-      const ticket = await tx.salesTicket.findUnique({
+      const ticket = await tx.ticketVenta.findUnique({
         where: { id: ticketId },
         include: { items: true },
       });
@@ -436,7 +430,7 @@ export class SalesService {
           ...newItems.map(i => i.salesProductId),
         ]),
       ];
-      const salesProducts = await tx.salesProduct.findMany({
+      const salesProducts = await tx.productoVenta.findMany({
         where: { id: { in: allProductIds } },
       });
       const spMap = await loadSalesProductsForStock(tx, allProductIds);
@@ -469,7 +463,7 @@ export class SalesService {
       if (stockProductIds.length > 0) {
         const lockedLevels = await tx.$queryRaw`
           SELECT sl.*
-          FROM "StockLevel" sl
+          FROM "niveles_stock" sl
           WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
           FOR UPDATE
         ` as Array<{ productId: string; quantity: number; warehouseId: string }>;
@@ -511,7 +505,7 @@ export class SalesService {
           const deduction = round3(Math.min(Number(level.quantity), required));
           remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
           await tx.$executeRaw`
-            UPDATE "StockLevel" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
+            UPDATE "niveles_stock" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
             WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
           `;
           movementEntries.push({
@@ -524,7 +518,7 @@ export class SalesService {
           });
         }
 
-        const operator = await tx.user.findUnique({ where: { id: operatorId } });
+        const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
         await this.movements.recordMany(
           tx,
           movementEntries.map(m => ({
@@ -534,7 +528,7 @@ export class SalesService {
         );
       }
 
-      await tx.salesTicketItem.deleteMany({ where: { ticketId } });
+      await tx.itemTicketVenta.deleteMany({ where: { ticketId } });
 
       let total = 0;
       const ticketItemRows: TicketItemData[] = [];
@@ -549,11 +543,11 @@ export class SalesService {
         });
       }
 
-      await tx.salesTicketItem.createMany({
+      await tx.itemTicketVenta.createMany({
         data: ticketItemRows.map(i => ({ ...i, ticketId })),
       });
 
-      return tx.salesTicket.update({
+      return tx.ticketVenta.update({
         where: { id: ticketId },
         data: { total },
         include: { items: true, operator: { select: { username: true } } },
@@ -571,21 +565,26 @@ export class SalesService {
     sold: Record<string, number>;
     returned: Record<string, number>;
   }> {
-    const tickets = await tx.salesTicket.findMany({
-      where: { status: { in: ['emitido', 'devuelto'] } },
-      include: { items: true },
-    });
+    // Agregación SQL: evita cargar toda la historia de tickets en memoria
+    const rows = await tx.$queryRaw`
+      SELECT
+        t.status,
+        i."salesProductId",
+        SUM(i.quantity)::float AS qty
+      FROM "tickets_venta" t
+      JOIN "items_ticket_venta" i ON i."ticketId" = t.id
+      WHERE t.status IN ('emitido', 'devuelto')
+      GROUP BY t.status, i."salesProductId"
+    ` as Array<{ status: string; salesProductId: string; qty: number }>;
+
     const sold: Record<string, number> = {};
     const returned: Record<string, number> = {};
-    for (const t of tickets) {
-      if (t.status === 'emitido') {
-        for (const item of t.items) {
-          sold[item.salesProductId] = round3((sold[item.salesProductId] || 0) + item.quantity);
-        }
+    for (const row of rows) {
+      const qty = round3(Number(row.qty));
+      if (row.status === 'emitido') {
+        sold[row.salesProductId] = round3((sold[row.salesProductId] || 0) + qty);
       } else {
-        for (const item of t.items) {
-          returned[item.salesProductId] = round3((returned[item.salesProductId] || 0) + item.quantity);
-        }
+        returned[row.salesProductId] = round3((returned[row.salesProductId] || 0) + qty);
       }
     }
     return { sold, returned };
@@ -607,6 +606,20 @@ export class SalesService {
     movementType: 'devolucion' | 'venta_anulada',
   ): Promise<void> {
     const restoreByStockProduct = buildRequiredByStockProduct(items, spMap);
+    const stockProductIds = Object.keys(restoreByStockProduct);
+    if (stockProductIds.length === 0) return;
+
+    // Una sola consulta en lugar de N findMany por producto
+    const levels = await tx.nivelStock.findMany({
+      where: { productId: { in: stockProductIds } },
+      orderBy: [{ productId: 'asc' }, { warehouseId: 'asc' }],
+    });
+    const firstLevelByProduct = new Map<string, (typeof levels)[number]>();
+    for (const level of levels) {
+      if (!firstLevelByProduct.has(level.productId)) {
+        firstLevelByProduct.set(level.productId, level);
+      }
+    }
 
     const restoreMovements: Array<{
       type: typeof movementType;
@@ -618,28 +631,24 @@ export class SalesService {
     }> = [];
 
     for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-      const levels = await tx.stockLevel.findMany({
-        where: { productId: stockProductId },
-        orderBy: { warehouseId: 'asc' },
+      const level = firstLevelByProduct.get(stockProductId);
+      if (!level) continue;
+      await tx.$executeRaw`
+        UPDATE "niveles_stock" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
+        WHERE id::text = ${level.id}
+      `;
+      restoreMovements.push({
+        type: movementType,
+        productId: stockProductId,
+        warehouseId: level.warehouseId,
+        quantity: qty,
+        reference,
+        operatorId,
       });
-      if (levels.length > 0) {
-        await tx.$executeRaw`
-          UPDATE "StockLevel" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
-          WHERE id::text = ${levels[0].id}
-        `;
-        restoreMovements.push({
-          type: movementType,
-          productId: stockProductId,
-          warehouseId: levels[0].warehouseId,
-          quantity: qty,
-          reference,
-          operatorId,
-        });
-      }
     }
 
     if (restoreMovements.length > 0) {
-      const operator = await tx.user.findUnique({ where: { id: operatorId } });
+      const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
       await this.movements.recordMany(
         tx,
         restoreMovements.map(m => ({
@@ -653,7 +662,7 @@ export class SalesService {
   // ============ Sales Products CRUD ============
 
   async findAllSalesProducts() {
-    return this.prisma.salesProduct.findMany({
+    return this.prisma.productoVenta.findMany({
       where: { active: true },
       include: SALES_PRODUCT_API_INCLUDE,
       orderBy: { name: 'asc' },
@@ -661,7 +670,7 @@ export class SalesService {
   }
 
   async findSalesProductById(id: string) {
-    const product = await this.prisma.salesProduct.findUnique({
+    const product = await this.prisma.productoVenta.findUnique({
       where: { id },
       include: SALES_PRODUCT_API_INCLUDE,
     });
@@ -675,7 +684,7 @@ export class SalesService {
   ) {
     assertValidPromoBundle(promoId, bundle);
     const componentIds = bundle.map(b => b.componentProductId);
-    const found = await this.prisma.salesProduct.findMany({
+    const found = await this.prisma.productoVenta.findMany({
       where: { id: { in: componentIds }, active: true },
     });
     if (found.length !== componentIds.length) {
@@ -706,7 +715,7 @@ export class SalesService {
 
     if (kind === 'promo') {
       await this.validatePromoBundle(undefined, data.bundle ?? []);
-      return this.prisma.salesProduct.create({
+      return this.prisma.productoVenta.create({
         data: {
           name: data.name,
           category: data.category,
@@ -725,7 +734,7 @@ export class SalesService {
       });
     }
 
-    return this.prisma.salesProduct.create({
+    return this.prisma.productoVenta.create({
       data: {
         name: data.name,
         category: data.category,
@@ -755,7 +764,7 @@ export class SalesService {
         await this.validatePromoBundle(id, bundle ?? []);
       }
 
-      await tx.salesProduct.update({
+      await tx.productoVenta.update({
         where: { id },
         data: {
           ...productData,
@@ -764,10 +773,10 @@ export class SalesService {
       });
 
       if (nextKind === 'promo') {
-        await tx.recipeItem.deleteMany({ where: { salesProductId: id } });
-        await tx.salesProductBundleItem.deleteMany({ where: { promoProductId: id } });
+        await tx.itemReceta.deleteMany({ where: { salesProductId: id } });
+        await tx.itemComboVenta.deleteMany({ where: { promoProductId: id } });
         if (bundle && bundle.length > 0) {
-          await tx.salesProductBundleItem.createMany({
+          await tx.itemComboVenta.createMany({
             data: bundle.map(b => ({
               promoProductId: id,
               componentProductId: b.componentProductId,
@@ -776,19 +785,19 @@ export class SalesService {
           });
         }
       } else if (nextKind === 'simple' || recipe !== undefined) {
-        await tx.salesProductBundleItem.deleteMany({ where: { promoProductId: id } });
-        await tx.recipeItem.deleteMany({ where: { salesProductId: id } });
+        await tx.itemComboVenta.deleteMany({ where: { promoProductId: id } });
+        await tx.itemReceta.deleteMany({ where: { salesProductId: id } });
         if (recipe && recipe.length > 0) {
-          await tx.recipeItem.createMany({
+          await tx.itemReceta.createMany({
             data: recipe.map(r => ({ salesProductId: id, ...r })),
           });
         }
         if (nextKind === 'simple') {
-          await tx.salesProduct.update({ where: { id }, data: { kind: 'simple' } });
+          await tx.productoVenta.update({ where: { id }, data: { kind: 'simple' } });
         }
       }
 
-      return tx.salesProduct.findUnique({
+      return tx.productoVenta.findUnique({
         where: { id },
         include: SALES_PRODUCT_API_INCLUDE,
       });
@@ -798,7 +807,7 @@ export class SalesService {
   // ============ Tickets ============
 
   async findAllTickets(status?: string, operatorId?: string) {
-    return this.prisma.salesTicket.findMany({
+    return this.prisma.ticketVenta.findMany({
       where: {
         ...(status ? { status } : {}),
         ...(operatorId ? { operatorId } : {}),
@@ -810,7 +819,7 @@ export class SalesService {
   }
 
   async findTicketById(id: string, operatorId?: string) {
-    const ticket = await this.prisma.salesTicket.findUnique({
+    const ticket = await this.prisma.ticketVenta.findUnique({
       where: { id },
       include: { items: true, kitchenOrders: true },
     });
@@ -824,10 +833,10 @@ export class SalesService {
   async voidTicket(ticketId: string, operatorId: string) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
-        SELECT id FROM "SalesTicket" WHERE id::text = ${ticketId} FOR UPDATE
+        SELECT id FROM "tickets_venta" WHERE id::text = ${ticketId} FOR UPDATE
       `;
 
-      const ticket = await tx.salesTicket.findUnique({
+      const ticket = await tx.ticketVenta.findUnique({
         where: { id: ticketId },
         include: { items: true },
       });
@@ -853,7 +862,7 @@ export class SalesService {
         'venta_anulada',
       );
 
-      return tx.salesTicket.update({
+      return tx.ticketVenta.update({
         where: { id: ticketId },
         data: { status: 'anulado' },
         include: { items: true },
@@ -868,21 +877,21 @@ export class SalesService {
   // ============ Kitchens ============
 
   async findAllKitchens() {
-    return this.prisma.kitchen.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.cocina.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createKitchen(data: { name: string; emoji?: string }) {
-    return this.prisma.kitchen.create({ data });
+    return this.prisma.cocina.create({ data });
   }
 
   async updateKitchen(id: string, data: { name?: string; emoji?: string; active?: boolean }) {
-    const existing = await this.prisma.kitchen.findUnique({ where: { id } });
+    const existing = await this.prisma.cocina.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Kitchen ${id} not found`);
-    return this.prisma.kitchen.update({ where: { id }, data });
+    return this.prisma.cocina.update({ where: { id }, data });
   }
 
   async deleteKitchen(id: string) {
-    const existing = await this.prisma.kitchen.findUnique({
+    const existing = await this.prisma.cocina.findUnique({
       where: { id },
       include: { _count: { select: { salesProducts: true, orders: true } } },
     });
@@ -897,14 +906,28 @@ export class SalesService {
         'No se puede eliminar la cocina: tiene comandas asociadas. Desactivala en su lugar.',
       );
     }
-    return this.prisma.kitchen.delete({ where: { id } });
+    return this.prisma.cocina.delete({ where: { id } });
   }
 
   // ============ Tables ============
 
   async findAllTables() {
     return this.prisma.$queryRaw`
-      SELECT id, name, 'libre' as status FROM "Warehouse" LIMIT 6
+      SELECT id, name, 'libre' as status FROM "depositos" LIMIT 6
     `;
+  }
+
+  /** Incrementa el contador bajo lock de fila (seguro ante checkout concurrente). */
+  private async nextTicketNumber(tx: Prisma.TransactionClient): Promise<number> {
+    await tx.contadorTicket.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', valor: 1000 },
+      update: {},
+    });
+    const updated = await tx.contadorTicket.update({
+      where: { id: 'default' },
+      data: { valor: { increment: 1 } },
+    });
+    return updated.valor;
   }
 }

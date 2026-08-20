@@ -7,16 +7,16 @@ export class FootballService {
 
   // Teams
   async findAllTeams() {
-    return this.prisma.footballTeam.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.equipoFutbol.findMany({ orderBy: { name: 'asc' } });
   }
 
   async createTeam(data: { name: string; shortName?: string; logo?: string }) {
-    return this.prisma.footballTeam.create({ data });
+    return this.prisma.equipoFutbol.create({ data });
   }
 
   // Matches
   async findAllMatches(status?: string) {
-    return this.prisma.footballMatch.findMany({
+    return this.prisma.partidoFutbol.findMany({
       where: status ? { status } : undefined,
       include: { homeTeam: true, awayTeam: true },
       orderBy: { date: 'asc' },
@@ -26,7 +26,7 @@ export class FootballService {
   async createMatch(data: {
     homeTeamId: string; awayTeamId: string; date: string; venue?: string;
   }) {
-    return this.prisma.footballMatch.create({
+    return this.prisma.partidoFutbol.create({
       data: {
         homeTeamId: data.homeTeamId,
         awayTeamId: data.awayTeamId,
@@ -39,10 +39,10 @@ export class FootballService {
   }
 
   async updateMatchScore(id: string, homeGoals: number, awayGoals: number) {
-    const match = await this.prisma.footballMatch.findUnique({ where: { id } });
+    const match = await this.prisma.partidoFutbol.findUnique({ where: { id } });
     if (!match) throw new NotFoundException(`Match ${id} not found`);
 
-    return this.prisma.footballMatch.update({
+    return this.prisma.partidoFutbol.update({
       where: { id },
       data: { homeGoals, awayGoals, status: 'jugado' },
       include: { homeTeam: true, awayTeam: true },
@@ -51,8 +51,8 @@ export class FootballService {
 
   // Standings (computed)
   async getStandings() {
-    const teams = await this.prisma.footballTeam.findMany();
-    const matches = await this.prisma.footballMatch.findMany({
+    const teams = await this.prisma.equipoFutbol.findMany();
+    const matches = await this.prisma.partidoFutbol.findMany({
       where: { status: 'jugado' },
     });
 

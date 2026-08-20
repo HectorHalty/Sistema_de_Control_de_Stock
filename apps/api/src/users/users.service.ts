@@ -21,7 +21,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   findAll() {
-    return this.prisma.user.findMany({
+    return this.prisma.usuario.findMany({
       select: { id: true, username: true, name: true, role: true, createdAt: true, updatedAt: true },
       orderBy: [{ role: 'asc' }, { name: 'asc' }],
     });
@@ -42,20 +42,20 @@ export class UsersService {
     } catch {
       throw new BadRequestException(`Invalid role: ${dto.role}`);
     }
-    const existing = await this.prisma.user.findUnique({ where: { username } });
+    const existing = await this.prisma.usuario.findUnique({ where: { username } });
     if (existing) {
       throw new BadRequestException(`User ${username} already exists`);
     }
 
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    return this.prisma.user.create({
+    return this.prisma.usuario.create({
       data: { username, name: dto.name.trim(), role, password },
       select: { id: true, username: true, name: true, role: true, createdAt: true, updatedAt: true },
     });
   }
 
   async update(id: string, dto: UpdateUserDto, actorId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.usuario.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
     let role: string;
@@ -67,7 +67,7 @@ export class UsersService {
 
     await this.assertCanModifyPrivilegedUser(user.id, user.role, actorId, role);
 
-    return this.prisma.user.update({
+    return this.prisma.usuario.update({
       where: { id },
       data: { name: dto.name.trim(), role },
       select: { id: true, username: true, name: true, role: true, createdAt: true, updatedAt: true },
@@ -79,17 +79,17 @@ export class UsersService {
       throw new BadRequestException('You cannot delete your own account');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.usuario.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
     await this.assertCanModifyPrivilegedUser(user.id, user.role, actorId, user.role);
     await this.assertNotLastSuperAdmin(user.id, user.role);
 
-    await this.prisma.user.delete({ where: { id } });
+    await this.prisma.usuario.delete({ where: { id } });
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
     const match = await bcrypt.compare(dto.currentPassword, user.password);
@@ -100,14 +100,14 @@ export class UsersService {
     }
 
     const password = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
-    await this.prisma.user.update({ where: { id: userId }, data: { password } });
+    await this.prisma.usuario.update({ where: { id: userId }, data: { password } });
   }
 
   private async assertNotLastSuperAdmin(userId: string, role: string) {
     const normalized = normalizeApiRole(role);
     if (normalized !== ROLES.SUPER_ADMIN && normalized !== ROLES.ADMIN) return;
 
-    const admins = await this.prisma.user.count({
+    const admins = await this.prisma.usuario.count({
       where: {
         id: { not: userId },
         role: { in: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
@@ -124,7 +124,7 @@ export class UsersService {
     actorId: string,
     nextRole: string,
   ) {
-    const actor = await this.prisma.user.findUnique({ where: { id: actorId }, select: { role: true } });
+    const actor = await this.prisma.usuario.findUnique({ where: { id: actorId }, select: { role: true } });
     if (!actor) throw new ForbiddenException('Actor not found');
 
     const actorNormalized = normalizeApiRole(actor.role);

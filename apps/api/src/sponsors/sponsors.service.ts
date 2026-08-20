@@ -6,7 +6,7 @@ export class SponsorsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(active?: boolean, placement?: string) {
-    return this.prisma.sponsor.findMany({
+    return this.prisma.patrocinador.findMany({
       where: {
         ...(active !== undefined ? { active } : {}),
         ...(placement ? { placement } : {}),
@@ -16,13 +16,13 @@ export class SponsorsService {
   }
 
   async findById(id: string) {
-    const sponsor = await this.prisma.sponsor.findUnique({ where: { id } });
+    const sponsor = await this.prisma.patrocinador.findUnique({ where: { id } });
     if (!sponsor) throw new NotFoundException(`Sponsor ${id} not found`);
     return sponsor;
   }
 
   async create(data: { name: string; imageUrl: string; placement?: string; linkUrl?: string }) {
-    return this.prisma.sponsor.create({
+    return this.prisma.patrocinador.create({
       data: {
         name: data.name,
         imageUrl: data.imageUrl,
@@ -35,11 +35,11 @@ export class SponsorsService {
 
   async update(id: string, data: { name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string }) {
     await this.findById(id);
-    return this.prisma.sponsor.update({ where: { id }, data });
+    return this.prisma.patrocinador.update({ where: { id }, data });
   }
 
   async delete(id: string) {
     await this.findById(id);
-    return this.prisma.sponsor.delete({ where: { id } });
+    return this.prisma.patrocinador.delete({ where: { id } });
   }
 }
