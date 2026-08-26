@@ -1,6 +1,10 @@
 # Google Cloud — Guía fase 1 (Sistema LCH)
 
-Crédito nuevo: **USD 300 por 90 días** (tarjeta requerida, no cobran si no excedés el trial).
+Camino oficial de deploy. **No usamos Oracle Cloud.**
+
+Crédito nuevo GCP: **USD 300 por 90 días** (tarjeta requerida; no cobran si no excedés el trial).
+
+Checklist corto: [CHECKLIST.md](./CHECKLIST.md)
 
 ---
 
@@ -34,7 +38,7 @@ Crédito nuevo: **USD 300 por 90 días** (tarjeta requerida, no cobran si no exc
 
 4. **Advanced options** → **Security** → **Add item** (SSH key) opcional:
    - En tu PC: `ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\lch-gcp" -N '""'`
-   - Copiá el contenido de `lch-gcp.pub` en formato: `ubuntu:ssh-ed25519 AAAA...`
+   - Copiá el contenido de `lch-gcp.pub` en formato: `ubuntu:ssh-ed25519 AAAA...` (o tu usuario GCP)
 5. **Create** (2–3 min hasta **Running**)
 
 ---
@@ -60,7 +64,7 @@ Tu IP en PowerShell:
 
 HTTP/HTTPS: al marcar las casillas en la VM, GCP crea `default-allow-http` y `default-allow-https` (puertos 80 y 443).
 
-**No abras** 3001, 5432, 6379, 8080.
+**No abras** 3001, 5432, 6379, 8080, 9000.
 
 ---
 
@@ -70,24 +74,17 @@ HTTP/HTTPS: al marcar las casillas en la VM, GCP crea `default-allow-http` y `de
 
 1. **Compute Engine** → **VM instances**
 2. Clic en **SSH** junto a `lch-prod`
-3. Se abre terminal en el navegador (usuario `TU_USUARIO` o el que configuraste)
+3. Se abre terminal en el navegador
 
 ### Opción B — Desde tu PC con gcloud
 
-1. Instalá Google Cloud CLI:
-   ```powershell
-   winget install Google.CloudSDK
-   ```
-2. Cerrá y abrí PowerShell:
-   ```powershell
-   gcloud init
-   gcloud auth login
-   gcloud config set project lch-prod
-   ```
-3. Conectar:
-   ```powershell
-   gcloud compute ssh lch-prod --zone=southamerica-east1-b
-   ```
+```powershell
+winget install Google.CloudSDK
+gcloud init
+gcloud auth login
+gcloud config set project lch-prod
+gcloud compute ssh lch-prod --zone=southamerica-east1-b
+```
 
 ### Opción C — SSH clásico con clave
 
@@ -95,24 +92,18 @@ HTTP/HTTPS: al marcar las casillas en la VM, GCP crea `default-allow-http` y `de
 ssh -i "$env:USERPROFILE\.ssh\lch-gcp" TU_USUARIO@IP_EXTERNA
 ```
 
-La **IP externa** está en la lista de VM instances.
-
-> En Ubuntu de GCP el usuario suele ser tu **email de Google** (sin @gmail.com) o el que pusiste en la metadata SSH.
-
 ---
 
 ## Parte 5 — Deploy del sistema LCH
 
-En la VM (cualquier método SSH):
+En la VM:
 
 ```bash
 # Dependencias + Docker + firewall
-curl -fsSL https://raw.githubusercontent.com/TU-USUARIO/TU-REPO/main/deploy/oracle-bootstrap.sh | bash
-# — o si subiste el repo:
-sudo mkdir -p /opt/lch && sudo chown $USER:$USER /opt/lch
-git clone https://github.com/TU-USUARIO/TU-REPO.git /opt/lch
+sudo mkdir -p /opt/lch && sudo chown "$USER:$USER" /opt/lch
+# Subí el repo (git clone o scp/rsync) a /opt/lch
 cd /opt/lch && chmod +x deploy/*.sh
-bash deploy/oracle-bootstrap.sh
+bash deploy/server-bootstrap.sh
 ```
 
 Cerrá sesión SSH y volvé a entrar (grupo docker).
@@ -123,14 +114,14 @@ cp .env.production.example .env.production
 nano .env.production
 ```
 
-Completar (sin `/` en POSTGRES_PASSWORD):
+Completar (sin `/` `:` `@` en passwords de Postgres/MinIO):
 
 ```env
-ADMIN_DOMAIN=admin.tudominio.com
-API_DOMAIN=api.tudominio.com
-VITE_API_URL=https://api.tudominio.com
-ALLOWED_ORIGINS=https://admin.tudominio.com,https://localhost,capacitor://localhost
-# + JWT, POSTGRES_PASSWORD, REDIS, MINIO...
+ADMIN_DOMAIN=lachacrafutbol.duckdns.org
+API_DOMAIN=lachacra-api.duckdns.org
+VITE_API_URL=https://lachacra-api.duckdns.org
+ALLOWED_ORIGINS=https://lachacrafutbol.duckdns.org,https://localhost,capacitor://localhost,http://localhost
+# + JWT_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD, MINIO_...
 ```
 
 ```bash
@@ -141,34 +132,27 @@ sudo bash deploy/install-caddy.sh
 sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
 sudo nano /etc/caddy/Caddyfile
 sudo systemctl reload caddy
+./deploy/smoke-test.sh
 ```
 
 ---
 
 ## Parte 6 — Dominio y HTTPS
 
-En tu registrador (Cloudflare, DonWeb, NIC.ar):
+DuckDNS (ya usado en el ejemplo) o registrador:
 
 | Tipo | Nombre | Valor |
 |------|--------|-------|
-| A | `admin` | IP externa de la VM |
-| A | `api` | IP externa de la VM |
-
-Smoke test:
-
-```bash
-./deploy/smoke-test.sh
-```
+| A / DuckDNS | admin / `lachacrafutbol` | IP externa de la VM |
+| A / DuckDNS | api / `lachacra-api` | IP externa de la VM |
 
 ---
 
 ## Parte 7 — Reservar IP estática (recomendado)
 
 1. **VPC network** → **IP addresses** → **Reserve static address**
-2. **Regional** → región `southamerica-east1` → **Reserve**
-3. **VM instances** → `lch-prod` → **Edit** → **Network interfaces** → cambiar IP efímera por la estática
-
-Así la IP no cambia al reiniciar la VM.
+2. **Regional** → `southamerica-east1` → **Reserve**
+3. **VM instances** → `lch-prod` → **Edit** → cambiar IP efímera por la estática
 
 ---
 
@@ -182,20 +166,20 @@ Así la IP no cambia al reiniciar la VM.
 
 Dentro de los **USD 300** del trial alcanza **varios meses** de e2-medium.
 
-Para ahorrar después del trial: **e2-small** + monitorear RAM, o migrar a Hetzner.
+Alternativa barata después del trial: Hetzner / otro VPS — mismos scripts (`server-bootstrap.sh` + `deploy.sh`).
 
 ---
 
 ## Checklist
 
 - [ ] Proyecto `lch-prod` creado
-- [ ] VM `lch-prod` Running (São Paulo, Ubuntu 22.04, e2-medium)
+- [ ] VM Running (São Paulo, Ubuntu 22.04, e2-medium)
 - [ ] HTTP + HTTPS firewall activos
 - [ ] SSH restringido a tu IP (opcional)
-- [ ] Conectado por SSH (navegador o gcloud)
-- [ ] `oracle-bootstrap.sh` + `deploy.sh` OK
+- [ ] `server-bootstrap.sh` + `deploy.sh` OK
 - [ ] IP estática reservada
-- [ ] Dominio apuntando a la IP
+- [ ] Dominio / DuckDNS apuntando a la IP
+- [ ] Password admin cambiada
 
 ---
 
@@ -205,5 +189,6 @@ Para ahorrar después del trial: **e2-small** + monitorear RAM, o migrar a Hetzn
 |----------|----------|
 | No puedo SSH | Revisá firewall `allow-ssh` y tu IP actual |
 | `docker: permission denied` | Cerrá sesión SSH y volvé a entrar |
-| Web no carga | `sudo bash deploy/oracle-open-ports.sh` + Caddy corriendo |
+| Web no carga | Caddy corriendo + DNS propagado |
 | Usuario SSH raro | Usá el botón **SSH** del navegador primero |
+| MinIO unhealthy | Passwords MinIO sin `/ : @` |

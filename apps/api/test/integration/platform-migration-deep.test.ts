@@ -201,6 +201,8 @@ describe('Integridad — ciclo proveedor → pedido → recepción → stock', (
   });
 
   it('genera números de pedido monótonos sin colisiones', async () => {
+    // El contador es la fuente de verdad (no se infiere del max de orderNumber).
+    state.orderCounters = [{ id: 'default', valor: 3 }];
     state.purchaseOrders.push({
       id: 'old',
       orderNumber: 'PED-003',

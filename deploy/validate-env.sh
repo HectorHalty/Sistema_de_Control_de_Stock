@@ -59,6 +59,11 @@ if [[ "${POSTGRES_PASSWORD:-}" =~ [/:@] ]]; then
   errors=$((errors + 1))
 fi
 
+if [[ "${MINIO_ACCESS_KEY:-}" =~ [/:@] || "${MINIO_SECRET_KEY:-}" =~ [/:@] ]]; then
+  echo "ERROR: MINIO_ACCESS_KEY / MINIO_SECRET_KEY no pueden contener /, : o @ (rompen el healthcheck MC_HOST)."
+  errors=$((errors + 1))
+fi
+
 if [[ "${VITE_API_URL:-}" != https://* ]]; then
   echo "WARN: VITE_API_URL no usa HTTPS — la APK en producción debería usar https://"
 fi

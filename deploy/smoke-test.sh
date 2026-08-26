@@ -32,12 +32,14 @@ check() {
 echo "Smoke tests (local):"
 
 check "API /health" "$API_LOCAL/health"
+check "API /health/ready" "$API_LOCAL/health/ready"
 check "Admin index" "$ADMIN_LOCAL/"
 
 if [[ -n "${API_DOMAIN:-}" && "$API_DOMAIN" != "api.lachacra.com" ]]; then
   echo ""
   echo "Smoke tests (público):"
   check "API HTTPS" "https://${API_DOMAIN}/health"
+  check "API ready HTTPS" "https://${API_DOMAIN}/health/ready"
   check "Admin HTTPS" "https://${ADMIN_DOMAIN:-admin.example.com}/"
   check "Swagger bloqueado" "https://${API_DOMAIN}/api/docs" "404"
 fi

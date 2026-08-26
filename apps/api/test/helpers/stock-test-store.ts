@@ -42,6 +42,7 @@ export interface StockTestState {
   employeeConsumptions: unknown[];
   stockCountSessions: unknown[];
   categories: { id: string; name: string }[];
+  orderCounters: { id: string; valor: number }[];
 }
 
 export function createEmptyStockState(): StockTestState {
@@ -57,6 +58,7 @@ export function createEmptyStockState(): StockTestState {
     employeeConsumptions: [],
     stockCountSessions: [],
     categories: [],
+    orderCounters: [{ id: 'default', valor: 0 }],
   };
 }
 
@@ -304,6 +306,39 @@ export function createPrismaMock(state: StockTestState) {
     },
     category: {
       findMany: async () => state.categories,
+    },
+    contadorPedido: {
+      upsert: async ({
+        where,
+        create,
+      }: {
+        where: { id: string };
+        create: { id: string; valor: number };
+        update: object;
+      }) => {
+        let row = state.orderCounters.find(c => c.id === where.id);
+        if (!row) {
+          row = { id: create.id, valor: create.valor };
+          state.orderCounters.push(row);
+        }
+        return { ...row };
+      },
+      update: async ({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: { valor?: number | { increment: number } };
+      }) => {
+        const row = state.orderCounters.find(c => c.id === where.id);
+        if (!row) throw new Error('contadorPedido not found');
+        if (typeof data.valor === 'object' && data.valor && 'increment' in data.valor) {
+          row.valor += data.valor.increment;
+        } else if (typeof data.valor === 'number') {
+          row.valor = data.valor;
+        }
+        return { ...row };
+      },
     },
     $transaction: async <T>(fn: (tx: typeof client) => Promise<T>): Promise<T> => {
       transactionCount++;

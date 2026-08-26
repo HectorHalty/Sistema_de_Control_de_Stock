@@ -1,5 +1,7 @@
 # Producción — Sistema de Gestión LCH (Fase 1: Inventario + Ventas)
 #
+# Camino oficial: Google Cloud / VPS — ver deploy/GCP.md y deploy/CHECKLIST.md
+#
 #   cp .env.production.example .env.production
 #   ./deploy/deploy.sh
 #
@@ -44,6 +46,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY}
+      # mc viene embebido en la imagen del server; hace falta el alias "local" para el healthcheck
+      MC_HOST_local: http://${MINIO_ACCESS_KEY}:${MINIO_SECRET_KEY}@127.0.0.1:9000
     volumes:
       - minio_data:/data
     healthcheck:
@@ -51,6 +55,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 15s
 
   minio-init:
     image: minio/mc:latest

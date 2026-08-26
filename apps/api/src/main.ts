@@ -73,6 +73,7 @@ async function bootstrap() {
     // Keep rate-limit focused on read traffic; never block writes/mutations.
     req.method !== 'GET'
     || req.path === '/health'
+    || req.path.startsWith('/health/')
     // Auth endpoints have their own dedicated limiter.
     || req.path.startsWith('/auth/')
     // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.

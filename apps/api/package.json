@@ -13,10 +13,11 @@
     "test:deep": "vitest run test/integration/platform-migration-deep.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "npx --yes tsx prisma/seed.ts",
+    "prisma:seed": "node prisma/seed.cjs",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "prisma": "^5.22.0",
     "@aws-sdk/client-s3": "^3.1049.0",
     "@aws-sdk/s3-request-presigner": "^3.1049.0",
     "@nestjs/common": "^11.1.27",
@@ -50,7 +51,6 @@
     "@types/node": "^22.0.0",
     "@types/passport-jwt": "^4.0.1",
     "ansis": "^4.2.0",
-    "prisma": "^5.22.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.4"
@@ -69,6 +69,6 @@
     "form-data": "^4.0.6"
   },
   "prisma": {
-    "seed": "npx --yes tsx prisma/seed.ts"
+    "seed": "node prisma/seed.cjs"
   }
 }

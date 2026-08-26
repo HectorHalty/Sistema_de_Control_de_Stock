@@ -195,7 +195,8 @@ npm run electron:public   # builds apps/web-public/release/
 ## API Endpoints
 
 ### Health
-- `GET /health` - Health check (used by frontend to detect API availability)
+- `GET /health` - Liveness (proceso vivo; lo usa el frontend y Docker)
+- `GET /health/ready` - Readiness (Postgres OK; smoke / monitoreo)
 
 ### Auth
 - `POST /auth/login` - Login (bcrypt-validated, rate-limited, no auto-provisioning)
@@ -330,14 +331,17 @@ npm run test:public
 
 ## Production deployment
 
+Camino oficial: **Google Cloud / VPS Ubuntu** — ver [deploy/GCP.md](../deploy/GCP.md) y [deploy/CHECKLIST.md](../deploy/CHECKLIST.md).
+
 ```bash
 cp .env.production.example .env.production
 # Completar secretos y dominios
 
 # En VPS Linux:
 chmod +x deploy/*.sh
+bash deploy/server-bootstrap.sh   # una vez (Docker, UFW)
 ./deploy/deploy.sh
-./deploy/seed-prod.sh   # una vez; cambiar admin123
+./deploy/seed-prod.sh             # una vez; cambiar admin123
 
 # HTTPS:
 sudo bash deploy/install-caddy.sh
@@ -348,12 +352,14 @@ sudo systemctl reload caddy
 # 0 3 * * * /opt/lch/deploy/backup-db.sh
 ```
 
-- Admin: `https://admin.tudominio.com` (Caddy → `:8080`)
-- API: `https://api.tudominio.com` (Caddy → `:3001`)
+- Admin: `https://lachacrafutbol.duckdns.org` (Caddy → `:8080`)
+- API: `https://lachacra-api.duckdns.org` (Caddy → `:3001`)
+- Health DB: `GET /health/ready`
 - APK release: `npm run build:apk:release`
 - Test local Docker: `npm run test:deploy`
 
-Ver carpeta `deploy/` para scripts detallados. **Oracle Cloud:** `deploy/ORACLE.md` · **Google Cloud:** `deploy/GCP.md`
+> Nota: scripts `deploy/ORACLE*` quedaron de un intento anterior; **no es el camino actual**.
+
 
 ## Known Limitations
 

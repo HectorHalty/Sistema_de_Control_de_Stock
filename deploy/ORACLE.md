@@ -1,4 +1,14 @@
-# Oracle Cloud — Guía fase 1 (Sistema LCH)
+# Oracle Cloud — LEGACY (no usar)
+
+> **Este camino quedó descartado.** El deploy oficial es **Google Cloud / VPS**:
+> ver [GCP.md](./GCP.md) y [CHECKLIST.md](./CHECKLIST.md).
+>
+> Los scripts `oracle-*.sh` / `ORACLE-RETRY.md` se conservan solo como referencia histórica.
+
+---
+
+# Oracle Cloud — Guía fase 1 (Sistema LCH) [ARCHIVADO]
+
 
 Tenancy: **hectormanuelhalty** · Región recomendada: **Brazil East (Sao Paulo)** ✓
 

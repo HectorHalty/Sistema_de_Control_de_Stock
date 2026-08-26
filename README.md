@@ -68,6 +68,16 @@ npm run dev:public    # http://localhost:5174
 
 En producción: `NODE_ENV=production` y `JWT_SECRET` de al menos 32 caracteres.
 
+## Producción (Fase 1)
+
+Deploy en **Google Cloud / VPS** (no Oracle): [deploy/GCP.md](deploy/GCP.md) · [deploy/CHECKLIST.md](deploy/CHECKLIST.md)
+
+```bash
+cp .env.production.example .env.production
+# completar secretos → en el servidor:
+./deploy/deploy.sh && ./deploy/seed-prod.sh
+```
+
 ## Licencia y empresa
 
 Desarrollado para **La Chacra Fútbol** — gestión operativa del complejo (LCH).

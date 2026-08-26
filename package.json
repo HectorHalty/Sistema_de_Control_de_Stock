@@ -28,7 +28,6 @@
     "deploy:validate": "bash deploy/validate-env.sh",
     "deploy:smoke": "bash deploy/smoke-test.sh",
     "test:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-deploy-local.ps1",
-    "oracle:retry": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/oracle-retry-saopaulo.ps1 -ReminderOnly -IntervalMinutes 30",
     "build:apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-release.ps1",
     "security:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/security-audit.ps1",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",

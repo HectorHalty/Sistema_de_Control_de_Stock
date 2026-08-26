@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# LEGACY — no usar. Preferí: deploy/server-bootstrap.sh (GCP / VPS).
-# Bootstrap inicial en una VM Oracle Cloud (Ubuntu 22.04).
-#   bash deploy/oracle-bootstrap.sh
+# Bootstrap inicial en una VM Ubuntu 22.04+ (Google Cloud u otro VPS).
+#   bash deploy/server-bootstrap.sh
 set -euo pipefail
 
-echo "ADVERTENCIA: Oracle quedó descartado. Usá deploy/server-bootstrap.sh (ver deploy/GCP.md)."
-echo "=== LCH — Bootstrap Oracle Cloud (LEGACY) ==="
+echo "=== LCH — Bootstrap servidor (GCP / VPS) ==="
 
 if [[ $EUID -eq 0 ]]; then
-  echo "No ejecutar como root. Usá el usuario ubuntu."
+  echo "No ejecutar como root. Usá tu usuario normal (con sudo)."
   exit 1
 fi
 
@@ -34,30 +32,26 @@ sudo ufw allow 443/tcp
 echo "y" | sudo ufw enable || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/oracle-open-ports.sh" ]]; then
-  sudo bash "$SCRIPT_DIR/oracle-open-ports.sh"
-else
-  echo "WARN: oracle-open-ports.sh no encontrado — ejecutalo manualmente después."
+if [[ -f "$SCRIPT_DIR/server-harden.sh" ]]; then
+  echo ">> Endureciendo SSH..."
+  sudo bash "$SCRIPT_DIR/server-harden.sh"
 fi
 
 sudo systemctl enable fail2ban 2>/dev/null || true
-
-if [[ -f "$SCRIPT_DIR/oracle-harden.sh" ]]; then
-  echo ">> Endureciendo SSH (oracle-harden)..."
-  sudo bash "$SCRIPT_DIR/oracle-harden.sh"
-fi
 
 echo ""
 echo "=== Bootstrap completado ==="
 echo ""
 echo "Próximos pasos:"
 echo "  1. Cerrar sesión SSH y volver a entrar (grupo docker)"
-echo "  2. Clonar el repo:  sudo mkdir -p /opt/lch && sudo chown \$USER:\$USER /opt/lch"
+echo "  2. sudo mkdir -p /opt/lch && sudo chown \$USER:\$USER /opt/lch"
 echo "     git clone <URL-DEL-REPO> /opt/lch && cd /opt/lch"
+echo "     # o subir el proyecto por scp/rsync"
 echo "  3. cp .env.production.example .env.production  # completar secretos"
 echo "  4. ./deploy/deploy.sh"
-echo "  5. sudo bash deploy/install-caddy.sh"
-echo "  6. sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile  # editar dominios"
-echo "  7. sudo systemctl reload caddy"
+echo "  5. ./deploy/seed-prod.sh"
+echo "  6. sudo bash deploy/install-caddy.sh"
+echo "  7. sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile  # editar dominios"
+echo "  8. sudo systemctl reload caddy"
 echo ""
-echo "Guía completa: deploy/ORACLE.md"
+echo "Guía: deploy/GCP.md · Checklist: deploy/CHECKLIST.md"
