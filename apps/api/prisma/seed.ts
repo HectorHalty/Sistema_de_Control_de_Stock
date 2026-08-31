@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedReglamento } from './seeds/reglamento.seed.cjs';
+import { seedScheduling } from './seeds/scheduling.seed.cjs';
+import { seedTorneoDemo } from './seeds/torneo-demo.seed.cjs';
+import { seedCantinaPublica } from './seeds/cantina.seed.cjs';
 
 const prisma = new PrismaClient();
 
@@ -70,6 +74,11 @@ async function main() {
     update: {},
     create: { id: 'default', valor: 0 },
   });
+
+  await seedScheduling(prisma);
+  await seedReglamento(prisma);
+  await seedTorneoDemo(prisma);
+  await seedCantinaPublica(prisma);
 
   console.log('Seed complete.');
   await prisma.$disconnect();

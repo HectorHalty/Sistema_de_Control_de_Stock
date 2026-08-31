@@ -9,7 +9,10 @@ import { KitchenModule } from './kitchen/kitchen.module';
 import { MediaModule } from './media/media.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
 import { FootballModule } from './football/football.module';
+import { ReglamentoModule } from './reglamento/reglamento.module';
+import { PublicModule } from './public/public.module';
 import { OnlineCatalogModule } from './online-catalog/online-catalog.module';
+import { OnlineModule } from './online/online.module';
 import { SseModule } from './sse/sse.module';
 import { PrintingModule } from './printing/printing.module';
 import { HealthController } from './common/health.controller';
@@ -29,7 +32,10 @@ import { HealthController } from './common/health.controller';
     MediaModule,
     SponsorsModule,
     FootballModule,
+    ReglamentoModule,
+    PublicModule,
     OnlineCatalogModule,
+    OnlineModule,
     SseModule,
     PrintingModule,
   ],

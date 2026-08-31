@@ -2,19 +2,28 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   BarChart3,
+  Calendar,
+  ChefHat,
   CircleDollarSign,
   ClipboardList,
+  FileText,
+  Gavel,
   Home,
+  Image,
   LogOut,
   Menu,
   Package,
   RotateCcw,
+  QrCode,
+  ScanLine,
+  Shield,
   Settings,
   ShoppingBag,
   ShoppingCart,
   Trophy,
   UserMinus,
   Users,
+  UtensilsCrossed,
   Warehouse,
 } from 'lucide-react';
 import { useAppContext } from '@/app/providers/AppContext';
@@ -26,6 +35,8 @@ import {
   canAccessSettings,
   canAccessStockRoute,
   canAccessVentasTab,
+  canAccessFutbolTab,
+  canAccessOnlineTab,
   getBottomNavModules,
   getInitials,
   getRoleLabel,
@@ -34,6 +45,8 @@ import {
   type ModuleId,
   type StockRoute,
   type VentasTab,
+  type FutbolTab,
+  type OnlineTab,
 } from '@/features/platform/config/modules';
 import { NotificationsMenu } from '@/features/platform/components/NotificationsMenu';
 
@@ -108,6 +121,7 @@ function buildContextNavItems(
       { key: 'mostrador' as VentasTab, label: 'Mostrador', icon: CircleDollarSign },
       { key: 'pedidos' as VentasTab, label: 'Mis Pedidos', icon: ShoppingCart },
       { key: 'devoluciones' as VentasTab, label: 'Devoluciones', icon: RotateCcw },
+      { key: 'retiro-qr' as VentasTab, label: 'Retiro cantina', icon: QrCode },
       { key: 'productos' as VentasTab, label: 'Productos', icon: Package },
       { key: 'mesas' as VentasTab, label: 'Mesas', icon: Warehouse },
       { key: 'reportes' as VentasTab, label: 'Reportes', icon: BarChart3 },
@@ -117,6 +131,47 @@ function buildContextNavItems(
         label: item.label,
         to: item.key === 'reportes' ? '/ventas?tab=reportes&section=ventas' : `/ventas?tab=${item.key}`,
         active: pathname.startsWith('/ventas') && normalizedTab === item.key,
+        icon: item.icon,
+      }));
+  }
+
+  if (activeModule === 'futbol') {
+    const selectedTab = currentTab || 'inicio';
+    return [
+      { key: 'inicio' as FutbolTab, label: 'Inicio', icon: Home },
+      { key: 'equipos' as FutbolTab, label: 'Equipos', icon: Users },
+      { key: 'capitanes' as FutbolTab, label: 'Capitanes', icon: Shield },
+      { key: 'plantel' as FutbolTab, label: 'Plantel / LBFE', icon: FileText },
+      { key: 'fixture' as FutbolTab, label: 'Fixture', icon: Calendar },
+      { key: 'resultados' as FutbolTab, label: 'Resultados', icon: BarChart3 },
+      { key: 'reglamento' as FutbolTab, label: 'Reglamento', icon: Gavel },
+      { key: 'suspendidos' as FutbolTab, label: 'Suspendidos', icon: UserMinus },
+      { key: 'media' as FutbolTab, label: 'Media', icon: Image },
+    ]
+      .filter((item) => canAccessFutbolTab(role, item.key))
+      .map((item) => ({
+        label: item.label,
+        to: `/futbol?tab=${item.key}`,
+        active: pathname.startsWith('/futbol') && selectedTab === item.key,
+        icon: item.icon,
+      }));
+  }
+
+  if (activeModule === 'online') {
+    const selectedTab = currentTab || 'inicio';
+    return [
+      { key: 'inicio' as OnlineTab, label: 'Inicio', icon: Home },
+      { key: 'cocina' as OnlineTab, label: 'Cocina', icon: ChefHat },
+      { key: 'escaner-qr' as OnlineTab, label: 'Escáner QR', icon: ScanLine },
+      { key: 'menu' as OnlineTab, label: 'Menú web', icon: UtensilsCrossed },
+      { key: 'sponsors' as OnlineTab, label: 'Sponsors', icon: ShoppingBag },
+      { key: 'metricas' as OnlineTab, label: 'Métricas', icon: BarChart3 },
+    ]
+      .filter((item) => canAccessOnlineTab(role, item.key))
+      .map((item) => ({
+        label: item.label,
+        to: `/online?tab=${item.key}`,
+        active: pathname.startsWith('/online') && selectedTab === item.key,
         icon: item.icon,
       }));
   }

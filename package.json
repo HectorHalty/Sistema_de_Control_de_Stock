@@ -6,6 +6,7 @@
     "apps/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-express-router.cjs",
     "dev:infra": "docker compose up -d postgres redis minio minio-init",
     "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "start:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -Setup",
@@ -29,6 +30,7 @@
     "deploy:smoke": "bash deploy/smoke-test.sh",
     "test:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-deploy-local.ps1",
     "build:apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-release.ps1",
+    "build:apk:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-public.ps1",
     "security:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/security-audit.ps1",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",
     "electron:public": "npm run electron:build --workspace=apps/web-public",
@@ -54,7 +56,7 @@
       "js-yaml": "4.2.0"
     },
     "file-type": "^21.3.2",
-    "express": "^4.22.2",
+    "express": "4.18.2",
     "qs": "^6.15.2",
     "body-parser": "^1.20.5",
     "form-data": "^4.0.6",

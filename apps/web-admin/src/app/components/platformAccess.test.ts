@@ -3,6 +3,7 @@ import {
   canAccessModule,
   canAccessStockReportTab,
   canAccessVentasTab,
+  canAccessOnlineTab,
   canManageUsers,
   getAllowedModules,
   getBottomNavModules,
@@ -63,6 +64,8 @@ describe('platformAccess', () => {
 
     it('Operador_Cocina has only online', () => {
       expect(getAllowedModules('Operador_Cocina')).toEqual(['online']);
+      expect(canAccessOnlineTab('Operador_Cocina', 'cocina')).toBe(true);
+      expect(canAccessOnlineTab('Operador_Cocina', 'escaner-qr')).toBe(true);
     });
   });
 
@@ -78,6 +81,7 @@ describe('platformAccess', () => {
       expect(canAccessVentasTab('Vendedor', 'mostrador')).toBe(true);
       expect(canAccessVentasTab('Vendedor', 'pedidos')).toBe(true);
       expect(canAccessVentasTab('Vendedor', 'devoluciones')).toBe(true);
+      expect(canAccessVentasTab('Vendedor', 'retiro-qr')).toBe(true);
       expect(canAccessVentasTab('Vendedor', 'productos')).toBe(false);
       expect(canAccessVentasTab('Vendedor', 'reportes')).toBe(false);
       expect(getDefaultVentasTab('Vendedor')).toBe('mostrador');

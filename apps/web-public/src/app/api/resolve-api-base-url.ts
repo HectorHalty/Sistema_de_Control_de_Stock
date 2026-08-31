@@ -1,0 +1,66 @@
+declare global {
+  interface Window {
+    __LCH_API_URL__?: string;
+  }
+}
+
+import { Capacitor } from '@capacitor/core';
+
+function isLocalDevApiUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function inferApiUrlFromContext(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const { hostname, protocol } = window.location;
+
+  if (
+    hostname === 'lachacrafutbol.duckdns.org'
+    || hostname === 'www.lachacrafutbol.duckdns.org'
+  ) {
+    return 'https://lachacra-api.duckdns.org';
+  }
+
+  if (hostname.endsWith('.duckdns.org') && hostname.includes('lachacra') && !hostname.startsWith('lachacra-api.')) {
+    return 'https://lachacra-api.duckdns.org';
+  }
+
+  if (hostname.startsWith('admin.')) {
+    const rest = hostname.slice('admin.'.length);
+    return `${protocol}//api.${rest}`;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    const built = import.meta.env.VITE_API_URL as string | undefined;
+    if (built && !isLocalDevApiUrl(built)) return built;
+    return 'https://lachacra-api.duckdns.org';
+  }
+
+  return null;
+}
+
+export function resolveApiBaseUrl(): string {
+  const runtime = typeof window !== 'undefined' ? window.__LCH_API_URL__?.trim() : '';
+  if (runtime && !isLocalDevApiUrl(runtime)) {
+    return runtime.replace(/\/$/, '');
+  }
+
+  const built = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+
+  if (built && !isLocalDevApiUrl(built)) {
+    return built.replace(/\/$/, '');
+  }
+
+  const inferred = inferApiUrlFromContext();
+  if (inferred) {
+    return inferred.replace(/\/$/, '');
+  }
+
+  return built || 'http://localhost:3001';
+}

@@ -22,7 +22,7 @@ model Usuario {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  salesTickets TicketVenta[] @relation("TicketsOperador")
+  salesTickets TicketVenta[]      @relation("TicketsOperador")
   auditEntries EntradaAuditoria[]
 
   @@map("usuarios")
@@ -50,9 +50,9 @@ model Deposito {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stockLevels     NivelStock[]
-  movimientos     MovimientoStock[]
-  consumos        ConsumoEmpleado[]
+  stockLevels NivelStock[]
+  movimientos MovimientoStock[]
+  consumos    ConsumoEmpleado[]
 
   @@map("depositos")
 }
@@ -69,7 +69,7 @@ model Producto {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category           Categoria          @relation(fields: [categoryId], references: [id])
+  category           Categoria           @relation(fields: [categoryId], references: [id])
   stockLevels        NivelStock[]
   recipeItems        ItemReceta[]
   supplierProducts   ProveedorProducto[]
@@ -130,22 +130,25 @@ model ProveedorProducto {
 // ==================== VENTAS ====================
 
 model ProductoVenta {
-  id        String   @id @default(uuid())
-  name      String
-  category  String   @default("Comidas")
-  kitchenId String
-  price     Decimal  @db.Decimal(10, 2)
-  emoji     String?
-  kind      String   @default("simple") // simple | promo
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String
+  category       String   @default("Comidas")
+  kitchenId      String
+  price          Decimal  @db.Decimal(10, 2)
+  emoji          String?
+  kind           String   @default("simple") // simple | promo
+  active         Boolean  @default(true)
+  visibleWeb     Boolean  @default(false)
+  descripcionWeb String?
+  imagenWeb      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   recipe        ItemReceta[]
-  bundleItems   ItemComboVenta[] @relation("PromoProduct")
-  usedInBundles ItemComboVenta[] @relation("BundleComponent")
+  bundleItems   ItemComboVenta[]  @relation("PromoProduct")
+  usedInBundles ItemComboVenta[]  @relation("BundleComponent")
   ticketItems   ItemTicketVenta[]
-  kitchen       Cocina           @relation(fields: [kitchenId], references: [id])
+  kitchen       Cocina            @relation(fields: [kitchenId], references: [id])
   kitchenItems  ItemOrdenCocina[]
 
   // Evita el mismo nombre de carta duplicado en la misma cocina
@@ -153,14 +156,15 @@ model ProductoVenta {
   @@index([kitchenId])
   @@index([active, kitchenId])
   @@index([active, name])
+  @@index([visibleWeb, active])
   @@map("productos_venta")
 }
 
 model ItemComboVenta {
-  id                 String @id @default(uuid())
+  id                 String   @id @default(uuid())
   promoProductId     String
   componentProductId String
-  quantity           Int    @default(1)
+  quantity           Int      @default(1)
   createdAt          DateTime @default(now())
 
   promoProduct     ProductoVenta @relation("PromoProduct", fields: [promoProductId], references: [id], onDelete: Cascade)
@@ -173,10 +177,10 @@ model ItemComboVenta {
 }
 
 model ItemReceta {
-  id             String  @id @default(uuid())
+  id             String   @id @default(uuid())
   salesProductId String
   stockProductId String
-  quantity       Decimal @db.Decimal(12, 3)
+  quantity       Decimal  @db.Decimal(12, 3)
   createdAt      DateTime @default(now())
 
   salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id], onDelete: Cascade)
@@ -197,24 +201,27 @@ model TicketVenta {
   operatorId     String
   note           String?
   idempotencyKey String?  @unique
+  origen         String   @default("pos") // pos | online
 
   operator      Usuario           @relation("TicketsOperador", fields: [operatorId], references: [id])
   items         ItemTicketVenta[]
   kitchenOrders OrdenCocina[]
+  pedidoPublico PedidoPublico?
 
   @@index([operatorId])
   @@index([status])
   @@index([createdAt])
   @@index([status, createdAt])
+  @@index([origen])
   @@map("tickets_venta")
 }
 
 model ItemTicketVenta {
-  id             String  @id @default(uuid())
+  id             String   @id @default(uuid())
   ticketId       String
   salesProductId String
   name           String // snapshot al momento de la venta (intencional)
-  unitPrice      Decimal @db.Decimal(10, 2) // snapshot
+  unitPrice      Decimal  @db.Decimal(10, 2) // snapshot
   quantity       Int
   createdAt      DateTime @default(now())
 
@@ -260,30 +267,33 @@ model Cocina {
 }
 
 model OrdenCocina {
-  id           String   @id @default(uuid())
-  ticketId     String
-  ticketNumber Int // snapshot del número de ticket (consulta KDS rápida)
-  kitchenId    String
-  status       String   @default("pending") // pending, preparing, ready, delivered
-  operatorName String
-  tableId      String?
-  tableName    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(uuid())
+  ticketId        String
+  ticketNumber    Int // snapshot del número de ticket (consulta KDS rápida)
+  kitchenId       String
+  status          String   @default("pending") // pending, preparing, ready, delivered
+  operatorName    String
+  tableId         String?
+  tableName       String?
+  pedidoPublicoId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  ticket  TicketVenta       @relation(fields: [ticketId], references: [id])
-  kitchen Cocina            @relation(fields: [kitchenId], references: [id])
-  items   ItemOrdenCocina[]
+  ticket        TicketVenta       @relation(fields: [ticketId], references: [id])
+  kitchen       Cocina            @relation(fields: [kitchenId], references: [id])
+  pedidoPublico PedidoPublico?    @relation(fields: [pedidoPublicoId], references: [id], onDelete: SetNull)
+  items         ItemOrdenCocina[]
 
   @@index([ticketId])
   @@index([kitchenId])
   @@index([status])
+  @@index([pedidoPublicoId])
   @@index([kitchenId, status, createdAt])
   @@map("ordenes_cocina")
 }
 
 model ItemOrdenCocina {
-  id             String  @id @default(uuid())
+  id             String   @id @default(uuid())
   kitchenOrderId String
   salesProductId String
   name           String // snapshot
@@ -360,41 +370,512 @@ model ProductoOnline {
   @@map("productos_online")
 }
 
-// ==================== FÚTBOL ====================
+// ==================== FÚTBOL / TORNEO PÚBLICO ====================
+
+model Temporada {
+  id        String   @id @default(uuid())
+  nombre    String
+  anio      Int
+  activa    Boolean  @default(false)
+  inicio    DateTime
+  fin       DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campeonatos Campeonato[]
+
+  @@unique([anio])
+  @@index([activa])
+  @@map("temporadas")
+}
+
+model Campeonato {
+  id          String    @id @default(uuid())
+  temporadaId String
+  nombre      String // Apertura | Clausura
+  activo      Boolean   @default(false)
+  inicio      DateTime?
+  fin         DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  temporada Temporada @relation(fields: [temporadaId], references: [id], onDelete: Cascade)
+  torneos   Torneo[]
+
+  @@unique([temporadaId, nombre])
+  @@index([activo])
+  @@map("campeonatos")
+}
+
+model CategoriaConfig {
+  id                 String   @id @default(uuid())
+  codigo             String   @unique // hombres_libre_a, mujeres_b, etc.
+  nombre             String
+  genero             String // hombres | mujeres
+  maxPlantel         Int
+  maxIncorporaciones Int      @default(3)
+  minJugadoresInicio Int
+  grupoCanchasId     String?
+  colorHex           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  grupoCanchas GrupoCanchas? @relation(fields: [grupoCanchasId], references: [id], onDelete: SetNull)
+  torneos      Torneo[]
+
+  @@map("categorias_config")
+}
+
+model Torneo {
+  id           String   @id @default(uuid())
+  campeonatoId String
+  categoriaId  String
+  nombre       String
+  activo       Boolean  @default(false)
+  publicado    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campeonato    Campeonato           @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  categoria     CategoriaConfig      @relation(fields: [categoriaId], references: [id])
+  config        TorneoConfig?
+  inscripciones EquipoInscripcion[]
+  jugadores     InscripcionJugador[]
+  partidos      PartidoFutbol[]
+  jornadas      Jornada[]
+  capitanes     CapitanAutorizado[]
+  preferencias  PreferenciaHorario[]
+
+  @@unique([campeonatoId, categoriaId])
+  @@index([activo, publicado])
+  @@map("torneos")
+}
+
+model TorneoConfig {
+  id                        String   @id @default(uuid())
+  torneoId                  String   @unique
+  puntosVictoria            Int      @default(3)
+  puntosEmpate              Int      @default(1)
+  puntosDerrota             Int      @default(0)
+  resultadoWO               String   @default("3-0")
+  descuentoPuntosWOSinAviso Int      @default(6)
+  descuentoPuntosWOConAviso Int      @default(3)
+  criteriosDesempate        Json     @default("[\"difGoles\",\"golesContra\",\"enfrentamientoDirecto\",\"fairPlay\",\"expulsados\",\"sorteo\"]")
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  torneo Torneo @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+
+  @@map("torneos_config")
+}
 
 model EquipoFutbol {
   id        String   @id @default(uuid())
   name      String   @unique
   shortName String?
   logo      String?
+  color     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  homeMatches PartidoFutbol[] @relation("HomeTeam")
-  awayMatches PartidoFutbol[] @relation("AwayTeam")
+  homeMatches   PartidoFutbol[]     @relation("HomeTeam")
+  awayMatches   PartidoFutbol[]     @relation("AwayTeam")
+  inscripciones EquipoInscripcion[]
 
   @@map("equipos_futbol")
 }
 
-model PartidoFutbol {
-  id         String   @id @default(uuid())
-  homeTeamId String
-  awayTeamId String
-  date       DateTime
-  status     String   @default("pendiente")
-  homeGoals  Int?
-  awayGoals  Int?
-  venue      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model EquipoInscripcion {
+  id                String   @id @default(uuid())
+  torneoId          String
+  equipoId          String
+  abbr              String?
+  color             String?
+  descuentoPuntosWO Int      @default(0)
+  activo            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  homeTeam EquipoFutbol @relation("HomeTeam", fields: [homeTeamId], references: [id])
-  awayTeam EquipoFutbol @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  torneo       Torneo               @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  equipo       EquipoFutbol         @relation(fields: [equipoId], references: [id])
+  jugadores    InscripcionJugador[]
+  capitanes    CapitanAutorizado[]
+  homePartidos PartidoFutbol[]      @relation("HomeInscripcion")
+  awayPartidos PartidoFutbol[]      @relation("AwayInscripcion")
+  byePartidos  PartidoFutbol[]      @relation("EquipoLibre")
+  preferencias PreferenciaHorario[]
+  seguidores   CuentaPublica[]      @relation("EquipoSeguido")
+
+  @@unique([torneoId, equipoId])
+  @@index([torneoId, activo])
+  @@map("equipos_inscripcion")
+}
+
+model Persona {
+  id                 String    @id @default(uuid())
+  dni                String    @unique
+  nombre             String
+  apellido           String
+  email              String?
+  telefonoCelular    String?
+  telefonoParticular String?
+  telefonoLaboral    String?
+  fechaNacimiento    DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  cuentaPublica CuentaPublica?
+  inscripciones InscripcionJugador[]
+  eventos       EventoPartido[]
+  suspensiones  Suspension[]
+
+  @@index([email])
+  @@map("personas")
+}
+
+model CuentaPublica {
+  id              String   @id @default(uuid())
+  googleId        String   @unique
+  email           String   @unique
+  avatarUrl       String?
+  rol             String   @default("usuario") // usuario | seguidor | jugador | capitan
+  personaId       String?  @unique
+  equipoSeguidoId String?
+  dniConfirmado   String?
+  notifPartidos   Boolean  @default(true)
+  notifPedidos    Boolean  @default(true)
+  notifTorneo     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  persona           Persona?           @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  equipoSeguido     EquipoInscripcion? @relation("EquipoSeguido", fields: [equipoSeguidoId], references: [id], onDelete: SetNull)
+  capitanAutorizado CapitanAutorizado?
+  pedidos           PedidoPublico[]
+
+  @@index([rol])
+  @@index([equipoSeguidoId])
+  @@map("cuentas_publicas")
+}
+
+model CapitanAutorizado {
+  id                  String   @id @default(uuid())
+  email               String
+  dni                 String
+  equipoInscripcionId String
+  torneoId            String
+  activo              Boolean  @default(true)
+  cuentaPublicaId     String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  equipoInscripcion EquipoInscripcion @relation(fields: [equipoInscripcionId], references: [id], onDelete: Cascade)
+  torneo            Torneo            @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  cuentaPublica     CuentaPublica?    @relation(fields: [cuentaPublicaId], references: [id], onDelete: SetNull)
+
+  @@unique([email, torneoId])
+  @@unique([dni, torneoId])
+  @@index([email])
+  @@index([equipoInscripcionId])
+  @@map("capitanes_autorizados")
+}
+
+model InscripcionJugador {
+  id                  String   @id @default(uuid())
+  personaId           String
+  torneoId            String
+  equipoInscripcionId String
+  numeroCamiseta      Int?
+  rolPlantel          String   @default("jugador") // jugador | capitan | subcapitan
+  activa              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  persona           Persona           @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  torneo            Torneo            @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  equipoInscripcion EquipoInscripcion @relation(fields: [equipoInscripcionId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, torneoId])
+  @@index([equipoInscripcionId, activa])
+  @@index([torneoId, activa])
+  @@map("inscripciones_jugador")
+}
+
+model GrupoCanchas {
+  id        String   @id @default(uuid())
+  codigo    String   @unique // mujeres | hombres_a | hombres_b
+  nombre    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  canchas    Cancha[]
+  franjas    FranjaHoraria[]
+  categorias CategoriaConfig[]
+
+  @@map("grupos_canchas")
+}
+
+model Cancha {
+  id             String   @id @default(uuid())
+  grupoCanchasId String
+  numero         Int
+  nombre         String?
+  activa         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  grupoCanchas GrupoCanchas    @relation(fields: [grupoCanchasId], references: [id], onDelete: Cascade)
+  partidos     PartidoFutbol[]
+
+  @@unique([grupoCanchasId, numero])
+  @@index([numero])
+  @@map("canchas")
+}
+
+model FranjaHoraria {
+  id              String   @id @default(uuid())
+  grupoCanchasId  String
+  horaInicio      String // HH:mm
+  duracionMinutos Int      @default(90)
+  orden           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  grupoCanchas GrupoCanchas @relation(fields: [grupoCanchasId], references: [id], onDelete: Cascade)
+
+  @@unique([grupoCanchasId, horaInicio])
+  @@index([grupoCanchasId, orden])
+  @@map("franjas_horarias")
+}
+
+model Jornada {
+  id             String   @id @default(uuid())
+  torneoId       String
+  numero         Int
+  fecha          DateTime
+  suspendida     Boolean  @default(false)
+  esRecuperacion Boolean  @default(false)
+  publicada      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  torneo       Torneo               @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  partidos     PartidoFutbol[]
+  preferencias PreferenciaHorario[]
+
+  @@unique([torneoId, numero])
+  @@index([torneoId, fecha])
+  @@index([suspendida])
+  @@map("jornadas")
+}
+
+model PreferenciaHorario {
+  id                  String   @id @default(uuid())
+  torneoId            String
+  jornadaId           String
+  equipoInscripcionId String
+  horaPreferida       String
+  createdAt           DateTime @default(now())
+
+  torneo            Torneo            @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  jornada           Jornada           @relation(fields: [jornadaId], references: [id], onDelete: Cascade)
+  equipoInscripcion EquipoInscripcion @relation(fields: [equipoInscripcionId], references: [id], onDelete: Cascade)
+
+  @@unique([jornadaId, equipoInscripcionId])
+  @@index([torneoId])
+  @@map("preferencias_horario")
+}
+
+model PartidoFutbol {
+  id                String   @id @default(uuid())
+  homeTeamId        String
+  awayTeamId        String
+  date              DateTime
+  status            String   @default("pendiente") // pendiente | jugado | suspendido | wo
+  homeGoals         Int?
+  awayGoals         Int?
+  venue             String?
+  torneoId          String?
+  jornadaId         String?
+  homeInscripcionId String?
+  awayInscripcionId String?
+  canchaId          String?
+  horaInicio        String?
+  bloqueadoManual   Boolean  @default(false)
+  equipoLibreId     String?
+  esWO              Boolean  @default(false)
+  motivoWO          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  homeTeam        EquipoFutbol       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam        EquipoFutbol       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  torneo          Torneo?            @relation(fields: [torneoId], references: [id], onDelete: SetNull)
+  jornada         Jornada?           @relation(fields: [jornadaId], references: [id], onDelete: SetNull)
+  homeInscripcion EquipoInscripcion? @relation("HomeInscripcion", fields: [homeInscripcionId], references: [id], onDelete: SetNull)
+  awayInscripcion EquipoInscripcion? @relation("AwayInscripcion", fields: [awayInscripcionId], references: [id], onDelete: SetNull)
+  cancha          Cancha?            @relation(fields: [canchaId], references: [id], onDelete: SetNull)
+  equipoLibre     EquipoInscripcion? @relation("EquipoLibre", fields: [equipoLibreId], references: [id], onDelete: SetNull)
+  eventos         EventoPartido[]
 
   @@index([status])
   @@index([date])
   @@index([status, date])
+  @@index([torneoId, jornadaId])
+  @@index([canchaId, date, horaInicio])
   @@map("partidos_futbol")
+}
+
+model EventoPartido {
+  id          String   @id @default(uuid())
+  partidoId   String
+  personaId   String
+  tipo        String // gol | asistencia | amarilla | roja | azul | doble_amarilla | expulsion_directa
+  minuto      Int?
+  articuloRef String?
+  createdAt   DateTime @default(now())
+
+  partido PartidoFutbol @relation(fields: [partidoId], references: [id], onDelete: Cascade)
+  persona Persona       @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@index([partidoId])
+  @@index([personaId])
+  @@index([tipo])
+  @@map("eventos_partido")
+}
+
+model Suspension {
+  id              String   @id @default(uuid())
+  personaId       String
+  torneoId        String?
+  motivo          String
+  fechasRestantes Int      @default(1)
+  activa          Boolean  @default(true)
+  origenPartidoId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@index([personaId, activa])
+  @@index([torneoId, activa])
+  @@map("suspensiones")
+}
+
+// ==================== REGLAMENTO ====================
+
+model ReglamentoApartado {
+  id        String   @id @default(uuid())
+  numero    Int      @unique
+  titulo    String
+  orden     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  articulos ReglamentoArticulo[]
+
+  @@map("reglamento_apartados")
+}
+
+model ReglamentoArticulo {
+  id         String   @id @default(uuid())
+  apartadoId String
+  numero     String // "1", "10 bis", "38 bis"
+  titulo     String?
+  contenido  String   @db.Text
+  aplicable  Boolean  @default(true)
+  orden      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  apartado ReglamentoApartado @relation(fields: [apartadoId], references: [id], onDelete: Cascade)
+
+  @@unique([apartadoId, numero])
+  @@index([aplicable])
+  @@map("reglamento_articulos")
+}
+
+model ReglamentoAnexo {
+  id        String   @id @default(uuid())
+  numero    Int      @unique
+  titulo    String
+  orden     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reglas ReglamentoRegla[]
+
+  @@map("reglamento_anexos")
+}
+
+model ReglamentoRegla {
+  id        String   @id @default(uuid())
+  anexoId   String
+  clave     String
+  titulo    String?
+  contenido String   @db.Text
+  orden     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  anexo ReglamentoAnexo @relation(fields: [anexoId], references: [id], onDelete: Cascade)
+
+  @@unique([anexoId, clave])
+  @@map("reglamento_reglas")
+}
+
+// ==================== CANTINA PÚBLICA ====================
+
+model PedidoPublico {
+  id              String   @id @default(uuid())
+  cuentaPublicaId String
+  status          String   @default("pendiente_pago") // pendiente_pago | pagado | en_cocina | listo | retirado | cancelado
+  total           Decimal  @db.Decimal(10, 2)
+  ticketVentaId   String?  @unique
+  nota            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cuentaPublica CuentaPublica       @relation(fields: [cuentaPublicaId], references: [id])
+  ticketVenta   TicketVenta?        @relation(fields: [ticketVentaId], references: [id], onDelete: SetNull)
+  items         ItemPedidoPublico[]
+  tokenRetiro   TokenRetiroQR?
+  ordenesCocina OrdenCocina[]
+
+  @@index([cuentaPublicaId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pedidos_publicos")
+}
+
+model ItemPedidoPublico {
+  id             String   @id @default(uuid())
+  pedidoId       String
+  salesProductId String?
+  name           String
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  quantity       Int
+  emoji          String?
+  createdAt      DateTime @default(now())
+
+  pedido PedidoPublico @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@map("items_pedido_publico")
+}
+
+model TokenRetiroQR {
+  id        String    @id @default(uuid())
+  pedidoId  String    @unique
+  token     String    @unique
+  usadoEn   DateTime?
+  invalido  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  pedido PedidoPublico @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("tokens_retiro_qr")
 }
 
 // ==================== AUDITORÍA ====================
@@ -516,7 +997,7 @@ model OrdenCompra {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier Proveedor?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplier Proveedor?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items    ItemOrdenCompra[]
 
   @@index([status])
@@ -559,16 +1040,16 @@ model LogConsumo {
 }
 
 model EntradaConsumo {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   logId         String
   productId     String
   productName   String
   warehouseId   String
   warehouseName String
-  previousStock Decimal @db.Decimal(12, 3)
-  newStock      Decimal @db.Decimal(12, 3)
-  consumed      Decimal @db.Decimal(12, 3)
-  unit          String  @default("unidades")
+  previousStock Decimal  @db.Decimal(12, 3)
+  newStock      Decimal  @db.Decimal(12, 3)
+  consumed      Decimal  @db.Decimal(12, 3)
+  unit          String   @default("unidades")
   createdAt     DateTime @default(now())
 
   log LogConsumo @relation(fields: [logId], references: [id], onDelete: Cascade)

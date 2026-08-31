@@ -15,12 +15,14 @@ import { ReturnsModule } from './pos/ReturnsModule';
 import { TablesModule } from './pos/TablesModule';
 import { InicioModule } from './pos/InicioModule';
 import { ReportesModule } from './pos/ReportesModule';
+import { RetiroQrModule } from './pos/RetiroQrModule';
 import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlaceholderPage';
 
 const VALID_TABS: VentasTab[] = [
   'mostrador',
   'pedidos',
   'devoluciones',
+  'retiro-qr',
   'productos',
   'mesas',
   'inicio',
@@ -101,6 +103,7 @@ function VentasPosShell() {
         {tab === 'productos' && <ProductsModule />}
         {tab === 'mesas' && <TablesModule />}
         {tab === 'reportes' && <ReportesModule />}
+        {tab === 'retiro-qr' && <RetiroQrModule />}
       </div>
     </div>
   );

@@ -20,16 +20,24 @@ export class KitchenService {
     private sseService: SseService,
   ) {}
 
-  async findAllOrders(kitchenId?: string, status?: string) {
+  async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean) {
     return this.prisma.ordenCocina.findMany({
       where: {
         ...(kitchenId ? { kitchenId } : {}),
         ...(status ? { status } : {}),
+        ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
       },
       include: {
         kitchen: true,
         items: true,
-        ticket: { select: { number: true, status: true } },
+        ticket: { select: { number: true, status: true, origen: true } },
+        pedidoPublico: {
+          select: {
+            id: true,
+            status: true,
+            tokenRetiro: { select: { token: true, usadoEn: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -75,10 +83,23 @@ export class KitchenService {
     return result;
   }
 
-  async getActiveOrdersForKitchen(kitchenId: string) {
+  async getActiveOrdersForKitchen(kitchenId: string, onlineOnly?: boolean) {
     return this.prisma.ordenCocina.findMany({
-      where: { kitchenId, status: { not: 'delivered' } },
-      include: { items: true },
+      where: {
+        kitchenId,
+        status: { not: 'delivered' },
+        ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
+      },
+      include: {
+        items: true,
+        pedidoPublico: {
+          select: {
+            id: true,
+            status: true,
+            tokenRetiro: { select: { token: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
   }

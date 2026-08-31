@@ -18,7 +18,14 @@
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.2.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "@react-oauth/google": "^0.13.5",
+    "@tanstack/react-query": "^5.102.8",
+    "clsx": "^2.1.1",
     "lucide-react": "0.487.0",
+    "react-router-dom": "^7.18.3",
+    "tailwind-merge": "^3.2.0",
     "tw-animate-css": "1.3.8"
   },
   "devDependencies": {

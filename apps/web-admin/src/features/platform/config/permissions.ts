@@ -31,7 +31,27 @@ export type VentasTab =
   | 'devoluciones'
   | 'productos'
   | 'mesas'
-  | 'reportes';
+  | 'reportes'
+  | 'retiro-qr';
+
+export type FutbolTab =
+  | 'inicio'
+  | 'equipos'
+  | 'capitanes'
+  | 'plantel'
+  | 'fixture'
+  | 'resultados'
+  | 'reglamento'
+  | 'suspendidos'
+  | 'media';
+
+export type OnlineTab =
+  | 'inicio'
+  | 'cocina'
+  | 'escaner-qr'
+  | 'menu'
+  | 'sponsors'
+  | 'metricas';
 
 export type VentasReportSection = 'ventas' | 'metricas' | 'historial';
 
@@ -74,7 +94,7 @@ const STOCK_REPORT_DENIED: Partial<Record<PlatformRole, StockReportTab[]>> = {
 const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
   SuperAdmin: 'all',
   Operador_Stock: [],
-  Vendedor: ['mostrador', 'pedidos', 'devoluciones'],
+  Vendedor: ['mostrador', 'pedidos', 'devoluciones', 'retiro-qr'],
   Gerente_Ventas: 'all',
   Operador_Futbol: [],
   Operador_Cocina: [],
@@ -82,6 +102,24 @@ const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
 
 const VENTAS_REPORT_DENIED: Partial<Record<PlatformRole, VentasReportSection[]>> = {
   Vendedor: ['metricas', 'historial', 'ventas'],
+};
+
+const FUTBOL_TABS: Record<PlatformRole, FutbolTab[] | 'all'> = {
+  SuperAdmin: 'all',
+  Operador_Stock: [],
+  Vendedor: [],
+  Gerente_Ventas: [],
+  Operador_Futbol: 'all',
+  Operador_Cocina: [],
+};
+
+const ONLINE_TABS: Record<PlatformRole, OnlineTab[] | 'all'> = {
+  SuperAdmin: 'all',
+  Operador_Stock: [],
+  Vendedor: [],
+  Gerente_Ventas: [],
+  Operador_Futbol: [],
+  Operador_Cocina: 'all',
 };
 
 export const ROLE_LABELS: Record<PlatformRole, string> = {
@@ -179,6 +217,30 @@ export function getDefaultVentasTab(role: CurrentUser['role']): VentasTab {
   const allowed = VENTAS_TABS[normalizeRole(role)];
   if (allowed === 'all') return 'mostrador';
   return allowed[0] ?? 'mostrador';
+}
+
+export function canAccessFutbolTab(role: CurrentUser['role'], tab: FutbolTab): boolean {
+  if (!canAccessModule(role, 'futbol')) return false;
+  const allowed = FUTBOL_TABS[normalizeRole(role)];
+  return allowed === 'all' || allowed.includes(tab);
+}
+
+export function getDefaultFutbolTab(role: CurrentUser['role']): FutbolTab {
+  const allowed = FUTBOL_TABS[normalizeRole(role)];
+  if (allowed === 'all') return 'inicio';
+  return allowed[0] ?? 'inicio';
+}
+
+export function canAccessOnlineTab(role: CurrentUser['role'], tab: OnlineTab): boolean {
+  if (!canAccessModule(role, 'online')) return false;
+  const allowed = ONLINE_TABS[normalizeRole(role)];
+  return allowed === 'all' || allowed.includes(tab);
+}
+
+export function getDefaultOnlineTab(role: CurrentUser['role']): OnlineTab {
+  const allowed = ONLINE_TABS[normalizeRole(role)];
+  if (allowed === 'all') return 'inicio';
+  return allowed[0] ?? 'inicio';
 }
 
 export function getDefaultStockReportTab(role: CurrentUser['role']): StockReportTab {

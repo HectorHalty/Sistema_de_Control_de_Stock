@@ -22,6 +22,8 @@ import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlacehold
 import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
 import { SettingsPage } from '@/features/platform/pages/SettingsPage';
 import { SalesModule } from '@/features/sales/SalesModule';
+import { FutbolModule } from '@/features/futbol/FutbolModule';
+import { OnlineModule } from '@/features/online/OnlineModule';
 
 const LogoutContext = createContext<(() => void) | null>(null);
 
@@ -105,11 +107,25 @@ function ComingSoonModuleGuard({
 }
 
 function OnlineGuard() {
-  return <ComingSoonModuleGuard moduleId="online" title="Ventas Online" />;
+  const { currentUser } = useAppStateFromContext();
+  if (!canAccessModule(currentUser.role, 'online')) {
+    return (
+      <ModulePlaceholderPage
+        title="Ventas Online"
+        description="Tu perfil no tiene acceso al módulo Online."
+        denied
+      />
+    );
+  }
+  return <OnlineModule />;
 }
 
 function FutbolGuard() {
-  return <ComingSoonModuleGuard moduleId="futbol" title="Fútbol" />;
+  const { currentUser } = useAppStateFromContext();
+  if (!canAccessModule(currentUser.role, 'futbol')) {
+    return <ModulePlaceholderPage title="Fútbol" description="Tu perfil no tiene acceso al módulo de Fútbol." denied />;
+  }
+  return <FutbolModule />;
 }
 
 function DefaultLandingRedirect() {

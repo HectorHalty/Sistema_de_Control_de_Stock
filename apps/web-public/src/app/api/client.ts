@@ -1,10 +1,7 @@
-/**
- * API client configuration.
- * Reads base URL from Vite env var VITE_API_URL, falls back to localhost:3001.
- */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { resolveApiBaseUrl } from './resolve-api-base-url';
 
-export { API_BASE_URL };
+export { resolveApiBaseUrl as getApiBaseUrl };
+export const API_BASE_URL = typeof window !== 'undefined' ? resolveApiBaseUrl() : 'http://localhost:3001';
 
 export interface ApiOptions {
   token?: string;
@@ -14,7 +11,7 @@ export interface ApiOptions {
  * Low-level fetch wrapper with auth header and JSON serialization.
  */
 async function apiFetch<T>(path: string, options?: RequestInit & { token?: string }): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${resolveApiBaseUrl()}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),

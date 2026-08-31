@@ -21,9 +21,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub?: string }) {
+  async validate(payload: { sub?: string; type?: string }) {
     if (!payload?.sub) {
       throw new UnauthorizedException('Invalid token');
+    }
+
+    if (payload.type === 'publico') {
+      throw new UnauthorizedException('Staff token required');
     }
 
     const user = await this.prisma.usuario.findUnique({
