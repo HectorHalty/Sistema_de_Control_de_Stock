@@ -184,17 +184,42 @@ export interface PublicSponsor {
   name: string;
   imageUrl: string;
   placement: string;
+  bannerLabel?: string | null;
+  mediaType?: string;
+  widthPx?: number | null;
+  heightPx?: number | null;
   linkUrl?: string | null;
+}
+
+export interface PublicMenuCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface PublicMenuFilter {
+  slug: string;
+  label: string;
 }
 
 export interface PublicMenuItem {
   id: string;
   name: string;
   category: string;
+  categorySlug?: string;
   price: number;
   emoji?: string | null;
   description?: string | null;
+  imageUrl?: string | null;
   kitchen: string;
+  popular?: boolean;
+  filters?: string[];
+}
+
+export interface PublicMenuResponse {
+  items: PublicMenuItem[];
+  categories: PublicMenuCategory[];
+  filters: PublicMenuFilter[];
 }
 
 export interface PublicTorneoDetail {
@@ -259,7 +284,7 @@ export interface PublicOrder {
 export const publicApi = {
   homeBundle: () => publicFetch<PublicHomeBundle>('/public/home-bundle'),
   torneo: (id?: string) => publicFetch<PublicTorneoDetail | null>(`/public/torneo${id ? `?id=${id}` : ''}`),
-  menu: () => publicFetch<PublicMenuItem[]>('/public/menu'),
+  menu: () => publicFetch<PublicMenuResponse>('/public/menu'),
   reglamento: () => publicFetch<{ apartados: ReglamentoApartado[]; anexos: unknown[] }>('/public/reglamento'),
   sponsors: () => publicFetch<PublicSponsor[]>('/public/sponsors'),
 
@@ -308,6 +333,8 @@ export const publicApi = {
         method: 'DELETE',
         token,
       }),
+    getListaBuenaFe: (token: string) =>
+      publicFetch<string>('/public/captain/roster/lista-buena-fe', { token }),
   },
 
   media: (type?: string) => {

@@ -149,6 +149,24 @@ export class FootballController {
     return this.footballService.generateRoundRobin(id);
   }
 
+  @Post('jornadas/:id/auto-schedule')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  autoScheduleJornada(@Param('id') id: string) {
+    return this.footballService.autoScheduleJornada(id);
+  }
+
+  @Post('jornadas/:id/suspend-rain')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendJornadaPorLluvia(@Param('id') id: string) {
+    return this.footballService.suspendJornadaPorLluvia(id);
+  }
+
+  @Post('jornadas/:id/publish')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  publishJornada(@Param('id') id: string) {
+    return this.footballService.publishJornada(id);
+  }
+
   @Get('matches')
   @Roles(...FOOTBALL_READ_ROLES)
   findAllMatches(

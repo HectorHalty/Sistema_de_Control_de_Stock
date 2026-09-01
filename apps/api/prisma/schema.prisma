@@ -129,6 +129,47 @@ model ProveedorProducto {
 
 // ==================== VENTAS ====================
 
+model CategoriaWeb {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0) @map("orden")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  productos ProductoVenta[]
+
+  @@index([active, sortOrder])
+  @@map("categorias_web")
+}
+
+model FiltroWeb {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  label     String
+  sortOrder Int      @default(0) @map("orden")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  productos ProductoVentaFiltro[]
+
+  @@index([active, sortOrder])
+  @@map("filtros_web")
+}
+
+model ProductoVentaFiltro {
+  productoVentaId String @map("producto_venta_id")
+  filtroWebId     String @map("filtro_web_id")
+
+  producto ProductoVenta @relation(fields: [productoVentaId], references: [id], onDelete: Cascade)
+  filtro   FiltroWeb     @relation(fields: [filtroWebId], references: [id], onDelete: Cascade)
+
+  @@id([productoVentaId, filtroWebId])
+  @@map("productos_venta_filtros")
+}
+
 model ProductoVenta {
   id             String   @id @default(uuid())
   name           String
@@ -141,6 +182,9 @@ model ProductoVenta {
   visibleWeb     Boolean  @default(false)
   descripcionWeb String?
   imagenWeb      String?
+  webCategoryId  String?  @map("categoria_web_id")
+  webSortOrder   Int      @default(0) @map("orden_web")
+  popularWeb     Boolean  @default(false) @map("popular_web")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -150,6 +194,8 @@ model ProductoVenta {
   ticketItems   ItemTicketVenta[]
   kitchen       Cocina            @relation(fields: [kitchenId], references: [id])
   kitchenItems  ItemOrdenCocina[]
+  webCategory   CategoriaWeb?     @relation(fields: [webCategoryId], references: [id], onDelete: SetNull)
+  filtrosWeb    ProductoVentaFiltro[]
 
   // Evita el mismo nombre de carta duplicado en la misma cocina
   @@unique([name, kitchenId])
@@ -157,6 +203,7 @@ model ProductoVenta {
   @@index([active, kitchenId])
   @@index([active, name])
   @@index([visibleWeb, active])
+  @@index([webCategoryId])
   @@map("productos_venta")
 }
 
@@ -332,17 +379,23 @@ model Medio {
 // ==================== PATROCINADORES ====================
 
 model Patrocinador {
-  id        String   @id @default(uuid())
-  name      String
-  imageUrl  String
-  placement String   @default("banner")
-  active    Boolean  @default(true)
-  linkUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  imageUrl    String
+  placement   String   @default("banner")
+  bannerLabel String?  @map("banner_label")
+  mediaType   String   @default("image") @map("tipo_medio") // image | video
+  widthPx     Int?     @map("ancho_px")
+  heightPx    Int?     @map("alto_px")
+  sortOrder   Int      @default(0) @map("orden")
+  active      Boolean  @default(true)
+  linkUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([active])
   @@index([placement])
+  @@index([active, placement, sortOrder])
   @@map("patrocinadores")
 }
 

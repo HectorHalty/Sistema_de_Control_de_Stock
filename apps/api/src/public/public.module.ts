@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { SalesModule } from '../sales/sales.module';
 import { SseModule } from '../sse/sse.module';
 import { ReglamentoModule } from '../reglamento/reglamento.module';
+import { FootballModule } from '../football/football.module';
 import { PublicController } from './public.controller';
 import { PublicService } from './public.service';
 import { PublicAuthService } from './public-auth.service';
@@ -18,7 +19,7 @@ import { PublicAuthGuard } from './guards/public-auth.guard';
 import { PublicCaptainGuard } from './guards/public-captain.guard';
 
 @Module({
-  imports: [ReglamentoModule, AuthModule, PassportModule, SalesModule, SseModule],
+  imports: [ReglamentoModule, FootballModule, AuthModule, PassportModule, SalesModule, SseModule],
   controllers: [
     PublicController,
     PublicAuthController,

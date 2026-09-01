@@ -11,7 +11,7 @@ export class SponsorsService {
         ...(active !== undefined ? { active } : {}),
         ...(placement ? { placement } : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
@@ -21,19 +21,48 @@ export class SponsorsService {
     return sponsor;
   }
 
-  async create(data: { name: string; imageUrl: string; placement?: string; linkUrl?: string }) {
+  async create(data: {
+    name: string;
+    imageUrl: string;
+    placement?: string;
+    linkUrl?: string;
+    bannerLabel?: string;
+    mediaType?: string;
+    widthPx?: number;
+    heightPx?: number;
+    sortOrder?: number;
+  }) {
     return this.prisma.patrocinador.create({
       data: {
         name: data.name,
         imageUrl: data.imageUrl,
         placement: data.placement || 'banner',
         linkUrl: data.linkUrl,
+        bannerLabel: data.bannerLabel,
+        mediaType: data.mediaType || 'image',
+        widthPx: data.widthPx,
+        heightPx: data.heightPx,
+        sortOrder: data.sortOrder ?? 0,
         active: true,
       },
     });
   }
 
-  async update(id: string, data: { name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string }) {
+  async update(
+    id: string,
+    data: {
+      name?: string;
+      imageUrl?: string;
+      placement?: string;
+      active?: boolean;
+      linkUrl?: string;
+      bannerLabel?: string;
+      mediaType?: string;
+      widthPx?: number;
+      heightPx?: number;
+      sortOrder?: number;
+    },
+  ) {
     await this.findById(id);
     return this.prisma.patrocinador.update({ where: { id }, data });
   }

@@ -6,6 +6,12 @@ import { DniModal } from './auth/DniModal';
 import { useCart } from './cart/CartContext';
 import { publicApi } from '../../api/public-api';
 import {
+  FooterSponsors,
+  MobileFooterSponsors,
+  SidebarSponsors,
+  usePublicSponsors,
+} from './SponsorPlacements';
+import {
   IconBookOpen,
   IconCamera,
   IconCart,
@@ -42,10 +48,12 @@ function Sidebar({
   path,
   cartCount,
   orderCount,
+  sponsors,
 }: {
   path: string;
   cartCount: number;
   orderCount: number;
+  sponsors: import('../../api/public-api').PublicSponsor[];
 }) {
   const navigate = useNavigate();
   const { user } = usePublicAuth();
@@ -119,6 +127,8 @@ function Sidebar({
           );
         })}
       </nav>
+
+      <SidebarSponsors sponsors={sponsors} />
 
       <div className="px-3 pb-3">
         <button
@@ -214,13 +224,14 @@ export function PublicLayout() {
     enabled: !!token,
   });
   const orderCount = orders.filter((o) => o.status !== 'retirado' && o.status !== 'cancelado').length;
+  const { data: sponsors = [] } = usePublicSponsors();
 
   return (
     <div
       style={{ background: '#111111', display: 'flex', height: '100vh', overflow: 'hidden' }}
       className="text-white"
     >
-      <Sidebar path={path} cartCount={count} orderCount={orderCount} />
+      <Sidebar path={path} cartCount={count} orderCount={orderCount} sponsors={sponsors} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
@@ -269,6 +280,9 @@ export function PublicLayout() {
         <main style={{ flex: 1, overflowY: 'auto', background: '#111111' }} className="min-h-0 pb-20 md:pb-0">
           <Outlet />
         </main>
+
+        <FooterSponsors sponsors={sponsors} />
+        {!hideMobileNav && <MobileFooterSponsors sponsors={sponsors} />}
 
         {!hideMobileNav && (
           <nav

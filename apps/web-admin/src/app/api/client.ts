@@ -418,22 +418,6 @@ export const salesApi = {
     remove: (id: string, token: string) =>
       apiFetch<void>(`/sales/kitchens/${id}`, { method: 'DELETE', token }),
   },
-  redeemPublicQr: (token: string, authToken: string) =>
-    apiFetch<{
-      ok: boolean;
-      pedido: {
-        id: string;
-        status: string;
-        total: number;
-        ticketNumber: number | null;
-        items: { name: string; quantity: number; unitPrice: number }[];
-        retiradoEn: string;
-      };
-    }>('/sales/public-orders/redeem-qr', {
-      method: 'POST',
-      token: authToken,
-      body: { token },
-    }),
 };
 
 /**
@@ -579,6 +563,22 @@ export const footballApi = {
         `/football/jornadas/${jornadaId}/round-robin`,
         { method: 'POST', token },
       ),
+    autoSchedule: (jornadaId: string, token: string) =>
+      apiFetch<{ scheduled: number; warnings: string[]; skippedManual: number }>(
+        `/football/jornadas/${jornadaId}/auto-schedule`,
+        { method: 'POST', token },
+      ),
+    suspendRain: (jornadaId: string, token: string) =>
+      apiFetch<{
+        recoveryJornadaId: string;
+        recoveryNumero: number;
+        movedMatches: number;
+      }>(`/football/jornadas/${jornadaId}/suspend-rain`, { method: 'POST', token }),
+    publish: (jornadaId: string, token: string) =>
+      apiFetch<{ jornadaId: string; publicada: boolean }>(
+        `/football/jornadas/${jornadaId}/publish`,
+        { method: 'POST', token },
+      ),
   },
   matches: {
     list: (token: string, filters?: { status?: string; torneoId?: string; jornadaId?: string }) => {
@@ -663,10 +663,11 @@ export const footballApi = {
  */
 export const onlineApi = {
   overview: (token: string) => apiFetch<OnlineOverview>('/online/overview', { token }),
-  metrics: (token: string, from?: string, to?: string) => {
+  metrics: (token: string, from?: string, to?: string, range?: '7d' | '30d' | '90d' | 'Año') => {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (range) params.set('range', range);
     const q = params.toString();
     return apiFetch<OnlineMetrics>(`/online/metrics${q ? `?${q}` : ''}`, { token });
   },
@@ -684,30 +685,40 @@ export const onlineApi = {
       const q = visibleOnly ? '?visibleOnly=true' : '';
       return apiFetch<WebMenuProduct[]>(`/online/menu${q}`, { token });
     },
+    create: (
+      data: CreateWebMenuProductPayload,
+      token: string,
+    ) => apiFetch<WebMenuProduct>('/online/menu', { method: 'POST', token, body: data }),
     update: (
       id: string,
-      data: {
-        visibleWeb?: boolean;
-        descripcionWeb?: string | null;
-        imagenWeb?: string | null;
-        emoji?: string | null;
-        price?: number;
-      },
+      data: UpdateWebMenuProductPayload,
       token: string,
     ) => apiFetch<WebMenuProduct>(`/online/menu/${id}`, { method: 'PUT', token, body: data }),
   },
+  categories: {
+    list: (token: string) => apiFetch<WebCategory[]>(`/online/categories`, { token }),
+    create: (data: { name: string; sortOrder?: number }, token: string) =>
+      apiFetch<WebCategory>('/online/categories', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; sortOrder?: number; active?: boolean }, token: string) =>
+      apiFetch<WebCategory>(`/online/categories/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/online/categories/${id}`, { method: 'DELETE', token }),
+  },
+  filters: {
+    list: (token: string) => apiFetch<WebFilter[]>(`/online/filters`, { token }),
+    create: (data: { label: string; slug?: string; sortOrder?: number }, token: string) =>
+      apiFetch<WebFilter>('/online/filters', { method: 'POST', token, body: data }),
+    update: (id: string, data: { label?: string; slug?: string; sortOrder?: number; active?: boolean }, token: string) =>
+      apiFetch<WebFilter>(`/online/filters/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/online/filters/${id}`, { method: 'DELETE', token }),
+  },
+  kitchens: {
+    list: (token: string) =>
+      apiFetch<{ id: string; name: string; emoji?: string | null }[]>('/online/kitchens', { token }),
+  },
   redeemQr: (token: string, authToken: string) =>
-    apiFetch<{
-      ok: boolean;
-      pedido: {
-        id: string;
-        status: string;
-        total: number;
-        ticketNumber: number | null;
-        items: { name: string; quantity: number; unitPrice: number }[];
-        retiradoEn: string;
-      };
-    }>('/online/redeem-qr', { method: 'POST', token: authToken, body: { token } }),
+    apiFetch<RedeemQrResponse>('/online/redeem-qr', { method: 'POST', token: authToken, body: { token } }),
 };
 
 /**
@@ -918,8 +929,36 @@ export interface OnlineOverview {
 export interface OnlineMetrics {
   totalPedidos: number;
   recaudacion: number;
+  recaudacionHoy: number;
+  ticketPromedio: number;
+  ticketsHoy: number;
   porEstado: { status: string; count: number }[];
   topItems: { name: string; quantity: number; revenue: number }[];
+  salesByDay: { id: string; day: string; ventas: number; tickets: number }[];
+  topProductsByKitchen: {
+    kitchen: string;
+    id: string;
+    color: string;
+    products: { id: string; name: string; value: number; revenue: number }[];
+    totalUnits: number;
+    totalRevenue: number;
+  }[];
+  range?: string;
+}
+
+export interface RedeemQrResponse {
+  ok: boolean;
+  pedido: {
+    id: string;
+    status: string;
+    total: number;
+    ticketNumber: number | null;
+    customerName: string;
+    pickupKitchen: string | null;
+    kitchens: { id: string; name: string; emoji?: string | null }[];
+    items: { name: string; quantity: number; unitPrice: number; emoji?: string | null }[];
+    retiradoEn: string;
+  };
 }
 
 export interface OnlinePublicOrder {
@@ -945,7 +984,60 @@ export interface WebMenuProduct {
   visibleWeb: boolean;
   descripcionWeb?: string | null;
   imagenWeb?: string | null;
+  webCategoryId?: string | null;
+  popularWeb?: boolean;
+  webSortOrder?: number;
   kitchen?: { id: string; name: string; emoji?: string | null };
+  webCategory?: { id: string; name: string; slug: string } | null;
+  filtrosWeb?: { filtro: { id: string; slug: string; label: string } }[];
+}
+
+export interface WebCategory {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  active: boolean;
+  _count?: { productos: number };
+}
+
+export interface WebFilter {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+  active: boolean;
+  _count?: { productos: number };
+}
+
+export interface CreateWebMenuProductPayload {
+  name: string;
+  category: string;
+  kitchenId: string;
+  price: number;
+  emoji?: string;
+  descripcionWeb?: string;
+  imagenWeb?: string;
+  visibleWeb?: boolean;
+  webCategoryId?: string;
+  popularWeb?: boolean;
+  filterIds?: string[];
+}
+
+export interface UpdateWebMenuProductPayload {
+  name?: string;
+  category?: string;
+  kitchenId?: string;
+  visibleWeb?: boolean;
+  descripcionWeb?: string | null;
+  imagenWeb?: string | null;
+  emoji?: string | null;
+  price?: number;
+  webCategoryId?: string | null;
+  popularWeb?: boolean;
+  webSortOrder?: number;
+  filterIds?: string[];
+  active?: boolean;
 }
 
 export type KitchenOrderStatus = 'pending' | 'preparing' | 'ready' | 'delivered';
@@ -967,8 +1059,13 @@ export interface Sponsor {
   name: string;
   imageUrl: string;
   placement: string;
+  bannerLabel?: string | null;
+  mediaType?: string;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  sortOrder?: number;
   active: boolean;
-  linkUrl?: string;
+  linkUrl?: string | null;
 }
 
 export interface OnlineProduct {
@@ -1253,6 +1350,7 @@ export interface PresignPayload {
 
 export interface PresignResult {
   uploadUrl: string;
+  publicUrl?: string;
   key: string;
   bucket: string;
   method: string;
@@ -1269,11 +1367,28 @@ export interface ConfirmMediaPayload {
 }
 
 export interface CreateSponsorPayload {
-  name: string; imageUrl: string; placement?: string; linkUrl?: string;
+  name: string;
+  imageUrl: string;
+  placement?: string;
+  linkUrl?: string;
+  bannerLabel?: string;
+  mediaType?: string;
+  widthPx?: number;
+  heightPx?: number;
+  sortOrder?: number;
 }
 
 export interface UpdateSponsorPayload {
-  name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string;
+  name?: string;
+  imageUrl?: string;
+  placement?: string;
+  active?: boolean;
+  linkUrl?: string;
+  bannerLabel?: string;
+  mediaType?: string;
+  widthPx?: number;
+  heightPx?: number;
+  sortOrder?: number;
 }
 
 export interface CreateOnlineProductPayload {

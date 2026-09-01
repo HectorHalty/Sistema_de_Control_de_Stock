@@ -12,18 +12,24 @@
     "electron:build": "npm run build && electron-builder --win --x64",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
-    "cap:run": "npx cap run android"
+    "cap:open:ios": "npx cap open ios",
+    "cap:run": "npx cap run android",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.2.0",
+    "@capacitor/ios": "^8.5.1",
+    "@capacitor/keyboard": "^8.0.5",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@react-oauth/google": "^0.13.5",
     "@tanstack/react-query": "^5.102.8",
     "clsx": "^2.1.1",
     "lucide-react": "0.487.0",
+    "qrcode.react": "^4.2.0",
     "react-router-dom": "^7.18.3",
     "tailwind-merge": "^3.2.0",
     "tw-animate-css": "1.3.8"

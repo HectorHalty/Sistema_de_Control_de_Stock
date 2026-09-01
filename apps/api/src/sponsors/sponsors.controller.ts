@@ -30,13 +30,41 @@ export class SponsorsController {
 
   @Post()
   @Roles(...SPONSOR_MUTATION_ROLES)
-  create(@Body() body: { name: string; imageUrl: string; placement?: string; linkUrl?: string }) {
+  create(
+    @Body()
+    body: {
+      name: string;
+      imageUrl: string;
+      placement?: string;
+      linkUrl?: string;
+      bannerLabel?: string;
+      mediaType?: string;
+      widthPx?: number;
+      heightPx?: number;
+      sortOrder?: number;
+    },
+  ) {
     return this.sponsorsService.create(body);
   }
 
   @Put(':id')
   @Roles(...SPONSOR_MUTATION_ROLES)
-  update(@Param('id') id: string, @Body() body: { name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string }) {
+  update(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      imageUrl?: string;
+      placement?: string;
+      active?: boolean;
+      linkUrl?: string;
+      bannerLabel?: string;
+      mediaType?: string;
+      widthPx?: number;
+      heightPx?: number;
+      sortOrder?: number;
+    },
+  ) {
     return this.sponsorsService.update(id, body);
   }
 

@@ -88,6 +88,59 @@ export function FixturePanel() {
     }
   }
 
+  async function autoSchedule() {
+    const token = getAccessToken();
+    if (!token || !selectedJornada) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await footballApi.jornadas.autoSchedule(selectedJornada, token);
+      if (result.warnings.length) {
+        setError(`Programados ${result.scheduled}. Avisos: ${result.warnings.join('; ')}`);
+      }
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo auto-programar');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function suspendRain() {
+    const token = getAccessToken();
+    if (!token || !selectedJornada) return;
+    if (!confirm('¿Suspender esta jornada por lluvia y mover partidos a recuperación?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await footballApi.jornadas.suspendRain(selectedJornada, token);
+      setError(
+        `Jornada suspendida. Recuperación #${result.recoveryNumero} — ${result.movedMatches} partido(s) movidos.`,
+      );
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo suspender jornada');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishJornada() {
+    const token = getAccessToken();
+    if (!token || !selectedJornada) return;
+    setBusy(true);
+    try {
+      await footballApi.jornadas.publish(selectedJornada, token);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo publicar jornada');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedJornadaData = jornadas.find((j) => j.id === selectedJornada);
+
   async function updateSchedule(matchId: string, canchaId: string, horaInicio: string) {
     const token = getAccessToken();
     if (!token) return;
@@ -126,17 +179,51 @@ export function FixturePanel() {
         </button>
       </form>
 
-      <select
-        className="max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        value={selectedJornada}
-        onChange={(e) => setSelectedJornada(e.target.value)}
-      >
-        {jornadas.map((j) => (
-          <option key={j.id} value={j.id}>
-            Jornada {j.numero} — {new Date(j.fecha).toLocaleDateString('es-AR')}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          value={selectedJornada}
+          onChange={(e) => setSelectedJornada(e.target.value)}
+        >
+          {jornadas.map((j) => (
+            <option key={j.id} value={j.id}>
+              Jornada {j.numero}
+              {j.esRecuperacion ? ' (recup.)' : ''}
+              {j.suspendida ? ' — SUSP.' : ''}
+              {j.publicada ? ' ✓' : ''}
+              — {new Date(j.fecha).toLocaleDateString('es-AR')}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+          onClick={autoSchedule}
+          className={futbolButtonClass()}
+        >
+          Auto-programar canchas
+        </button>
+        <button
+          type="button"
+          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+          onClick={publishJornada}
+          className={futbolButtonClass('ghost')}
+        >
+          Publicar jornada
+        </button>
+        <button
+          type="button"
+          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+          onClick={suspendRain}
+          className={futbolButtonClass('ghost')}
+        >
+          Suspender por lluvia
+        </button>
+      </div>
+
+      {selectedJornadaData?.suspendida && (
+        <p className="text-sm text-amber-600">Esta jornada está suspendida.</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando partidos...</p>

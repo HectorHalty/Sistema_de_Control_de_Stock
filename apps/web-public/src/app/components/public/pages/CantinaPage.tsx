@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { publicApi, type PublicMenuItem } from '../../../api/public-api';
+import { publicApi, type PublicMenuItem, type PublicSponsor } from '../../../api/public-api';
 import { useCart, formatPrice } from '../cart/CartContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconMinus, IconPlus, IconStar } from '../figma-icons';
@@ -12,31 +12,75 @@ export function CantinaPage() {
   const { items: cart, add, remove, count, total } = useCart();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('todas');
+  const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: menu = [], isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['menu'],
     queryFn: () => publicApi.menu(),
   });
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(menu.map((m) => m.category).filter(Boolean))];
-    return cats;
-  }, [menu]);
+  const { data: sponsors = [] } = useQuery({
+    queryKey: ['sponsors-cantina'],
+    queryFn: () => publicApi.sponsors(),
+  });
 
-  const popular = useMemo(() => menu.filter((m) => m.price > 0).slice(0, 2), [menu]);
+  const cantinaBanner = useMemo((): PublicSponsor | null => {
+    return (
+      sponsors.find((s) => s.bannerLabel?.includes('Cantina')) ??
+      sponsors.find((s) => s.placement === 'banner' && s.bannerLabel?.toLowerCase().includes('cantina')) ??
+      null
+    );
+  }, [sponsors]);
+
+  const menu = data?.items ?? [];
+  const webFilters = data?.filters ?? [];
+  const webCategories = data?.categories ?? [];
+
+  const categories = useMemo(() => {
+    if (webCategories.length > 0) {
+      return webCategories.map((c) => ({ id: c.slug, label: c.name }));
+    }
+    return [...new Set(menu.map((m) => m.category).filter(Boolean))].map((c) => ({
+      id: c,
+      label: c,
+    }));
+  }, [menu, webCategories]);
+
+  const popular = useMemo(
+    () => menu.filter((m) => m.popular || m.filters?.includes('popular')).slice(0, 4),
+    [menu],
+  );
 
   const filtered = useMemo(() => {
     return menu.filter((item) => {
-      const matchCat = filter === 'todas' || item.category === filter;
+      const matchCat =
+        filter === 'todas' ||
+        item.category === filter ||
+        item.categorySlug === filter;
       const q = search.toLowerCase();
       const matchSearch =
         !search ||
         item.name.toLowerCase().includes(q) ||
         item.description?.toLowerCase().includes(q);
-      return matchCat && matchSearch;
+
+      let matchQuick = true;
+      if (activeQuickFilter === 'popular') {
+        matchQuick = !!item.popular || !!item.filters?.includes('popular');
+      } else if (activeQuickFilter === 'economico') {
+        matchQuick =
+          !!item.filters?.includes('economico') ||
+          (item.price > 0 && item.price <= 5000);
+      } else if (activeQuickFilter === 'bebidas') {
+        matchQuick =
+          !!item.filters?.includes('bebidas') ||
+          item.category.toLowerCase().includes('bebida');
+      }
+
+      return matchCat && matchSearch && matchQuick;
     });
-  }, [menu, filter, search]);
+  }, [menu, filter, search, activeQuickFilter]);
+
 
   if (isLoading) return <PageLoader />;
 
@@ -50,6 +94,14 @@ export function CantinaPage() {
     );
   }
 
+  const quickFilters = webFilters.length
+    ? webFilters
+    : [
+        { slug: 'popular', label: 'Popular' },
+        { slug: 'economico', label: 'Económico' },
+        { slug: 'bebidas', label: 'Bebidas' },
+      ];
+
   const cats: { id: string; label: string; icon: ReactNode }[] = [
     {
       id: 'todas',
@@ -62,8 +114,8 @@ export function CantinaPage() {
       ),
     },
     ...categories.map((c) => ({
-      id: c,
-      label: c.length > 10 ? `${c.slice(0, 8)}.` : c,
+      id: c.id,
+      label: c.label.length > 10 ? `${c.label.slice(0, 8)}.` : c.label,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
@@ -171,14 +223,22 @@ export function CantinaPage() {
             </svg>
             Filtros
           </button>
-          {['popular', 'económico', 'bebidas'].map((f) => (
+          {quickFilters.map((f) => (
             <button
-              key={f}
+              key={f.slug}
               type="button"
-              style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', color: '#9ca3af' }}
+              onClick={() =>
+                setActiveQuickFilter(activeQuickFilter === f.slug ? null : f.slug)
+              }
+              style={{
+                background: activeQuickFilter === f.slug ? '#6BFF9E22' : '#1c1c1c',
+                border:
+                  activeQuickFilter === f.slug ? '1px solid #6BFF9E55' : '1px solid #2a2a2a',
+                color: activeQuickFilter === f.slug ? '#6BFF9E' : '#9ca3af',
+              }}
               className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold capitalize"
             >
-              {f}
+              {f.label}
             </button>
           ))}
         </div>
@@ -204,22 +264,9 @@ export function CantinaPage() {
           ))}
         </div>
 
-        <div
-          style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
-          className="relative h-28 overflow-hidden rounded-2xl"
-        >
-          <img src={CANTEEN_HERO_IMG} alt="Promo" className="h-full w-full object-cover" />
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 40%, transparent)' }} />
-          <div className="absolute inset-0 flex flex-col justify-center px-5">
-            <span style={{ color: '#6BFF9E' }} className="text-[9px] font-black uppercase tracking-widest">
-              Promo del día
-            </span>
-            <p className="text-base font-black leading-tight text-white">El tercer tiempo es acá</p>
-            <p className="text-[11px] text-gray-400">Pedí online, retirá en cantina</p>
-          </div>
-        </div>
+        <CantinaPromoBanner banner={cantinaBanner} />
 
-        {!search && filter === 'todas' && popular.length > 0 && (
+        {!search && filter === 'todas' && !activeQuickFilter && popular.length > 0 && (
           <div>
             <h2 className="mb-3 text-base font-black text-white">Los más pedidos</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -284,6 +331,54 @@ export function CantinaPage() {
   );
 }
 
+function CantinaPromoBanner({ banner }: { banner: PublicSponsor | null }) {
+  const height = banner?.heightPx ?? 112;
+  const mediaUrl = banner?.imageUrl ?? CANTEEN_HERO_IMG;
+  const title = banner?.name ?? 'El tercer tiempo es acá';
+  const subtitle = banner?.bannerLabel ?? 'Pedí online, retirá en cantina';
+
+  const inner = (
+    <div
+      style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', height, maxHeight: 140 }}
+      className="relative overflow-hidden rounded-2xl"
+    >
+      {banner?.mediaType === 'video' ? (
+        <video
+          src={mediaUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <img src={mediaUrl} alt={title} className="h-full w-full object-cover" />
+      )}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 40%, transparent)' }}
+      />
+      <div className="absolute inset-0 flex flex-col justify-center px-5">
+        <span style={{ color: '#6BFF9E' }} className="text-[9px] font-black uppercase tracking-widest">
+          Promo del día
+        </span>
+        <p className="text-base font-black leading-tight text-white">{title}</p>
+        <p className="text-[11px] text-gray-400">{subtitle}</p>
+      </div>
+    </div>
+  );
+
+  if (banner?.linkUrl) {
+    return (
+      <a href={banner.linkUrl} target="_blank" rel="noreferrer" className="block">
+        {inner}
+      </a>
+    );
+  }
+
+  return inner;
+}
+
 function MenuCard({
   item,
   qty,
@@ -297,13 +392,15 @@ function MenuCard({
   onAdd: () => void;
   onRemove: () => void;
 }) {
+  const imgSrc = item.imageUrl || foodImageFor(item.name, item.category);
+
   return (
     <div
       style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
       className="flex flex-col overflow-hidden rounded-xl"
     >
       <div className="relative h-36 shrink-0 overflow-hidden">
-        <img src={foodImageFor(item.name, item.category)} alt={item.name} className="h-full w-full object-cover" />
+        <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" />
         {popular && (
           <div
             style={{ background: '#6BFF9E', color: '#0e0e0e' }}

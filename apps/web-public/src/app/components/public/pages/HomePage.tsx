@@ -182,7 +182,13 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {!!data?.sponsors.length && <SponsorBanner sponsor={data.sponsors[0]} />}
+      {!!data?.sponsors.length && (
+        <SponsorBanner
+          sponsor={
+            data.sponsors.find((s) => s.bannerLabel?.includes('Home')) ?? data.sponsors[0]
+          }
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -467,24 +473,44 @@ export function HomePage() {
 function SponsorBanner({
   sponsor,
 }: {
-  sponsor: { name: string; imageUrl?: string; linkUrl?: string | null };
+  sponsor: {
+    name: string;
+    imageUrl?: string;
+    linkUrl?: string | null;
+    bannerLabel?: string | null;
+    mediaType?: string;
+    widthPx?: number | null;
+    heightPx?: number | null;
+  };
 }) {
+  const height = sponsor.heightPx ?? 86;
   const inner = (
     <div
       style={{
         borderRadius: 14,
         overflow: 'hidden',
         position: 'relative',
-        height: 86,
+        height,
         border: '1px solid #2a2a2a',
       }}
     >
       {sponsor.imageUrl ? (
-        <img
-          src={sponsor.imageUrl}
-          alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-        />
+        sponsor.mediaType === 'video' ? (
+          <video
+            src={sponsor.imageUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+          />
+        ) : (
+          <img
+            src={sponsor.imageUrl}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+          />
+        )
       ) : (
         <div className="h-full w-full bg-[#161616]" />
       )}

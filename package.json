@@ -31,6 +31,7 @@
     "test:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-deploy-local.ps1",
     "build:apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-release.ps1",
     "build:apk:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-public.ps1",
+    "build:ios:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-ios-public.ps1",
     "security:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/security-audit.ps1",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",
     "electron:public": "npm run electron:build --workspace=apps/web-public",

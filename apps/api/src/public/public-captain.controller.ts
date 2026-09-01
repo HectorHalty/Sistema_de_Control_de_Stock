@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Post,
   Put,
@@ -41,5 +42,11 @@ export class PublicCaptainController {
   @Delete('roster/:personaId')
   removePlayer(@PublicUser() user: PublicAuthUser, @Param('personaId') personaId: string) {
     return this.captain.removePlayer(user.id, personaId);
+  }
+
+  @Get('roster/lista-buena-fe')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getListaBuenaFe(@PublicUser() user: PublicAuthUser) {
+    return this.captain.getListaBuenaFeHtml(user.id);
   }
 }

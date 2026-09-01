@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
+import { autoScheduleMatches } from './fixture-scheduler';
 
 @Injectable()
 export class FootballService {
@@ -358,6 +359,182 @@ ${partidoBlock}
       },
       include: this.matchInclude(),
     });
+  }
+
+  async autoScheduleJornada(jornadaId: string) {
+    const jornada = await this.prisma.jornada.findUnique({
+      where: { id: jornadaId },
+      include: {
+        torneo: { include: { categoria: { include: { grupoCanchas: true } } } },
+      },
+    });
+    if (!jornada) throw new NotFoundException('Jornada no encontrada');
+    if (jornada.suspendida) {
+      throw new BadRequestException('No se puede programar una jornada suspendida');
+    }
+
+    const grupoId = jornada.torneo.categoria.grupoCanchasId;
+    if (!grupoId) {
+      throw new BadRequestException('La categoría no tiene grupo de canchas configurado');
+    }
+
+    const [canchas, franjas, matches, sameDayMatches] = await Promise.all([
+      this.prisma.cancha.findMany({
+        where: { grupoCanchasId: grupoId, activa: true },
+        orderBy: { numero: 'asc' },
+      }),
+      this.prisma.franjaHoraria.findMany({
+        where: { grupoCanchasId: grupoId },
+        orderBy: { orden: 'asc' },
+      }),
+      this.prisma.partidoFutbol.findMany({
+        where: { jornadaId, status: 'pendiente' },
+      }),
+      this.prisma.partidoFutbol.findMany({
+        where: {
+          date: {
+            gte: new Date(jornada.fecha.toISOString().slice(0, 10)),
+            lt: new Date(
+              new Date(jornada.fecha.toISOString().slice(0, 10)).getTime() + 86_400_000,
+            ),
+          },
+          canchaId: { not: null },
+          horaInicio: { not: null },
+        },
+      }),
+    ]);
+
+    const slots = franjas.flatMap((f) =>
+      canchas.map((c) => ({
+        canchaId: c.id,
+        canchaNumero: c.numero,
+        horaInicio: f.horaInicio,
+      })),
+    );
+
+    const canchaOccupied = new Set<string>();
+    const teamOccupied = new Set<string>();
+    for (const m of sameDayMatches) {
+      if (m.jornadaId === jornadaId && !m.canchaId) continue;
+      if (m.canchaId && m.horaInicio) {
+        canchaOccupied.add(`${m.canchaId}|${m.horaInicio}`);
+      }
+      if (m.horaInicio) {
+        if (m.homeInscripcionId) teamOccupied.add(`${m.homeInscripcionId}|${m.horaInicio}`);
+        if (m.awayInscripcionId) teamOccupied.add(`${m.awayInscripcionId}|${m.horaInicio}`);
+      }
+    }
+
+    const result = autoScheduleMatches(
+      matches.map((m) => ({
+        id: m.id,
+        homeInscripcionId: m.homeInscripcionId,
+        awayInscripcionId: m.awayInscripcionId,
+        bloqueadoManual: m.bloqueadoManual,
+        canchaId: m.canchaId,
+        horaInicio: m.horaInicio,
+      })),
+      slots,
+      canchaOccupied,
+      teamOccupied,
+    );
+
+    for (const assignment of result.assignments) {
+      await this.prisma.partidoFutbol.update({
+        where: { id: assignment.matchId },
+        data: {
+          canchaId: assignment.canchaId,
+          horaInicio: assignment.horaInicio,
+          venue: assignment.venue,
+        },
+      });
+    }
+
+    return {
+      jornadaId,
+      scheduled: result.assignments.length,
+      warnings: result.warnings,
+      skippedManual: result.skipped.length,
+    };
+  }
+
+  async suspendJornadaPorLluvia(jornadaId: string) {
+    const jornada = await this.prisma.jornada.findUnique({
+      where: { id: jornadaId },
+      include: { torneo: true },
+    });
+    if (!jornada) throw new NotFoundException('Jornada no encontrada');
+    if (jornada.suspendida) {
+      throw new ConflictException('La jornada ya está suspendida');
+    }
+
+    const pendingMatches = await this.prisma.partidoFutbol.findMany({
+      where: { jornadaId, status: 'pendiente' },
+    });
+
+    const maxJornada = await this.prisma.jornada.findFirst({
+      where: { torneoId: jornada.torneoId },
+      orderBy: { numero: 'desc' },
+    });
+    const nextNumero = (maxJornada?.numero ?? jornada.numero) + 1;
+    const recoveryDate = new Date(jornada.fecha);
+    recoveryDate.setDate(recoveryDate.getDate() + 7);
+
+    const recovery = await this.prisma.$transaction(async (tx) => {
+      await tx.jornada.update({
+        where: { id: jornadaId },
+        data: { suspendida: true, publicada: false },
+      });
+
+      const nueva = await tx.jornada.create({
+        data: {
+          torneoId: jornada.torneoId,
+          numero: nextNumero,
+          fecha: recoveryDate,
+          esRecuperacion: true,
+          suspendida: false,
+          publicada: false,
+        },
+      });
+
+      for (const match of pendingMatches) {
+        await tx.partidoFutbol.update({
+          where: { id: match.id },
+          data: {
+            jornadaId: nueva.id,
+            date: recoveryDate,
+            ...(match.bloqueadoManual
+              ? {}
+              : { canchaId: null, horaInicio: null, venue: null }),
+          },
+        });
+      }
+
+      return nueva;
+    });
+
+    return {
+      suspendedJornadaId: jornadaId,
+      recoveryJornadaId: recovery.id,
+      recoveryNumero: recovery.numero,
+      recoveryFecha: recovery.fecha.toISOString(),
+      movedMatches: pendingMatches.length,
+    };
+  }
+
+  async publishJornada(jornadaId: string) {
+    const jornada = await this.prisma.jornada.findUnique({ where: { id: jornadaId } });
+    if (!jornada) throw new NotFoundException('Jornada no encontrada');
+    if (jornada.suspendida) {
+      throw new BadRequestException('No se puede publicar una jornada suspendida');
+    }
+
+    await this.prisma.jornada.update({
+      where: { id: jornadaId },
+      data: { publicada: true },
+    });
+
+    return { jornadaId, publicada: true };
   }
 
   async updateMatchSchedule(

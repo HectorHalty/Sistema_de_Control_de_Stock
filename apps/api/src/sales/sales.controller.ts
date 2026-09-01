@@ -254,18 +254,6 @@ export class SalesController {
 
   }
 
-
-
-  @Post('public-orders/redeem-qr')
-
-  @Roles(...SALES_OPERATION_ROLES)
-
-  redeemPublicQr(@Body() body: { token: string }, @CurrentUser() user: AuthUser) {
-
-    return this.salesService.redeemPublicQr(body.token, user.id);
-
-  }
-
 }
 
 

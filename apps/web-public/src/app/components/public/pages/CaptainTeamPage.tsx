@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
+  FileText,
   Loader2,
   Plus,
   Trash2,
@@ -70,6 +71,23 @@ export function CaptainTeamPage() {
       setShowForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo agregar jugador');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePrintListaBuenaFe() {
+    if (!token) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const html = await publicApi.captain.getListaBuenaFe(token);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo generar la Lista de Buena Fe');
     } finally {
       setSaving(false);
     }
@@ -145,6 +163,15 @@ export function CaptainTeamPage() {
           >
             <UserPlus size={16} />
             Agregar jugador
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePrintListaBuenaFe()}
+            disabled={saving || plantelCount === 0}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#2a2a2a] bg-[#161616] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            <FileText size={16} />
+            Lista de Buena Fe
           </button>
         </div>
       </section>

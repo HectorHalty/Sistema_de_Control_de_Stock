@@ -31,8 +31,7 @@ export type VentasTab =
   | 'devoluciones'
   | 'productos'
   | 'mesas'
-  | 'reportes'
-  | 'retiro-qr';
+  | 'reportes';
 
 export type FutbolTab =
   | 'inicio'
@@ -48,7 +47,6 @@ export type FutbolTab =
 export type OnlineTab =
   | 'inicio'
   | 'cocina'
-  | 'escaner-qr'
   | 'menu'
   | 'sponsors'
   | 'metricas';
@@ -94,7 +92,7 @@ const STOCK_REPORT_DENIED: Partial<Record<PlatformRole, StockReportTab[]>> = {
 const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
   SuperAdmin: 'all',
   Operador_Stock: [],
-  Vendedor: ['mostrador', 'pedidos', 'devoluciones', 'retiro-qr'],
+  Vendedor: ['mostrador', 'pedidos', 'devoluciones'],
   Gerente_Ventas: 'all',
   Operador_Futbol: [],
   Operador_Cocina: [],

@@ -2,6 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 
+function slugifyCategory(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 @Injectable()
 export class PublicService {
   constructor(
@@ -27,7 +36,7 @@ export class PublicService {
         proximosPartidos: [],
         standings: [],
         sponsors,
-        menuCount: menu.length,
+        menuCount: menu.items.length,
       };
     }
 
@@ -51,7 +60,7 @@ export class PublicService {
       proximosPartidos,
       standings: standings.slice(0, 8),
       sponsors,
-      menuCount: menu.length,
+      menuCount: menu.items.length,
     };
   }
 
@@ -164,32 +173,60 @@ export class PublicService {
   }
 
   async listMenu() {
-    const items = await this.prisma.productoVenta.findMany({
-      where: { active: true, visibleWeb: true },
-      include: { kitchen: true },
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
-    });
+    const [items, categories, filters] = await Promise.all([
+      this.prisma.productoVenta.findMany({
+        where: { active: true, visibleWeb: true },
+        include: {
+          kitchen: true,
+          webCategory: { select: { id: true, name: true, slug: true } },
+          filtrosWeb: { include: { filtro: { select: { slug: true, label: true } } } },
+        },
+        orderBy: [{ webSortOrder: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.categoriaWeb.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, slug: true },
+      }),
+      this.prisma.filtroWeb.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+        select: { slug: true, label: true },
+      }),
+    ]);
 
-    return items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      category: item.category,
-      price: Number(item.price),
-      emoji: item.emoji,
-      description: item.descripcionWeb,
-      kitchen: item.kitchen.name,
-    }));
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.webCategory?.name ?? item.category,
+        categorySlug: item.webCategory?.slug ?? slugifyCategory(item.category),
+        price: Number(item.price),
+        emoji: item.emoji,
+        description: item.descripcionWeb,
+        imageUrl: item.imagenWeb,
+        kitchen: item.kitchen.name,
+        popular: item.popularWeb,
+        filters: item.filtrosWeb.map((f) => f.filtro.slug),
+      })),
+      categories,
+      filters,
+    };
   }
 
   async listSponsors() {
     return this.prisma.patrocinador.findMany({
       where: { active: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
       select: {
         id: true,
         name: true,
         imageUrl: true,
         placement: true,
+        bannerLabel: true,
+        mediaType: true,
+        widthPx: true,
+        heightPx: true,
         linkUrl: true,
       },
     });
