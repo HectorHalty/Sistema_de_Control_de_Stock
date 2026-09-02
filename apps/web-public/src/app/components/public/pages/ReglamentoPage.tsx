@@ -13,11 +13,21 @@ export function ReglamentoPage() {
 
   if (isLoading) return <PageLoader />;
 
-  if (error || !data) {
+  if (error || !data?.apartados?.length) {
     return (
-      <div className="p-6" style={{ maxWidth: 700, margin: '0 auto' }}>
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
-          {(error as Error)?.message ?? 'No se pudo cargar el reglamento.'}
+      <div className="space-y-5 p-6" style={{ maxWidth: 700, margin: '0 auto' }}>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-widest text-gray-400">La Chacra Fútbol</p>
+          <h1 className="text-2xl font-black text-white">Reglamento del Torneo</h1>
+        </div>
+        <div
+          style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
+          className="rounded-2xl p-10 text-center"
+        >
+          <p className="text-gray-400">Todavía no hay reglamento cargado en el sistema.</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Cuando el administrador publique el reglamento, lo verás acá.
+          </p>
         </div>
       </div>
     );

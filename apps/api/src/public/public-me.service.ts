@@ -420,18 +420,34 @@ export class PublicCaptainService {
 
   private async ensureDniAvailable(dni: string, torneoId: string, excludePersonaId?: string) {
     const normalized = dni.replace(/\D/g, '');
+    const torneo = await this.prisma.torneo.findUnique({
+      where: { id: torneoId },
+      select: { campeonatoId: true },
+    });
+    if (!torneo) return;
+
+    const activeTorneoIds = (
+      await this.prisma.torneo.findMany({
+        where: { campeonatoId: torneo.campeonatoId, activo: true },
+        select: { id: true },
+      })
+    ).map((t) => t.id);
+
     const existing = await this.prisma.inscripcionJugador.findFirst({
       where: {
-        torneoId,
+        torneoId: { in: activeTorneoIds },
         activa: true,
         persona: { dni: normalized },
         ...(excludePersonaId ? { NOT: { personaId: excludePersonaId } } : {}),
       },
-      include: { equipoInscripcion: { include: { equipo: true } } },
+      include: {
+        equipoInscripcion: { include: { equipo: true } },
+        torneo: { include: { categoria: true } },
+      },
     });
     if (existing) {
       throw new ConflictException(
-        `El DNI ya está inscripto en ${existing.equipoInscripcion.equipo.name}`,
+        `El DNI ya está inscripto en ${existing.equipoInscripcion.equipo.name} (${existing.torneo.categoria.nombre})`,
       );
     }
   }

@@ -30,7 +30,7 @@ export class KitchenService {
       include: {
         kitchen: true,
         items: true,
-        ticket: { select: { number: true, status: true, origen: true } },
+        ticket: { select: { number: true, status: true, origen: true, total: true, createdAt: true } },
         pedidoPublico: {
           select: {
             id: true,
@@ -92,11 +92,13 @@ export class KitchenService {
       },
       include: {
         items: true,
+        kitchen: true,
+        ticket: { select: { number: true, status: true, origen: true, total: true, createdAt: true } },
         pedidoPublico: {
           select: {
             id: true,
             status: true,
-            tokenRetiro: { select: { token: true } },
+            tokenRetiro: { select: { token: true, usadoEn: true } },
           },
         },
       },

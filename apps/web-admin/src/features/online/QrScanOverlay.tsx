@@ -102,7 +102,7 @@ export function QrScanOverlay({ open, onClose, onScan, loading }: Props) {
 
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
         {!cameraError && (
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border-2 border-primary">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border-2 border-[#6BFF9E]">
             <video ref={videoRef} className="aspect-square w-full object-cover" muted playsInline />
             <div className="pointer-events-none absolute inset-8 rounded-xl border-2 border-dashed border-white/60" />
           </div>

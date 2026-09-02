@@ -20,6 +20,8 @@ export type SchedulerAssignment = {
   venue: string;
 };
 
+export type SchedulerPreferences = Record<string, string>;
+
 export type SchedulerResult = {
   assignments: SchedulerAssignment[];
   warnings: string[];
@@ -35,12 +37,48 @@ function slotKey(canchaId: string, hora: string): string {
   return `${canchaId}|${hora}`;
 }
 
-/** Auto-asigna cancha/hora respetando slots ocupados y equipos sin doble horario. */
+function preferredHoursForMatch(
+  match: SchedulerMatch,
+  preferences: SchedulerPreferences,
+): Set<string> {
+  const hours = new Set<string>();
+  if (match.homeInscripcionId && preferences[match.homeInscripcionId]) {
+    hours.add(preferences[match.homeInscripcionId]);
+  }
+  if (match.awayInscripcionId && preferences[match.awayInscripcionId]) {
+    hours.add(preferences[match.awayInscripcionId]);
+  }
+  return hours;
+}
+
+function sortSlotsForMatch(
+  slots: SchedulerSlot[],
+  preferredHours: Set<string>,
+): SchedulerSlot[] {
+  if (!preferredHours.size) return slots;
+  return [...slots].sort((a, b) => {
+    const aScore = preferredHours.has(a.horaInicio) ? 0 : 1;
+    const bScore = preferredHours.has(b.horaInicio) ? 0 : 1;
+    if (aScore !== bScore) return aScore - bScore;
+    return a.horaInicio.localeCompare(b.horaInicio) || a.canchaNumero - b.canchaNumero;
+  });
+}
+
+function matchPreferenceScore(match: SchedulerMatch, preferences: SchedulerPreferences): number {
+  let score = 0;
+  if (match.homeInscripcionId && preferences[match.homeInscripcionId]) score++;
+  if (match.awayInscripcionId && preferences[match.awayInscripcionId]) score++;
+  return score;
+}
+
+/** Auto-asigna cancha/hora respetando slots ocupados, equipos sin doble horario y preferencias. */
 export function autoScheduleMatches(
   matches: SchedulerMatch[],
   slots: SchedulerSlot[],
   existingCanchaOccupied: Set<string>,
   existingTeamOccupied: Set<string>,
+  preferences: SchedulerPreferences = {},
+  teamNames: Record<string, string> = {},
 ): SchedulerResult {
   const assignments: SchedulerAssignment[] = [];
   const warnings: string[] = [];
@@ -64,10 +102,16 @@ export function autoScheduleMatches(
     return true;
   });
 
+  pending.sort(
+    (a, b) => matchPreferenceScore(b, preferences) - matchPreferenceScore(a, preferences),
+  );
+
   for (const match of pending) {
     let assigned = false;
+    const preferredHours = preferredHoursForMatch(match, preferences);
+    const orderedSlots = sortSlotsForMatch(slots, preferredHours);
 
-    for (const slot of slots) {
+    for (const slot of orderedSlots) {
       const sk = slotKey(slot.canchaId, slot.horaInicio);
       if (canchaOccupied.has(sk)) continue;
 
@@ -87,6 +131,33 @@ export function autoScheduleMatches(
         venue: `Cancha ${slot.canchaNumero}`,
       });
       assigned = true;
+
+      if (preferredHours.size && !preferredHours.has(slot.horaInicio)) {
+        const teams: string[] = [];
+        if (
+          match.homeInscripcionId &&
+          preferences[match.homeInscripcionId] &&
+          preferences[match.homeInscripcionId] !== slot.horaInicio
+        ) {
+          teams.push(
+            `${teamNames[match.homeInscripcionId] ?? 'Local'} (pref. ${preferences[match.homeInscripcionId]})`,
+          );
+        }
+        if (
+          match.awayInscripcionId &&
+          preferences[match.awayInscripcionId] &&
+          preferences[match.awayInscripcionId] !== slot.horaInicio
+        ) {
+          teams.push(
+            `${teamNames[match.awayInscripcionId] ?? 'Visitante'} (pref. ${preferences[match.awayInscripcionId]})`,
+          );
+        }
+        if (teams.length) {
+          warnings.push(
+            `Partido ${match.id}: preferencia no cumplida para ${teams.join(' / ')} — asignado ${slot.horaInicio}`,
+          );
+        }
+      }
       break;
     }
 

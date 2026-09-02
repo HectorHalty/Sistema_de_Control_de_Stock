@@ -22,6 +22,7 @@ interface CartContextValue {
   add: (item: PublicMenuItem) => void;
   remove: (id: string) => void;
   clear: () => void;
+  replaceItems: (lines: CartLine[]) => void;
   lastOrder: PublicOrder | null;
   setLastOrder: (order: PublicOrder | null) => void;
 }
@@ -82,12 +83,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems([]);
   }, []);
 
+  const replaceItems = useCallback((lines: CartLine[]) => {
+    localStorage.setItem(CART_KEY, JSON.stringify(lines));
+    setItems(lines);
+  }, []);
+
   const count = items.reduce((s, c) => s + c.qty, 0);
   const total = items.reduce((s, c) => s + c.price * c.qty, 0);
 
   const value = useMemo(
-    () => ({ items, count, total, add, remove, clear, lastOrder, setLastOrder }),
-    [items, count, total, add, remove, clear, lastOrder],
+    () => ({ items, count, total, add, remove, clear, replaceItems, lastOrder, setLastOrder }),
+    [items, count, total, add, remove, clear, replaceItems, lastOrder, setLastOrder],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -8,7 +8,7 @@ const DEMO_EQUIPOS = [
 ];
 
 const DEMO_JUGADORES = [
-  { dni: '30123456', nombre: 'Juan', apellido: 'Pérez', email: 'juan.perez@demo.test', rolPlantel: 'capitan' },
+  { dni: '30123456', nombre: 'Juan', apellido: 'Pérez', email: 'jugador@lachacra.test', rolPlantel: 'jugador' },
   { dni: '31234567', nombre: 'María', apellido: 'González', email: 'maria.gonzalez@demo.test', rolPlantel: 'jugador' },
   { dni: '32345678', nombre: 'Lucas', apellido: 'Rodríguez', email: 'lucas.rodriguez@demo.test', rolPlantel: 'jugador' },
   { dni: '33456789', nombre: 'Sofía', apellido: 'López', email: 'sofia.lopez@demo.test', rolPlantel: 'subcapitan' },
@@ -103,21 +103,37 @@ async function seedTorneoDemo(prisma) {
   }
 
   const capitanEquipo = equipoRecords[0];
-  await prisma.capitanAutorizado.upsert({
-    where: { email_torneoId: { email: 'capitan.demo@lachacra.test', torneoId: torneo.id } },
-    update: {
-      dni: '28123456',
-      equipoInscripcionId: capitanEquipo.inscripcion.id,
-      activo: true,
-    },
-    create: {
-      email: 'capitan.demo@lachacra.test',
-      dni: '28123456',
+  const capitanEmail = 'capitan@lachacra.test';
+  const capitanDni = '28123456';
+
+  const existingCap = await prisma.capitanAutorizado.findFirst({
+    where: {
       torneoId: torneo.id,
-      equipoInscripcionId: capitanEquipo.inscripcion.id,
-      activo: true,
+      OR: [{ email: capitanEmail }, { dni: capitanDni }],
     },
   });
+
+  if (existingCap) {
+    await prisma.capitanAutorizado.update({
+      where: { id: existingCap.id },
+      data: {
+        email: capitanEmail,
+        dni: capitanDni,
+        equipoInscripcionId: capitanEquipo.inscripcion.id,
+        activo: true,
+      },
+    });
+  } else {
+    await prisma.capitanAutorizado.create({
+      data: {
+        email: capitanEmail,
+        dni: capitanDni,
+        torneoId: torneo.id,
+        equipoInscripcionId: capitanEquipo.inscripcion.id,
+        activo: true,
+      },
+    });
+  }
 
   for (const j of DEMO_JUGADORES) {
     const persona = await prisma.persona.upsert({
@@ -231,7 +247,53 @@ async function seedTorneoDemo(prisma) {
     });
   }
 
+  const playedMatch = await prisma.partidoFutbol.findFirst({
+    where: {
+      torneoId: torneo.id,
+      homeTeamId: equipoRecords[2].equipo.id,
+      awayTeamId: equipoRecords[3].equipo.id,
+      status: 'jugado',
+    },
+  });
+
+  if (playedMatch) {
+    const scorerPersona = await prisma.persona.findUnique({ where: { dni: DEMO_JUGADORES[0].dni } });
+    if (scorerPersona) {
+      const existingGoals = await prisma.eventoPartido.count({
+        where: { partidoId: playedMatch.id, personaId: scorerPersona.id, tipo: 'gol' },
+      });
+      if (existingGoals === 0) {
+        await prisma.eventoPartido.createMany({
+          data: [
+            { partidoId: playedMatch.id, personaId: scorerPersona.id, tipo: 'gol', minuto: 12 },
+            { partidoId: playedMatch.id, personaId: scorerPersona.id, tipo: 'gol', minuto: 44 },
+          ],
+        });
+      }
+    }
+  }
+
   console.log(`Torneo demo: ${DEMO_EQUIPOS.length} equipos, categoría Libre A, jornada 1.`);
+
+  const { CATEGORIAS } = require('./scheduling.seed.cjs');
+  for (const cat of CATEGORIAS) {
+    const categoriaRow = await prisma.categoriaConfig.findUnique({ where: { codigo: cat.codigo } });
+    if (!categoriaRow) continue;
+    await prisma.torneo.upsert({
+      where: {
+        campeonatoId_categoriaId: { campeonatoId: campeonato.id, categoriaId: categoriaRow.id },
+      },
+      update: { activo: true },
+      create: {
+        campeonatoId: campeonato.id,
+        categoriaId: categoriaRow.id,
+        nombre: `${cat.nombre} — ${campeonato.nombre}`,
+        activo: true,
+        publicado: cat.codigo === 'hombres_libre_a',
+      },
+    });
+  }
+  console.log(`Torneos bootstrap: ${CATEGORIAS.length} categorías en ${campeonato.nombre}.`);
 }
 
 module.exports = { seedTorneoDemo };

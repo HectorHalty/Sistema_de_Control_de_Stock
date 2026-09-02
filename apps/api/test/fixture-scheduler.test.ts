@@ -140,4 +140,27 @@ describe('FixtureScheduler', () => {
     const hours = result.assignments.map((a) => a.horaInicio);
     expect(new Set(hours).size).toBe(2);
   });
+
+  it('prioriza slots según preferencia de horario del equipo', () => {
+    const result = autoScheduleMatches(
+      [
+        {
+          id: 'm1',
+          homeInscripcionId: 'h1',
+          awayInscripcionId: 'a1',
+          bloqueadoManual: false,
+          canchaId: null,
+          horaInicio: null,
+        },
+      ],
+      slots,
+      new Set(),
+      new Set(),
+      { h1: '13:00' },
+      { h1: 'Equipo H1' },
+    );
+
+    expect(result.assignments[0]?.horaInicio).toBe('13:00');
+    expect(result.warnings).toHaveLength(0);
+  });
 });

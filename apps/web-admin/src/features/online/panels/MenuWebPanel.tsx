@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   onlineApi,
+  salesApi,
   getAccessToken,
   type Kitchen,
+  type SalesProduct,
   type WebCategory,
   type WebFilter,
   type WebMenuProduct,
 } from '@/app/api/client';
 import { OnlineMediaUpload } from '../OnlineMediaUpload';
+import { SalesProductPicker } from '../SalesProductPicker';
 import { OnlineError, OnlinePanelShell, onlineButtonClass, onlineFieldClass } from '../online-shared';
 
 type Tab = 'productos' | 'categorias' | 'filtros';
 
 const emptyProduct = {
+  salesProductId: null as string | null,
   name: '',
   category: 'Comidas',
   kitchenId: '',
@@ -28,6 +32,7 @@ const emptyProduct = {
 export function MenuWebPanel() {
   const [tab, setTab] = useState<Tab>('productos');
   const [rows, setRows] = useState<WebMenuProduct[]>([]);
+  const [salesProducts, setSalesProducts] = useState<SalesProduct[]>([]);
   const [categories, setCategories] = useState<WebCategory[]>([]);
   const [filters, setFilters] = useState<WebFilter[]>([]);
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
@@ -39,19 +44,23 @@ export function MenuWebPanel() {
   const [newCategory, setNewCategory] = useState('');
   const [newFilter, setNewFilter] = useState('');
 
+  const alreadyOnWebIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
+
   const reload = useCallback(async () => {
     const token = getAccessToken();
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const [menu, cats, filts, ks] = await Promise.all([
+      const [menu, cats, filts, ks, sales] = await Promise.all([
         onlineApi.menu.list(token),
         onlineApi.categories.list(token),
         onlineApi.filters.list(token),
         onlineApi.kitchens.list(token),
+        salesApi.products.list(),
       ]);
       setRows(menu);
+      setSalesProducts(sales.filter((p) => p.active));
       setCategories(cats);
       setFilters(filts);
       setKitchens(ks);
@@ -66,6 +75,26 @@ export function MenuWebPanel() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  function applySalesProduct(product: SalesProduct | null) {
+    if (!product) {
+      setDraft((d) => ({ ...emptyProduct, kitchenId: d.kitchenId || kitchens[0]?.id || '' }));
+      return;
+    }
+    setDraft({
+      salesProductId: product.id,
+      name: product.name,
+      category: product.category,
+      kitchenId: product.kitchenId,
+      price: String(product.price),
+      emoji: product.emoji ?? '',
+      descripcionWeb: '',
+      imagenWeb: '',
+      webCategoryId: '',
+      popularWeb: false,
+      filterIds: [],
+    });
+  }
 
   async function saveProduct(row: WebMenuProduct, patch: Partial<WebMenuProduct> & { filterIds?: string[] }) {
     const token = getAccessToken();
@@ -84,20 +113,25 @@ export function MenuWebPanel() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const token = getAccessToken();
-    if (!token || !draft.name.trim() || !draft.kitchenId) return;
+    if (!token || !draft.salesProductId) {
+      setError('Seleccioná un producto de ventas');
+      return;
+    }
     setSavingId('new');
+    setError(null);
     try {
-      await onlineApi.menu.create(
+      await onlineApi.menu.update(
+        draft.salesProductId,
         {
-          name: draft.name.trim(),
-          category: draft.category.trim() || 'Comidas',
-          kitchenId: draft.kitchenId,
+          name: draft.name.trim() || undefined,
+          category: draft.category.trim() || undefined,
+          kitchenId: draft.kitchenId || undefined,
           price: Number(draft.price) || 0,
           emoji: draft.emoji || undefined,
-          descripcionWeb: draft.descripcionWeb || undefined,
-          imagenWeb: draft.imagenWeb || undefined,
+          descripcionWeb: draft.descripcionWeb || null,
+          imagenWeb: draft.imagenWeb || null,
           visibleWeb: true,
-          webCategoryId: draft.webCategoryId || undefined,
+          webCategoryId: draft.webCategoryId || null,
           popularWeb: draft.popularWeb,
           filterIds: draft.filterIds,
         },
@@ -107,7 +141,7 @@ export function MenuWebPanel() {
       setShowCreate(false);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear');
+      setError(err instanceof Error ? err.message : 'No se pudo agregar al menú web');
     } finally {
       setSavingId(null);
     }
@@ -168,8 +202,8 @@ export function MenuWebPanel() {
   return (
     <OnlinePanelShell title="Menú web">
       <p className="text-sm text-muted-foreground">
-        Gestioná categorías, filtros y productos de venta visibles en la cantina pública. Los pedidos
-        usan el mismo flujo de ventas (stock + ticket + cocina).
+        Elegí productos ya creados en Ventas para publicarlos en la cantina. El precio se completa
+        automáticamente y podés ajustarlo para promos web.
       </p>
       {error && <OnlineError message={error} />}
 
@@ -275,25 +309,64 @@ export function MenuWebPanel() {
       ) : (
         <div className="space-y-4">
           <button type="button" className={onlineButtonClass()} onClick={() => setShowCreate(!showCreate)}>
-            {showCreate ? 'Cancelar' : '+ Nuevo producto'}
+            {showCreate ? 'Cancelar' : '+ Agregar al menú web'}
           </button>
 
           {showCreate && (
             <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
-              <input className={onlineFieldClass()} placeholder="Nombre" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} required />
-              <input className={onlineFieldClass()} placeholder="Precio" type="number" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} required />
-              <select className={onlineFieldClass()} value={draft.kitchenId} onChange={(e) => setDraft({ ...draft, kitchenId: e.target.value })} required>
-                {kitchens.map((k) => (
-                  <option key={k.id} value={k.id}>{k.emoji} {k.name}</option>
-                ))}
-              </select>
-              <select className={onlineFieldClass()} value={draft.webCategoryId} onChange={(e) => setDraft({ ...draft, webCategoryId: e.target.value })}>
+              <SalesProductPicker
+                products={salesProducts}
+                alreadyOnWebIds={alreadyOnWebIds}
+                value={draft.salesProductId}
+                onSelect={applySalesProduct}
+              />
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                  Precio web (promo)
+                </label>
+                <input
+                  className={onlineFieldClass()}
+                  placeholder="Precio"
+                  type="number"
+                  min={0}
+                  value={draft.price}
+                  onChange={(e) => setDraft({ ...draft, price: e.target.value })}
+                  required
+                  disabled={!draft.salesProductId}
+                />
+                {draft.salesProductId && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Podés dejar el precio de ventas o bajarlo para una promo online.
+                  </p>
+                )}
+              </div>
+
+              <input
+                className={onlineFieldClass()}
+                placeholder="Nombre (opcional)"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                disabled={!draft.salesProductId}
+              />
+              <select
+                className={onlineFieldClass()}
+                value={draft.webCategoryId}
+                onChange={(e) => setDraft({ ...draft, webCategoryId: e.target.value })}
+                disabled={!draft.salesProductId}
+              >
                 <option value="">Sin categoría web</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <input className={onlineFieldClass()} placeholder="Emoji" value={draft.emoji} onChange={(e) => setDraft({ ...draft, emoji: e.target.value })} />
+              <input
+                className={onlineFieldClass()}
+                placeholder="Emoji"
+                value={draft.emoji}
+                onChange={(e) => setDraft({ ...draft, emoji: e.target.value })}
+                disabled={!draft.salesProductId}
+              />
               <div className="md:col-span-2">
                 <OnlineMediaUpload
                   label="Imagen del producto"
@@ -301,13 +374,20 @@ export function MenuWebPanel() {
                   onChange={(url) => setDraft({ ...draft, imagenWeb: url })}
                 />
               </div>
-              <textarea className={`${onlineFieldClass()} md:col-span-2 min-h-[60px]`} placeholder="Descripción web" value={draft.descripcionWeb} onChange={(e) => setDraft({ ...draft, descripcionWeb: e.target.value })} />
+              <textarea
+                className={`${onlineFieldClass()} md:col-span-2 min-h-[60px]`}
+                placeholder="Descripción web"
+                value={draft.descripcionWeb}
+                onChange={(e) => setDraft({ ...draft, descripcionWeb: e.target.value })}
+                disabled={!draft.salesProductId}
+              />
               <div className="md:col-span-2 flex flex-wrap gap-2">
                 {filters.map((f) => (
                   <label key={f.id} className="flex items-center gap-1 text-sm">
                     <input
                       type="checkbox"
                       checked={draft.filterIds.includes(f.id)}
+                      disabled={!draft.salesProductId}
                       onChange={(e) => {
                         setDraft({
                           ...draft,
@@ -321,12 +401,21 @@ export function MenuWebPanel() {
                   </label>
                 ))}
                 <label className="flex items-center gap-1 text-sm">
-                  <input type="checkbox" checked={draft.popularWeb} onChange={(e) => setDraft({ ...draft, popularWeb: e.target.checked })} />
+                  <input
+                    type="checkbox"
+                    checked={draft.popularWeb}
+                    disabled={!draft.salesProductId}
+                    onChange={(e) => setDraft({ ...draft, popularWeb: e.target.checked })}
+                  />
                   Popular
                 </label>
               </div>
-              <button type="submit" disabled={savingId === 'new'} className={`${onlineButtonClass()} md:col-span-2`}>
-                Crear producto en ventas + web
+              <button
+                type="submit"
+                disabled={savingId === 'new' || !draft.salesProductId}
+                className={`${onlineButtonClass()} md:col-span-2`}
+              >
+                Publicar en menú web
               </button>
             </form>
           )}
@@ -369,7 +458,10 @@ export function MenuWebPanel() {
                           className={onlineFieldClass()}
                           type="number"
                           defaultValue={String(row.price)}
-                          onBlur={(e) => Number(e.target.value) !== Number(row.price) && saveProduct(row, { price: Number(e.target.value) })}
+                          onBlur={(e) =>
+                            Number(e.target.value) !== Number(row.price) &&
+                            saveProduct(row, { price: Number(e.target.value) })
+                          }
                         />
                         <select
                           className={onlineFieldClass()}
@@ -390,12 +482,6 @@ export function MenuWebPanel() {
                             <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
-                        <input
-                          className={`${onlineFieldClass()} md:col-span-2`}
-                          defaultValue={row.imagenWeb ?? ''}
-                          placeholder="URL imagen web"
-                          onBlur={(e) => e.target.value !== (row.imagenWeb ?? '') && saveProduct(row, { imagenWeb: e.target.value || null })}
-                        />
                         <div className="md:col-span-2">
                           <OnlineMediaUpload
                             value={row.imagenWeb ?? ''}
@@ -406,7 +492,10 @@ export function MenuWebPanel() {
                           className={`${onlineFieldClass()} md:col-span-2 min-h-[60px]`}
                           defaultValue={row.descripcionWeb ?? ''}
                           placeholder="Descripción web"
-                          onBlur={(e) => e.target.value !== (row.descripcionWeb ?? '') && saveProduct(row, { descripcionWeb: e.target.value || null })}
+                          onBlur={(e) =>
+                            e.target.value !== (row.descripcionWeb ?? '') &&
+                            saveProduct(row, { descripcionWeb: e.target.value || null })
+                          }
                         />
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">

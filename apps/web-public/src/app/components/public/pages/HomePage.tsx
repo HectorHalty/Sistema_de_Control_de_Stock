@@ -4,8 +4,9 @@ import { publicApi } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart } from '../cart/CartContext';
 import { PageLoader } from '../../ui/PageLoader';
-import { IconCamera, IconCart, IconClock, IconFood, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
-import { CANTEEN_HERO_IMG, GALLERY_FALLBACK } from '../food-images';
+import { IconCart, IconClock, IconFood, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
+import { CANTEEN_HERO_IMG } from '../food-images';
+import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -16,59 +17,84 @@ function formatMatchDate(iso: string) {
     .toUpperCase();
 }
 
-function displayName(email?: string | null) {
-  if (!email) return null;
-  const local = email.split('@')[0] ?? email;
+function displayName(user?: { nombre?: string | null; email?: string | null } | null) {
+  if (user?.nombre?.trim()) return user.nombre.trim();
+  if (!user?.email) return null;
+  const local = user.email.split('@')[0] ?? user.email;
   return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { meContext, user } = usePublicAuth();
+  const { meContext, user, token } = usePublicAuth();
   const { count } = useCart();
 
-  const { data, error, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['home-bundle'],
     queryFn: () => publicApi.homeBundle(),
+    retry: false,
   });
-  const { data: torneo } = useQuery({
-    queryKey: ['torneo'],
-    queryFn: () => publicApi.torneo(),
+
+  const useDemoTorneo = !data?.torneo;
+
+  const { data: torneoDetail } = useQuery({
+    queryKey: ['torneo-detail', data?.torneo?.id],
+    queryFn: () => publicApi.torneo(data!.torneo!.id),
+    enabled: !!data?.torneo?.id,
+    retry: false,
   });
-  const { data: media = [] } = useQuery({
-    queryKey: ['media'],
+
+  const { data: mediaItems = [] } = useQuery({
+    queryKey: ['home-media'],
     queryFn: () => publicApi.media(),
+    retry: false,
   });
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ['home-orders', token],
+    queryFn: () => publicApi.orders.list(token!),
+    enabled: !!token,
+  });
+
+  const activeOrder = orders.find(
+    (o) => o.qr && !o.qr.usado && o.status !== 'retirado' && o.status !== 'cancelado',
+  );
 
   if (isLoading) return <PageLoader />;
 
-  if (error) {
-    return (
-      <div className="p-6" style={{ maxWidth: 920, margin: '0 auto' }}>
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
-          <p className="font-medium">No pudimos cargar el sitio</p>
-          <p className="mt-2 text-sm">{(error as Error).message}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const name = displayName(user?.email);
+  const name = displayName(user);
   const myTeam = meContext?.equipo?.name;
-  const nextFromCtx = meContext?.proximoPartido;
-  const nextPublic = data?.proximosPartidos[0];
-  const played = (torneo?.partidos ?? []).filter((p) => p.status === 'jugado').slice(-3).reverse();
-  const thumbs = media.filter((m) => m.type !== 'video').slice(0, 3);
-  const galleryImgs = thumbs.length
-    ? thumbs.map((t) => t.url)
-    : GALLERY_FALLBACK;
+  const nextFromCtx = meContext?.proximoPartido
+    ? {
+        local: meContext.proximoPartido.local,
+        visitante: meContext.proximoPartido.visitante,
+        fecha: formatMatchDate(meContext.proximoPartido.fecha),
+        hora: meContext.proximoPartido.hora,
+        cancha: meContext.proximoPartido.cancha,
+        jornada: null as number | null,
+      }
+    : null;
 
-  const localName = nextFromCtx?.local ?? nextPublic?.local.name;
-  const awayName = nextFromCtx?.visitante ?? nextPublic?.visitante.name;
-  const cancha = nextFromCtx?.cancha ?? nextPublic?.cancha;
-  const hora = nextFromCtx?.hora ?? nextPublic?.hora;
-  const fechaIso = nextFromCtx?.fecha ?? nextPublic?.fecha;
-  const jornada = nextPublic?.jornada;
+  const nextFromBundle = data?.proximosPartidos?.[0]
+    ? {
+        local: data.proximosPartidos[0].local.name,
+        visitante: data.proximosPartidos[0].visitante.name,
+        fecha: formatMatchDate(data.proximosPartidos[0].fecha),
+        hora: data.proximosPartidos[0].hora,
+        cancha: data.proximosPartidos[0].cancha ?? undefined,
+        jornada: data.proximosPartidos[0].jornada,
+      }
+    : null;
+  const nextMatch = nextFromCtx ?? nextFromBundle;
+  const played = resolveRecentResults(torneoDetail, useDemoTorneo);
+  const standings = resolveStandings(data?.standings, useDemoTorneo);
+
+  const localName = nextMatch?.local;
+  const awayName = nextMatch?.visitante;
+  const cancha = nextMatch?.cancha;
+  const hora = nextMatch?.hora;
+  const fechaLabel = nextMatch?.fecha;
+  const jornada = nextMatch?.jornada;
 
   return (
     <div className="space-y-5 p-6" style={{ maxWidth: 920, margin: '0 auto' }}>
@@ -114,6 +140,28 @@ export function HomePage() {
         </button>
       </div>
 
+      {activeOrder && (
+        <button
+          type="button"
+          onClick={() => navigate(`/qr?orderId=${activeOrder.id}`)}
+          style={{ background: '#6BFF9E15', border: '1px solid #6BFF9E44' }}
+          className="flex w-full items-center justify-between rounded-xl px-5 py-4 text-left transition-opacity hover:opacity-90"
+        >
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-lch-accent">
+              Pedido #{activeOrder.ticketNumber ?? '-'}
+            </p>
+            <p className="mt-0.5 font-bold text-white">
+              {activeOrder.status === 'listo' ? 'Listo para retirar' : 'Pedido en curso'}
+            </p>
+            <p className="text-xs text-gray-500">Toca para ver tu codigo QR</p>
+          </div>
+          <span className="rounded-lg bg-lch-accent px-3 py-1.5 text-xs font-black text-[#0e0e0e]">
+            Ver QR
+          </span>
+        </button>
+      )}
+
       {localName && awayName ? (
         <div
           style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, overflow: 'hidden' }}
@@ -130,7 +178,7 @@ export function HomePage() {
               className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-black"
             >
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[#6BFF9E]" />
-              {fechaIso ? formatMatchDate(fechaIso) : ''}
+              {fechaLabel}
               {hora ? ` · ${hora}` : ''}
             </span>
           </div>
@@ -197,8 +245,7 @@ export function HomePage() {
             {played.length ? (
               <div className="space-y-3">
                 {played.map((r) => {
-                  const myInvolved =
-                    myTeam && (r.local === myTeam || r.visitante === myTeam);
+                  const myInvolved = myTeam && (r.local === myTeam || r.visitante === myTeam);
                   const myScore = myInvolved
                     ? r.local === myTeam
                       ? r.homeGoals
@@ -219,10 +266,7 @@ export function HomePage() {
                       className="px-4 py-3"
                     >
                       <div className="mb-1.5 flex items-center justify-between">
-                        <span className="text-[10px] font-medium text-gray-600">
-                          J{r.jornada ?? '—'}
-                          {r.cancha ? ` · ${r.cancha}` : ''}
-                        </span>
+                        <span className="text-[10px] font-medium text-gray-600">{r.date}</span>
                         {myInvolved && (
                           <span
                             style={{
@@ -261,7 +305,7 @@ export function HomePage() {
             )}
           </div>
 
-          {!!data?.standings.length && (
+          {!!standings.length && (
             <div
               style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
               className="flex-1 rounded-2xl p-5"
@@ -284,11 +328,11 @@ export function HomePage() {
                 <span className="w-6 text-center text-[10px] font-bold text-gray-600">PG</span>
                 <span className="w-8 text-center text-[10px] font-bold text-gray-600">Pts</span>
               </div>
-              {data.standings.slice(0, 6).map((row, i) => {
-                const highlight = myTeam === row.teamName;
+              {standings.slice(0, 6).map((row) => {
+                const highlight = myTeam === row.team;
                 return (
                   <div
-                    key={row.inscripcionId}
+                    key={row.abbr}
                     style={
                       highlight
                         ? { background: '#6BFF9E0e', borderRadius: 9, border: '1px solid #6BFF9E22' }
@@ -300,16 +344,24 @@ export function HomePage() {
                       style={{ color: highlight ? '#6BFF9E' : '#4b5563' }}
                       className="w-5 text-xs font-black"
                     >
-                      {i + 1}
+                      {row.pos}
                     </span>
                     <span
                       style={{ color: highlight ? 'white' : '#d1d5db' }}
-                      className="flex-1 truncate text-xs font-semibold"
+                      className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs font-semibold"
                     >
-                      {row.teamName}
+                      <span className="truncate">{row.team}</span>
+                      {highlight && (
+                        <span
+                          style={{ background: '#6BFF9E', color: '#0e0e0e' }}
+                          className="shrink-0 rounded px-1 py-px text-[8px] font-black"
+                        >
+                          TÚ
+                        </span>
+                      )}
                     </span>
-                    <span className="w-6 text-center text-xs text-gray-500">{row.played}</span>
-                    <span className="w-6 text-center text-xs text-gray-500">{row.won}</span>
+                    <span className="w-6 text-center text-xs text-gray-500">{row.pj}</span>
+                    <span className="w-6 text-center text-xs text-gray-500">{row.pg}</span>
                     <span
                       style={{
                         color: highlight ? '#6BFF9E' : 'white',
@@ -319,7 +371,7 @@ export function HomePage() {
                       }}
                       className="w-8 text-center text-xs font-black"
                     >
-                      {row.points}
+                      {row.pts}
                     </span>
                   </div>
                 );
@@ -417,51 +469,41 @@ export function HomePage() {
             </div>
           </button>
 
-          <div
-            style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 18, overflow: 'hidden' }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 3, height: 100 }}>
-              {galleryImgs.map((src, i) => (
-                <div key={`${src}-${i}`} style={{ overflow: 'hidden', position: 'relative' }}>
-                  <img
-                    src={src}
-                    alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
-                  {i === 2 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.55)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <span className="text-sm font-black text-white">
-                        {media.length > 3 ? `+${media.length - 2}` : 'Galería'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
-                <p style={{ color: '#6BFF9E' }} className="text-[10px] font-black uppercase tracking-widest">
-                  {data?.torneo?.campeonato ?? 'Torneo'}
-                </p>
-                <p className="mt-0.5 text-xs font-bold text-white">Fotos & Videos del finde</p>
-              </div>
+          <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-bold text-white">Fotos & Videos del finde</p>
               <button
                 type="button"
                 onClick={() => navigate('/fotos')}
-                style={{ background: '#1a1a1a', color: 'white', border: '1px solid #2a2a2a' }}
-                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold"
+                style={{ border: '1px solid #3a3a3a', color: 'white' }}
+                className="rounded-lg px-3 py-1.5 text-[11px] font-bold hover:border-[#6BFF9E55]"
               >
-                <IconCamera /> Ver todo
+                Ver todo
               </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(mediaItems.length
+                ? mediaItems.slice(0, 3)
+                : [
+                    { id: 'ph1', url: CANTEEN_HERO_IMG, title: 'Cancha 1' },
+                    { id: 'ph2', url: CANTEEN_HERO_IMG, title: 'Cancha 2' },
+                    { id: 'ph3', url: CANTEEN_HERO_IMG, title: 'Cancha 3' },
+                  ]
+              ).map((item, idx) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigate('/fotos')}
+                  className="relative aspect-square overflow-hidden rounded-xl"
+                >
+                  <img src={item.url} alt={item.title} className="h-full w-full object-cover" />
+                  {idx === 2 && mediaItems.length > 3 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-black text-white">
+                      +{mediaItems.length - 2}
+                    </div>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>

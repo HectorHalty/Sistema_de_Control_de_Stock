@@ -1,16 +1,39 @@
-import { useAppContext } from '@/app/providers/AppContext';
+import { useState } from 'react';
+import { footballApi, getAccessToken } from '@/app/api/client';
 import { SettingsPanel, SettingsRow, SettingsToggle } from '@/features/platform/settings/SettingsRow';
+import { useAppContext } from '@/app/providers/AppContext';
+import { useFutbolOverview } from '../futbol-shared';
 
 export function FutbolSettingsPanel() {
   const {
-    showPublicFixture,
-    setShowPublicFixture,
     matchNotifications,
     setMatchNotifications,
     defaultCategory,
     setDefaultCategory,
     tournamentCategories,
   } = useAppContext();
+
+  const { data, reload } = useFutbolOverview();
+  const [toggling, setToggling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const torneo = data?.torneo;
+  const publicado = torneo?.publicado ?? false;
+
+  async function togglePublicFixture() {
+    const token = getAccessToken();
+    if (!token || !torneo) return;
+    setToggling(true);
+    setError(null);
+    try {
+      await footballApi.updateTorneo(torneo.id, { publicado: !publicado }, token);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar');
+    } finally {
+      setToggling(false);
+    }
+  }
 
   return (
     <SettingsPanel title="Configuracion de Futbol" description="Torneos, fixture publico y notificaciones deportivas.">
@@ -23,10 +46,20 @@ export function FutbolSettingsPanel() {
 
       <SettingsRow
         title="Mostrar Fixture en Sitio Publico"
-        description="Publicar el fixture y resultados en la web para socios y visitantes"
+        description={
+          torneo
+            ? `Torneo activo: ${torneo.nombre}. ${publicado ? 'Visible en la web.' : 'Oculto — borrador.'}`
+            : 'No hay torneo activo configurado.'
+        }
       >
-        <SettingsToggle checked={showPublicFixture} onChange={setShowPublicFixture} />
+        <SettingsToggle
+          checked={publicado}
+          onChange={() => void togglePublicFixture()}
+          disabled={!torneo || toggling}
+        />
       </SettingsRow>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <SettingsRow
         title="Categoria de Torneo por Defecto"
@@ -35,11 +68,13 @@ export function FutbolSettingsPanel() {
       >
         <select
           value={defaultCategory}
-          onChange={e => setDefaultCategory(e.target.value as typeof defaultCategory)}
+          onChange={(e) => setDefaultCategory(e.target.value as typeof defaultCategory)}
           className="px-3 py-1.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
         >
-          {tournamentCategories.map(category => (
-            <option key={category} value={category}>{category}</option>
+          {tournamentCategories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
           ))}
         </select>
       </SettingsRow>

@@ -40,6 +40,7 @@ export type FutbolTab =
   | 'plantel'
   | 'fixture'
   | 'resultados'
+  | 'posiciones'
   | 'reglamento'
   | 'suspendidos'
   | 'media';

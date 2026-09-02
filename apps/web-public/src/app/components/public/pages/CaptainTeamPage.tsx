@@ -3,9 +3,11 @@ import {
   ArrowLeft,
   FileText,
   Loader2,
+  Pencil,
   Plus,
   Trash2,
   UserPlus,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { publicApi, type CaptainTeamData, type RosterPlayer } from '../../../api/public-api';
@@ -28,6 +30,8 @@ export function CaptainTeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   async function loadTeam() {
@@ -100,8 +104,49 @@ export function CaptainTeamPage() {
     try {
       const updated = await publicApi.captain.removePlayer(player.personaId, token);
       setData(updated);
+      if (editingId === player.personaId) setEditingId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo quitar jugador');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(player: RosterPlayer) {
+    setEditingId(player.personaId);
+    setShowForm(false);
+    setEditForm({
+      nombre: player.nombre,
+      apellido: player.apellido,
+      dni: player.dni,
+      email: player.email ?? '',
+      fechaNacimiento: player.fechaNacimiento?.slice(0, 10) ?? '',
+      numeroCamiseta: player.numeroCamiseta != null ? String(player.numeroCamiseta) : '',
+    });
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token || !editingId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await publicApi.captain.updatePlayer(
+        editingId,
+        {
+          nombre: editForm.nombre.trim(),
+          apellido: editForm.apellido.trim(),
+          dni: editForm.dni.replace(/\D/g, ''),
+          email: editForm.email.trim(),
+          fechaNacimiento: editForm.fechaNacimiento,
+          numeroCamiseta: editForm.numeroCamiseta ? Number(editForm.numeroCamiseta) : null,
+        },
+        token,
+      );
+      setData(updated);
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar jugador');
     } finally {
       setSaving(false);
     }
@@ -249,26 +294,114 @@ export function CaptainTeamPage() {
             {data.plantel.map((p) => (
               <li
                 key={p.personaId}
-                className="flex items-center justify-between rounded-xl border border-[#2a2a2a] bg-[#161616] px-4 py-3"
+                className="rounded-xl border border-[#2a2a2a] bg-[#161616]"
               >
-                <div>
-                  <p className="font-bold">
-                    {p.apellido}, {p.nombre}
-                    {p.numeroCamiseta != null ? ` · #${p.numeroCamiseta}` : ''}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    DNI {p.dni}
-                    {p.email ? ` · ${p.email}` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleRemove(p)}
-                  className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {editingId === p.personaId ? (
+                  <form onSubmit={handleSaveEdit} className="space-y-3 p-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold">Editar jugador</h4>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-lg p-1 text-gray-500 hover:text-white"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        placeholder="Nombre"
+                        value={editForm.nombre}
+                        onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                        required
+                      />
+                      <input
+                        placeholder="Apellido"
+                        value={editForm.apellido}
+                        onChange={(e) => setEditForm({ ...editForm, apellido: e.target.value })}
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                        required
+                      />
+                      <input
+                        placeholder="DNI"
+                        inputMode="numeric"
+                        value={editForm.dni}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, dni: e.target.value.replace(/\D/g, '') })
+                        }
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                        required
+                      />
+                      <input
+                        placeholder="Email"
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                        required
+                      />
+                      <input
+                        type="date"
+                        value={editForm.fechaNacimiento}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, fechaNacimiento: e.target.value })
+                        }
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                        required
+                      />
+                      <input
+                        placeholder="N° camiseta"
+                        inputMode="numeric"
+                        value={editForm.numeroCamiseta}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, numeroCamiseta: e.target.value })
+                        }
+                        className="rounded-lg border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2 text-sm outline-none focus:border-lch-accent"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="w-full rounded-lg bg-lch-accent py-2 text-sm font-black text-[#0e0e0e] disabled:opacity-50"
+                    >
+                      {saving ? 'Guardando…' : 'Guardar cambios'}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="font-bold">
+                        {p.apellido}, {p.nombre}
+                        {p.numeroCamiseta != null ? ` · #${p.numeroCamiseta}` : ''}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        DNI {p.dni}
+                        {p.email ? ` · ${p.email}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => startEdit(p)}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-white/5 hover:text-lch-accent"
+                        aria-label="Editar jugador"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => handleRemove(p)}
+                        className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
+                        aria-label="Quitar jugador"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

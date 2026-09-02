@@ -36,7 +36,7 @@ function ChartTooltip({
   return (
     <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-lg">
       <p className="text-xs font-medium capitalize text-muted-foreground">{label}</p>
-      <p className="text-base font-semibold text-emerald-600">{formatMoney(ventas)}</p>
+      <p className="text-base font-semibold text-primary">{formatMoney(ventas)}</p>
       <p className="text-xs text-muted-foreground">{tickets} pedido{tickets !== 1 ? 's' : ''}</p>
     </div>
   );
@@ -100,7 +100,7 @@ export function MetricasPanel() {
               type="button"
               onClick={() => setRange(r)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                range === r ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:bg-muted'
+                range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               {r}
@@ -113,33 +113,33 @@ export function MetricasPanel() {
         <p className="text-sm text-muted-foreground">Cargando métricas...</p>
       ) : (
         <div className="space-y-5">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-6 text-white shadow-lg">
+          <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-[#161616] p-6 text-foreground shadow-lg">
             <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="mb-2 flex items-center gap-2 text-emerald-100">
+                <div className="mb-2 flex items-center gap-2 text-primary">
                   <TrendingUp className="h-5 w-5" />
                   <span className="text-sm font-medium uppercase tracking-wide">
                     Recaudación online · {range}
                   </span>
                 </div>
                 <p className="text-4xl font-bold tracking-tight">{formatMoney(metrics.recaudacion)}</p>
-                <p className="mt-2 text-sm text-emerald-100/90">
+                <p className="mt-2 text-sm text-muted-foreground">
                   Hoy:{' '}
-                  <span className="font-semibold text-white">{formatMoney(metrics.recaudacionHoy)}</span>
+                  <span className="font-semibold text-foreground">{formatMoney(metrics.recaudacionHoy)}</span>
                   {' · '}
                   {metrics.totalPedidos} pedidos en el período
                 </p>
               </div>
               <div className="flex gap-3">
-                <div className="rounded-xl bg-white/15 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-xs text-emerald-100">Hoy</p>
+                <div className="rounded-xl border border-border bg-card px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Hoy</p>
                   <p className="text-lg font-bold">{metrics.ticketsHoy}</p>
-                  <p className="text-xs text-emerald-100">pedidos</p>
+                  <p className="text-xs text-muted-foreground">pedidos</p>
                 </div>
-                <div className="rounded-xl bg-white/15 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-xs text-emerald-100">Promedio</p>
+                <div className="rounded-xl border border-border bg-card px-4 py-3">
+                  <p className="text-xs text-muted-foreground">Promedio</p>
                   <p className="text-lg font-bold">{formatMoney(metrics.ticketPromedio)}</p>
-                  <p className="text-xs text-emerald-100">por pedido</p>
+                  <p className="text-xs text-muted-foreground">por pedido</p>
                 </div>
               </div>
             </div>
@@ -160,8 +160,8 @@ export function MetricasPanel() {
                     <AreaChart data={metrics.salesByDay}>
                       <defs>
                         <linearGradient id="onlineVentasGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#6BFF9E" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#6BFF9E" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -171,7 +171,7 @@ export function MetricasPanel() {
                       <Area
                         type="monotone"
                         dataKey="ventas"
-                        stroke="#10b981"
+                        stroke="#6BFF9E"
                         fill="url(#onlineVentasGradient)"
                         strokeWidth={2}
                       />
@@ -196,7 +196,7 @@ export function MetricasPanel() {
                 {metrics.topProductsByKitchen.length > 0 && (
                   <div className="rounded-2xl border border-border bg-card p-5">
                     <div className="mb-3 flex items-center gap-2">
-                      <Warehouse className="h-5 w-5 text-emerald-600" />
+                      <Warehouse className="h-5 w-5 text-primary" />
                       <h4 className="font-semibold">Ventas por cocina</h4>
                     </div>
                     <div className="h-52">

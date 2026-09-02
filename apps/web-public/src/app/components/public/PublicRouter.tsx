@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from './PublicLayout';
+import { CaptainRoute } from './CaptainRoute';
 import { PageLoader } from '../ui/PageLoader';
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
@@ -38,7 +39,16 @@ export function PublicRouter() {
           <Route path="fotos" element={<Lazy><FotosPage /></Lazy>} />
           <Route path="reglamento" element={<Lazy><ReglamentoPage /></Lazy>} />
           <Route path="perfil" element={<Lazy><ProfilePage /></Lazy>} />
-          <Route path="administrar-equipo" element={<Lazy><CaptainTeamPage /></Lazy>} />
+          <Route
+            path="administrar-equipo"
+            element={
+              <CaptainRoute>
+                <Lazy>
+                  <CaptainTeamPage />
+                </Lazy>
+              </CaptainRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

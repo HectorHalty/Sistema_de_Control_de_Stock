@@ -26,6 +26,32 @@ export class CompleteDniDto {
   dni!: string;
 }
 
+export class RegisterDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(6)
+  password!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nombre!: string;
+
+  @IsString()
+  @MinLength(7)
+  dni!: string;
+}
+
+export class LoginDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+}
+
 export class FollowTeamDto {
   @IsString()
   @IsNotEmpty()

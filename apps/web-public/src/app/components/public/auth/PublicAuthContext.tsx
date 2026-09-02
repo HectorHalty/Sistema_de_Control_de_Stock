@@ -22,6 +22,8 @@ interface PublicAuthContextValue {
   loading: boolean;
   showDniModal: boolean;
   setShowDniModal: (open: boolean) => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: { email: string; password: string; nombre: string; dni: string }) => Promise<void>;
   loginDev: (email: string, name: string) => Promise<void>;
   loginGoogle: (idToken: string) => Promise<void>;
   completeDni: (dni: string) => Promise<void>;
@@ -90,6 +92,22 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [token]);
 
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const res = await publicApi.auth.login(email, password);
+      await applyAuthResponse(res);
+    },
+    [applyAuthResponse],
+  );
+
+  const register = useCallback(
+    async (data: { email: string; password: string; nombre: string; dni: string }) => {
+      const res = await publicApi.auth.register(data);
+      await applyAuthResponse(res);
+    },
+    [applyAuthResponse],
+  );
+
   const loginDev = useCallback(
     async (email: string, name: string) => {
       const res = await publicApi.auth.loginDev(email, name);
@@ -137,6 +155,8 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       loading,
       showDniModal,
       setShowDniModal,
+      login,
+      register,
       loginDev,
       loginGoogle,
       completeDni,
@@ -150,6 +170,8 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       token,
       loading,
       showDniModal,
+      login,
+      register,
       loginDev,
       loginGoogle,
       completeDni,

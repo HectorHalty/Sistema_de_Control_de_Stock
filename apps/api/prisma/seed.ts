@@ -4,6 +4,7 @@ import { seedReglamento } from './seeds/reglamento.seed.cjs';
 import { seedScheduling } from './seeds/scheduling.seed.cjs';
 import { seedTorneoDemo } from './seeds/torneo-demo.seed.cjs';
 import { seedCantinaPublica } from './seeds/cantina.seed.cjs';
+import { seedPublicAccounts } from './seeds/public-accounts.seed.cjs';
 
 const prisma = new PrismaClient();
 
@@ -79,6 +80,7 @@ async function main() {
   await seedReglamento(prisma);
   await seedTorneoDemo(prisma);
   await seedCantinaPublica(prisma);
+  await seedPublicAccounts(prisma);
 
   console.log('Seed complete.');
   await prisma.$disconnect();

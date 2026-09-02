@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { QrCode, ScanLine } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { QrCode } from 'lucide-react';
 import {
   kitchenApi,
   onlineApi,
@@ -9,12 +9,14 @@ import {
   type RedeemQrResponse,
 } from '@/app/api/client';
 import { QrScanOverlay } from '../QrScanOverlay';
+import { OnlineKitchenTicket, aggregatePendingItems } from '../OnlineKitchenTicket';
 import {
   NEXT_KITCHEN_STATUS,
   OnlineError,
   OnlinePanelShell,
   STATUS_LABELS,
   onlineButtonClass,
+  onlineFieldClass,
 } from '../online-shared';
 
 export function CocinaOnlinePanel() {
@@ -53,6 +55,12 @@ export function CocinaOnlinePanel() {
     return () => clearInterval(t);
   }, [reload]);
 
+  const activeKitchen = kitchens.find((k) => k.id === kitchenId);
+  const active = orders.filter((o) => o.status !== 'delivered');
+  const oldest = active[0] ?? null;
+  const pendingItems = useMemo(() => aggregatePendingItems(active), [active]);
+  const otherOrders = oldest ? active.slice(1) : active;
+
   async function advance(order: KitchenOrder) {
     const next = NEXT_KITCHEN_STATUS[order.status];
     if (!next) return;
@@ -81,60 +89,115 @@ export function CocinaOnlinePanel() {
     }
   }
 
-  const active = orders.filter((o) => o.status !== 'delivered');
-
   return (
     <>
       <OnlinePanelShell title="Cocina online">
-        <p className="text-sm text-muted-foreground">
-          Cola de pedidos de la cantina web. Usá el botón inferior para escanear el QR de retiro.
-        </p>
+        <div className="sticky top-0 z-10 -mx-1 space-y-3 rounded-xl border border-border bg-background/95 p-3 backdrop-blur">
+          <p className="text-sm text-muted-foreground">
+            Pedidos online por cocina. El ticket más antiguo pendiente aparece listo para preparar.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Cocina
+            </label>
+            <select
+              className={`${onlineFieldClass()} max-w-md font-medium`}
+              value={kitchenId}
+              onChange={(e) => setKitchenId(e.target.value)}
+            >
+              {kitchens.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.emoji} {k.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {error && <OnlineError message={error} />}
-        <select
-          className="max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          value={kitchenId}
-          onChange={(e) => setKitchenId(e.target.value)}
-        >
-          {kitchens.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.emoji} {k.name}
-            </option>
-          ))}
-        </select>
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Cargando pedidos...</p>
+        ) : active.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+            No hay pedidos online pendientes en {activeKitchen?.name ?? 'esta cocina'}.
+          </p>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {active.map((order) => (
-              <div key={order.id} className="rounded-xl border border-border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-bold">Ticket #{order.ticketNumber}</span>
-                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
-                    {STATUS_LABELS[order.status] ?? order.status}
-                  </span>
-                </div>
-                <ul className="mb-3 space-y-1 text-sm">
-                  {order.items.map((item) => (
-                    <li key={item.id}>
-                      {item.emoji} {item.quantity}× {item.name}
-                    </li>
-                  ))}
-                </ul>
-                {NEXT_KITCHEN_STATUS[order.status] && (
-                  <button
-                    type="button"
-                    className={onlineButtonClass()}
-                    onClick={() => advance(order)}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <section className="rounded-xl border border-border bg-card p-4">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                Productos pendientes · {activeKitchen?.name}
+              </h3>
+              <ul className="space-y-2">
+                {pendingItems.map((item) => (
+                  <li
+                    key={item.name}
+                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm"
                   >
-                    → {STATUS_LABELS[NEXT_KITCHEN_STATUS[order.status]!] ?? 'Siguiente'}
-                  </button>
+                    <span className="font-medium">
+                      {item.emoji ? `${item.emoji} ` : ''}
+                      {item.name}
+                    </span>
+                    <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-black text-primary">
+                      {item.quantity} u.
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {active.length} pedido(s) activo(s) en cola
+              </p>
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <h3 className="mb-3 text-center text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                  Pedido más antiguo
+                </h3>
+                {oldest && (
+                  <OnlineKitchenTicket
+                    order={oldest}
+                    kitchen={activeKitchen}
+                    highlight
+                    onAdvance={() => advance(oldest)}
+                  />
                 )}
               </div>
-            ))}
-            {active.length === 0 && (
-              <p className="text-sm text-muted-foreground">No hay pedidos online activos en cocina.</p>
-            )}
+
+              {otherOrders.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                    En cola
+                  </h3>
+                  {otherOrders.map((order) => (
+                    <div key={order.id} className="rounded-xl border border-border bg-card p-3">
+                      <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="font-bold">#{String(order.ticketNumber).padStart(6, '0')}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {STATUS_LABELS[order.status] ?? order.status}
+                        </span>
+                      </div>
+                      <ul className="mb-2 space-y-0.5 text-xs text-muted-foreground">
+                        {order.items.map((item) => (
+                          <li key={item.id}>
+                            {item.quantity}× {item.name}
+                          </li>
+                        ))}
+                      </ul>
+                      {NEXT_KITCHEN_STATUS[order.status] && (
+                        <button
+                          type="button"
+                          className={`${onlineButtonClass('ghost')} w-full text-xs`}
+                          onClick={() => advance(order)}
+                        >
+                          → {STATUS_LABELS[NEXT_KITCHEN_STATUS[order.status]!] ?? 'Siguiente'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </OnlinePanelShell>
@@ -142,10 +205,10 @@ export function CocinaOnlinePanel() {
       <button
         type="button"
         onClick={() => setScanOpen(true)}
-        className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-primary px-8 py-4 text-lg font-bold text-primary-foreground shadow-2xl transition hover:scale-[1.02] active:scale-95"
+        aria-label="Escanear QR"
+        className="fixed bottom-8 left-1/2 z-40 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl transition hover:scale-105 active:scale-95"
       >
-        <ScanLine size={28} />
-        Escanear QR
+        <QrCode size={36} strokeWidth={2.2} />
       </button>
 
       <QrScanOverlay
@@ -157,8 +220,8 @@ export function CocinaOnlinePanel() {
 
       {redeemed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-emerald-500/40 bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center gap-2 text-xl font-bold text-emerald-600">
+          <div className="w-full max-w-lg rounded-2xl border border-primary/40 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-2 text-xl font-bold text-primary">
               <QrCode size={24} />
               Pedido entregado
             </div>

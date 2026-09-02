@@ -22,16 +22,18 @@ export function SettingsRow({ title, description, children, bordered = true }: S
 interface SettingsToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }
 
-export function SettingsToggle({ checked, onChange }: SettingsToggleProps) {
+export function SettingsToggle({ checked, onChange, disabled }: SettingsToggleProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`w-11 h-6 rounded-full relative transition-colors ${checked ? 'bg-[#3d7a3d]' : 'bg-gray-300 dark:bg-gray-600'}`}
+      className={`w-11 h-6 rounded-full relative transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${checked ? 'bg-[#3d7a3d]' : 'bg-gray-300 dark:bg-gray-600'}`}
     >
       <div
         className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${checked ? 'right-0.5' : 'left-0.5'}`}

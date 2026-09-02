@@ -4,12 +4,9 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { PublicRouter } from './components/public/PublicRouter';
 import { PublicAuthProvider } from './components/public/auth/PublicAuthContext';
 import { CartProvider } from './components/public/cart/CartContext';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,13 +49,5 @@ function PublicAppShell() {
 }
 
 export default function App() {
-  if (GOOGLE_CLIENT_ID) {
-    return (
-      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        <PublicAppShell />
-      </GoogleOAuthProvider>
-    );
-  }
-
   return <PublicAppShell />;
 }

@@ -28,14 +28,14 @@ export function useOnlineOverview() {
 }
 
 export function onlineFieldClass(extra = '') {
-  return `w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary ${extra}`.trim();
+  return `w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary ${extra}`.trim();
 }
 
 export function onlineButtonClass(variant: 'primary' | 'ghost' = 'primary') {
   if (variant === 'ghost') {
-    return 'rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted';
+    return 'rounded-xl border border-border px-3 py-2 text-sm text-foreground hover:bg-muted';
   }
-  return 'rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50';
+  return 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50';
 }
 
 export function OnlinePanelShell({
@@ -47,7 +47,7 @@ export function OnlinePanelShell({
 }) {
   return (
     <div className="space-y-4 pb-20 lg:pb-4">
-      <h2 className="text-lg font-bold">{title}</h2>
+      <h2 className="text-lg font-bold text-foreground">{title}</h2>
       {children}
     </div>
   );

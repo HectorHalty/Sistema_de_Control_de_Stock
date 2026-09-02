@@ -22,6 +22,7 @@
     "test:admin": "npm run test --workspace=apps/web-admin",
     "test:public": "npm run test --workspace=apps/web-public",
     "test:api": "npm run test --workspace=apps/api",
+    "smoke:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-public.ps1",
     "build:admin": "npm run build --workspace=apps/web-admin",
     "build:public": "npm run build --workspace=apps/web-public",
     "build:api": "npm run build --workspace=apps/api",

@@ -1,19 +1,22 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { publicApi, type PublicMenuItem, type PublicSponsor } from '../../../api/public-api';
-import { useCart, formatPrice } from '../cart/CartContext';
+import { publicApi, type PublicMenuItem, type PublicOrder, type PublicSponsor } from '../../../api/public-api';
+import { useCart, formatPrice, type CartLine } from '../cart/CartContext';
+import { usePublicAuth } from '../auth/PublicAuthContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconMinus, IconPlus, IconStar } from '../figma-icons';
 import { CANTEEN_HERO_IMG, foodImageFor } from '../food-images';
 
 export function CantinaPage() {
   const navigate = useNavigate();
-  const { items: cart, add, remove, count, total } = useCart();
+  const { user, token } = usePublicAuth();
+  const { items: cart, add, remove, count, total, replaceItems, lastOrder } = useCart();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('todas');
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [repeatOrder, setRepeatOrder] = useState<PublicOrder | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['menu'],
@@ -24,6 +27,20 @@ export function CantinaPage() {
     queryKey: ['sponsors-cantina'],
     queryFn: () => publicApi.sponsors(),
   });
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ['cantina-orders', token],
+    queryFn: () => publicApi.orders.list(token!),
+    enabled: !!token,
+  });
+
+  useEffect(() => {
+    if (!user || cart.length > 0) return;
+    const dismissed = sessionStorage.getItem('lch_repeat_order_dismissed');
+    if (dismissed === '1') return;
+    const candidate = lastOrder ?? orders.find((o) => o.items?.length);
+    if (candidate?.items?.length) setRepeatOrder(candidate);
+  }, [user, cart.length, lastOrder, orders]);
 
   const cantinaBanner = useMemo((): PublicSponsor | null => {
     return (
@@ -75,6 +92,11 @@ export function CantinaPage() {
         matchQuick =
           !!item.filters?.includes('bebidas') ||
           item.category.toLowerCase().includes('bebida');
+      } else if (activeQuickFilter === 'sin_tacc' || activeQuickFilter === 'sintacc') {
+        matchQuick =
+          !!item.filters?.includes('sin_tacc') ||
+          !!item.filters?.includes('sintacc') ||
+          !!item.description?.toLowerCase().includes('sin tacc');
       }
 
       return matchCat && matchSearch && matchQuick;
@@ -100,6 +122,7 @@ export function CantinaPage() {
         { slug: 'popular', label: 'Popular' },
         { slug: 'economico', label: 'Económico' },
         { slug: 'bebidas', label: 'Bebidas' },
+        { slug: 'sin_tacc', label: 'Sin Tacc' },
       ];
 
   const cats: { id: string; label: string; icon: ReactNode }[] = [
@@ -242,6 +265,11 @@ export function CantinaPage() {
             </button>
           ))}
         </div>
+        {showFilters && (
+          <p className="mt-2 text-[11px] text-gray-500">
+            Usá los chips para filtrar por popular, económico, bebidas o sin TACC.
+          </p>
+        )}
       </div>
 
       <div className="space-y-6 px-6 pt-5">
@@ -327,6 +355,102 @@ export function CantinaPage() {
           </button>
         </div>
       )}
+
+      {repeatOrder && (
+        <RepeatOrderModal
+          order={repeatOrder}
+          menu={menu}
+          onClose={() => {
+            sessionStorage.setItem('lch_repeat_order_dismissed', '1');
+            setRepeatOrder(null);
+          }}
+          onRepeat={(lines) => {
+            replaceItems(lines);
+            sessionStorage.setItem('lch_repeat_order_dismissed', '1');
+            setRepeatOrder(null);
+            navigate('/carrito');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RepeatOrderModal({
+  order,
+  menu,
+  onClose,
+  onRepeat,
+}: {
+  order: PublicOrder;
+  menu: PublicMenuItem[];
+  onClose: () => void;
+  onRepeat: (lines: CartLine[]) => void;
+}) {
+  const created = new Date(order.createdAt);
+  const when = Number.isNaN(created.getTime())
+    ? ''
+    : created.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const summary = order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ');
+  const pizzaImg = foodImageFor('Pizza Muzzarella', 'Pizzas');
+
+  function handleRepeat() {
+    const lines: CartLine[] = [];
+    for (const item of order.items) {
+      const match = menu.find(
+        (m) => m.id === item.salesProductId || m.name.toLowerCase() === item.name.toLowerCase(),
+      );
+      if (match) lines.push({ ...match, qty: item.quantity });
+    }
+    if (!lines.length) {
+      onClose();
+      return;
+    }
+    onRepeat(lines);
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+      <div
+        style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', maxWidth: 420 }}
+        className="w-full overflow-hidden rounded-2xl"
+      >
+        <div className="relative h-36">
+          <img src={pizzaImg} alt="" className="h-full w-full object-cover" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#6BFF9E]">
+            Tu último pedido{when ? ` · Hoy, ${when}` : ''}
+          </p>
+          <h3 className="mt-1 text-xl font-black text-white">¿Repetimos?</h3>
+          <p className="mt-1 text-sm text-gray-400">{summary}</p>
+          <p className="mt-2 text-lg font-black text-white">{formatPrice(order.total)}</p>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ background: '#161616', border: '1px solid #2a2a2a' }}
+              className="rounded-xl py-3 text-sm font-bold text-gray-300"
+            >
+              No, gracias
+            </button>
+            <button
+              type="button"
+              onClick={handleRepeat}
+              className="rounded-xl bg-[#6BFF9E] py-3 text-sm font-black text-[#0e0e0e]"
+            >
+              Sí, repetir pedido
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,18 +7,32 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 import { autoScheduleMatches } from './fixture-scheduler';
+import { scheduleSaturdayMatches } from './saturday-scheduler';
+import { SuspensionSyncService } from './suspension-sync.service';
 
 @Injectable()
 export class FootballService {
   constructor(
     private prisma: PrismaService,
     private reglamentoEngine: ReglamentoEngineService,
+    private suspensionSync: SuspensionSyncService,
   ) {}
 
-  async getOverview() {
-    const torneo = await this.getActiveTorneo();
+  async getOverview(torneoId?: string) {
+    const torneo = torneoId
+      ? await this.prisma.torneo.findUnique({
+          where: { id: torneoId },
+          include: {
+            categoria: true,
+            campeonato: { include: { temporada: true } },
+          },
+        })
+      : await this.getActiveTorneo();
+
+    const torneos = await this.listTorneos();
+
     if (!torneo) {
-      return { torneo: null, stats: null };
+      return { torneo: null, stats: null, torneos };
     }
 
     const [equipos, partidos, capitanes, jornadas] = await Promise.all([
@@ -31,6 +45,7 @@ export class FootballService {
     return {
       torneo,
       stats: { equipos, partidos, capitanes, jornadas },
+      torneos,
     };
   }
 
@@ -47,8 +62,98 @@ export class FootballService {
 
   async listTorneos() {
     return this.prisma.torneo.findMany({
-      include: { categoria: true, campeonato: true },
+      include: {
+        categoria: true,
+        campeonato: { include: { temporada: true } },
+      },
       orderBy: [{ activo: 'desc' }, { nombre: 'asc' }],
+    });
+  }
+
+  async createTorneo(data: { campeonatoId: string; categoriaId: string; nombre?: string }) {
+    const [campeonato, categoria] = await Promise.all([
+      this.prisma.campeonato.findUnique({ where: { id: data.campeonatoId } }),
+      this.prisma.categoriaConfig.findUnique({ where: { id: data.categoriaId } }),
+    ]);
+    if (!campeonato) throw new NotFoundException('Campeonato no encontrado');
+    if (!categoria) throw new NotFoundException('Categoría no encontrada');
+
+    const existing = await this.prisma.torneo.findUnique({
+      where: {
+        campeonatoId_categoriaId: {
+          campeonatoId: data.campeonatoId,
+          categoriaId: data.categoriaId,
+        },
+      },
+    });
+    if (existing) throw new ConflictException('Ya existe un torneo para esta categoría en el campeonato');
+
+    const torneo = await this.prisma.torneo.create({
+      data: {
+        campeonatoId: data.campeonatoId,
+        categoriaId: data.categoriaId,
+        nombre: data.nombre ?? `${categoria.nombre} — ${campeonato.nombre}`,
+        activo: true,
+        publicado: false,
+      },
+      include: {
+        categoria: true,
+        campeonato: { include: { temporada: true } },
+      },
+    });
+
+    await this.prisma.torneoConfig.create({ data: { torneoId: torneo.id } });
+    return torneo;
+  }
+
+  async bootstrapTorneosCampeonato(campeonatoId?: string) {
+    const campeonato = campeonatoId
+      ? await this.prisma.campeonato.findUnique({ where: { id: campeonatoId } })
+      : await this.prisma.campeonato.findFirst({ where: { activo: true } });
+    if (!campeonato) throw new BadRequestException('No hay campeonato activo');
+
+    const categorias = await this.prisma.categoriaConfig.findMany({ orderBy: { nombre: 'asc' } });
+    const created: string[] = [];
+
+    for (const cat of categorias) {
+      const torneo = await this.prisma.torneo.upsert({
+        where: {
+          campeonatoId_categoriaId: { campeonatoId: campeonato.id, categoriaId: cat.id },
+        },
+        update: { activo: true },
+        create: {
+          campeonatoId: campeonato.id,
+          categoriaId: cat.id,
+          nombre: `${cat.nombre} — ${campeonato.nombre}`,
+          activo: true,
+          publicado: false,
+        },
+        include: { categoria: true },
+      });
+      await this.prisma.torneoConfig.upsert({
+        where: { torneoId: torneo.id },
+        update: {},
+        create: { torneoId: torneo.id },
+      });
+      created.push(torneo.categoria.nombre);
+    }
+
+    return { campeonatoId: campeonato.id, created: created.length, categorias: created };
+  }
+
+  async updateTorneo(
+    id: string,
+    data: { publicado?: boolean; activo?: boolean; nombre?: string },
+  ) {
+    const torneo = await this.prisma.torneo.findUnique({ where: { id } });
+    if (!torneo) throw new NotFoundException('Torneo no encontrado');
+    return this.prisma.torneo.update({
+      where: { id },
+      data,
+      include: {
+        categoria: true,
+        campeonato: { include: { temporada: true } },
+      },
     });
   }
 
@@ -272,6 +377,80 @@ ${partidoBlock}
     });
   }
 
+  async getJornadaPreferencias(jornadaId: string) {
+    const jornada = await this.prisma.jornada.findUnique({
+      where: { id: jornadaId },
+      include: {
+        torneo: { include: { categoria: { include: { grupoCanchas: true } } } },
+      },
+    });
+    if (!jornada) throw new NotFoundException('Jornada no encontrada');
+
+    const grupoId = jornada.torneo.categoria.grupoCanchasId;
+    const [inscripciones, preferencias, franjas] = await Promise.all([
+      this.prisma.equipoInscripcion.findMany({
+        where: { torneoId: jornada.torneoId, activo: true },
+        include: { equipo: true },
+        orderBy: { equipo: { name: 'asc' } },
+      }),
+      this.prisma.preferenciaHorario.findMany({ where: { jornadaId } }),
+      grupoId
+        ? this.prisma.franjaHoraria.findMany({
+            where: { grupoCanchasId: grupoId },
+            orderBy: { orden: 'asc' },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const prefByTeam = new Map(preferencias.map((p) => [p.equipoInscripcionId, p.horaPreferida]));
+
+    return {
+      jornadaId,
+      franjas: franjas.map((f) => f.horaInicio),
+      equipos: inscripciones.map((i) => ({
+        inscripcionId: i.id,
+        name: i.equipo.name,
+        horaPreferida: prefByTeam.get(i.id) ?? null,
+      })),
+    };
+  }
+
+  async upsertJornadaPreferencia(
+    jornadaId: string,
+    equipoInscripcionId: string,
+    horaPreferida: string | null,
+  ) {
+    const jornada = await this.prisma.jornada.findUnique({ where: { id: jornadaId } });
+    if (!jornada) throw new NotFoundException('Jornada no encontrada');
+
+    const inscripcion = await this.prisma.equipoInscripcion.findFirst({
+      where: { id: equipoInscripcionId, torneoId: jornada.torneoId, activo: true },
+    });
+    if (!inscripcion) throw new BadRequestException('Equipo no inscripto en este torneo');
+
+    if (!horaPreferida) {
+      await this.prisma.preferenciaHorario.deleteMany({
+        where: { jornadaId, equipoInscripcionId },
+      });
+      return { equipoInscripcionId, horaPreferida: null };
+    }
+
+    const row = await this.prisma.preferenciaHorario.upsert({
+      where: {
+        jornadaId_equipoInscripcionId: { jornadaId, equipoInscripcionId },
+      },
+      create: {
+        jornadaId,
+        equipoInscripcionId,
+        torneoId: jornada.torneoId,
+        horaPreferida,
+      },
+      update: { horaPreferida },
+    });
+
+    return { equipoInscripcionId: row.equipoInscripcionId, horaPreferida: row.horaPreferida };
+  }
+
   async generateRoundRobin(jornadaId: string) {
     const jornada = await this.prisma.jornada.findUnique({
       where: { id: jornadaId },
@@ -378,7 +557,8 @@ ${partidoBlock}
       throw new BadRequestException('La categoría no tiene grupo de canchas configurado');
     }
 
-    const [canchas, franjas, matches, sameDayMatches] = await Promise.all([
+    const [canchas, franjas, matches, sameDayMatches, preferencias, inscripciones] =
+      await Promise.all([
       this.prisma.cancha.findMany({
         where: { grupoCanchasId: grupoId, activa: true },
         orderBy: { numero: 'asc' },
@@ -401,6 +581,11 @@ ${partidoBlock}
           canchaId: { not: null },
           horaInicio: { not: null },
         },
+      }),
+      this.prisma.preferenciaHorario.findMany({ where: { jornadaId } }),
+      this.prisma.equipoInscripcion.findMany({
+        where: { torneoId: jornada.torneoId, activo: true },
+        include: { equipo: true },
       }),
     ]);
 
@@ -425,6 +610,16 @@ ${partidoBlock}
       }
     }
 
+    const preferences: Record<string, string> = {};
+    for (const p of preferencias) {
+      preferences[p.equipoInscripcionId] = p.horaPreferida;
+    }
+
+    const teamNames: Record<string, string> = {};
+    for (const ins of inscripciones) {
+      teamNames[ins.id] = ins.equipo.name;
+    }
+
     const result = autoScheduleMatches(
       matches.map((m) => ({
         id: m.id,
@@ -437,6 +632,8 @@ ${partidoBlock}
       slots,
       canchaOccupied,
       teamOccupied,
+      preferences,
+      teamNames,
     );
 
     for (const assignment of result.assignments) {
@@ -456,6 +653,247 @@ ${partidoBlock}
       warnings: result.warnings,
       skippedManual: result.skipped.length,
     };
+  }
+
+  private dayRange(fecha: string) {
+    const dayStart = new Date(fecha);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+    return { dayStart, dayEnd };
+  }
+
+  async getSaturdayGrid(fecha: string, campeonatoId?: string) {
+    const { dayStart, dayEnd } = this.dayRange(fecha);
+    const campeonato = campeonatoId
+      ? await this.prisma.campeonato.findUnique({ where: { id: campeonatoId } })
+      : await this.prisma.campeonato.findFirst({ where: { activo: true } });
+    if (!campeonato) throw new BadRequestException('No hay campeonato activo');
+
+    const torneoIds = (
+      await this.prisma.torneo.findMany({
+        where: { campeonatoId: campeonato.id, activo: true },
+        select: { id: true },
+      })
+    ).map((t) => t.id);
+
+    const [matches, canchas] = await Promise.all([
+      this.prisma.partidoFutbol.findMany({
+        where: {
+          torneoId: { in: torneoIds },
+          date: { gte: dayStart, lt: dayEnd },
+          canchaId: { not: null },
+          horaInicio: { not: null },
+        },
+        include: {
+          homeTeam: true,
+          awayTeam: true,
+          cancha: { include: { grupoCanchas: true } },
+          torneo: { include: { categoria: true } },
+          jornada: true,
+        },
+        orderBy: [{ horaInicio: 'asc' }, { cancha: { numero: 'asc' } }],
+      }),
+      this.prisma.cancha.findMany({
+        where: { activa: true, numero: { lte: 8 } },
+        include: { grupoCanchas: true },
+        orderBy: { numero: 'asc' },
+      }),
+    ]);
+
+    return {
+      fecha,
+      campeonato: campeonato.nombre,
+      canchas,
+      partidos: matches.map((m) => ({
+        id: m.id,
+        hora: m.horaInicio,
+        canchaId: m.canchaId,
+        canchaNumero: m.cancha?.numero,
+        categoria: m.torneo?.categoria.nombre,
+        categoriaColor: m.torneo?.categoria.colorHex,
+        local: m.homeTeam.name,
+        visitante: m.awayTeam.name,
+        bloqueadoManual: m.bloqueadoManual,
+        jornada: m.jornada?.numero ?? null,
+      })),
+    };
+  }
+
+  async autoScheduleSaturday(
+    fecha: string,
+    campeonatoId?: string,
+    categoriaOrder?: string[],
+  ) {
+    const { dayStart, dayEnd } = this.dayRange(fecha);
+    const campeonato = campeonatoId
+      ? await this.prisma.campeonato.findUnique({ where: { id: campeonatoId } })
+      : await this.prisma.campeonato.findFirst({ where: { activo: true } });
+    if (!campeonato) throw new BadRequestException('No hay campeonato activo');
+
+    const torneos = await this.prisma.torneo.findMany({
+      where: { campeonatoId: campeonato.id, activo: true },
+      include: { categoria: { include: { grupoCanchas: true } } },
+    });
+    if (!torneos.length) throw new BadRequestException('No hay torneos activos en el campeonato');
+
+    const torneoIds = torneos.map((t) => t.id);
+    const defaultOrder = torneos.map((t) => t.categoria.codigo).sort();
+    const order = categoriaOrder?.length ? categoriaOrder : defaultOrder;
+
+    const [canchas, franjas, jornadas, inscripciones] = await Promise.all([
+      this.prisma.cancha.findMany({
+        where: { activa: true },
+        include: { grupoCanchas: true },
+        orderBy: { numero: 'asc' },
+      }),
+      this.prisma.franjaHoraria.findMany({ orderBy: [{ grupoCanchasId: 'asc' }, { orden: 'asc' }] }),
+      this.prisma.jornada.findMany({
+        where: {
+          torneoId: { in: torneoIds },
+          fecha: { gte: dayStart, lt: dayEnd },
+          suspendida: false,
+        },
+      }),
+      this.prisma.equipoInscripcion.findMany({
+        where: { torneoId: { in: torneoIds }, activo: true },
+        include: { equipo: true },
+      }),
+    ]);
+
+    const jornadaIds = jornadas.map((j) => j.id);
+    const [matches, sameDayMatches, preferencias] = await Promise.all([
+      this.prisma.partidoFutbol.findMany({
+        where: { jornadaId: { in: jornadaIds }, status: 'pendiente' },
+      }),
+      this.prisma.partidoFutbol.findMany({
+        where: {
+          date: { gte: dayStart, lt: dayEnd },
+          canchaId: { not: null },
+          horaInicio: { not: null },
+        },
+      }),
+      this.prisma.preferenciaHorario.findMany({
+        where: { jornadaId: { in: jornadaIds } },
+      }),
+    ]);
+
+    const slotMap = new Map<string, { canchaId: string; canchaNumero: number; horaInicio: string }>();
+    for (const f of franjas) {
+      for (const c of canchas.filter((x) => x.grupoCanchasId === f.grupoCanchasId)) {
+        slotMap.set(`${c.id}|${f.horaInicio}`, {
+          canchaId: c.id,
+          canchaNumero: c.numero,
+          horaInicio: f.horaInicio,
+        });
+      }
+    }
+    const slots = [...slotMap.values()];
+
+    const canchaOccupied = new Set<string>();
+    const teamOccupied = new Set<string>();
+    const schedulingJornadaIds = new Set(jornadaIds);
+
+    for (const m of sameDayMatches) {
+      if (m.jornadaId && schedulingJornadaIds.has(m.jornadaId) && !m.canchaId) continue;
+      if (m.canchaId && m.horaInicio) canchaOccupied.add(`${m.canchaId}|${m.horaInicio}`);
+      if (m.horaInicio) {
+        if (m.homeInscripcionId) teamOccupied.add(`${m.homeInscripcionId}|${m.horaInicio}`);
+        if (m.awayInscripcionId) teamOccupied.add(`${m.awayInscripcionId}|${m.horaInicio}`);
+      }
+    }
+
+    const preferences: Record<string, string> = {};
+    for (const p of preferencias) preferences[p.equipoInscripcionId] = p.horaPreferida;
+
+    const teamNames: Record<string, string> = {};
+    for (const ins of inscripciones) teamNames[ins.id] = ins.equipo.name;
+
+    const torneoMap = new Map(torneos.map((t) => [t.id, t]));
+
+    const saturdayMatches = matches.map((m) => {
+      const torneo = torneoMap.get(m.torneoId!);
+      const grupoId = torneo!.categoria.grupoCanchasId!;
+      return {
+        id: m.id,
+        torneoId: m.torneoId!,
+        homeInscripcionId: m.homeInscripcionId,
+        awayInscripcionId: m.awayInscripcionId,
+        bloqueadoManual: m.bloqueadoManual,
+        canchaId: m.canchaId,
+        horaInicio: m.horaInicio,
+        categoriaCodigo: torneo!.categoria.codigo,
+        categoriaNombre: torneo!.categoria.nombre,
+        categoriaColor: torneo!.categoria.colorHex,
+        grupoCodigo: torneo!.categoria.grupoCanchas?.codigo ?? '',
+        allowedCanchaIds: new Set(
+          canchas.filter((c) => c.grupoCanchasId === grupoId).map((c) => c.id),
+        ),
+        allowedHoras: new Set(
+          franjas.filter((f) => f.grupoCanchasId === grupoId).map((f) => f.horaInicio),
+        ),
+      };
+    });
+
+    const result = scheduleSaturdayMatches({
+      matches: saturdayMatches,
+      slots,
+      preferences,
+      teamNames,
+      categoriaOrder: order,
+      existingCanchaOccupied: canchaOccupied,
+      existingTeamOccupied: teamOccupied,
+    });
+
+    for (const assignment of result.assignments) {
+      await this.prisma.partidoFutbol.update({
+        where: { id: assignment.matchId },
+        data: {
+          canchaId: assignment.canchaId,
+          horaInicio: assignment.horaInicio,
+          venue: assignment.venue,
+        },
+      });
+    }
+
+    return {
+      fecha,
+      campeonatoId: campeonato.id,
+      scheduled: result.assignments.length,
+      skippedManual: result.skipped.length,
+      unassigned: result.unassigned.length,
+      warnings: result.warnings,
+    };
+  }
+
+  async publishJornadasByFecha(fecha: string, campeonatoId?: string) {
+    const { dayStart, dayEnd } = this.dayRange(fecha);
+    const campeonato = campeonatoId
+      ? await this.prisma.campeonato.findUnique({ where: { id: campeonatoId } })
+      : await this.prisma.campeonato.findFirst({ where: { activo: true } });
+    if (!campeonato) throw new BadRequestException('No hay campeonato activo');
+
+    const torneoIds = (
+      await this.prisma.torneo.findMany({
+        where: { campeonatoId: campeonato.id, activo: true },
+        select: { id: true },
+      })
+    ).map((t) => t.id);
+
+    const updated = await this.prisma.jornada.updateMany({
+      where: {
+        torneoId: { in: torneoIds },
+        fecha: { gte: dayStart, lt: dayEnd },
+        suspendida: false,
+      },
+      data: { publicada: true },
+    });
+
+    await this.prisma.torneo.updateMany({
+      where: { id: { in: torneoIds } },
+      data: { publicado: true },
+    });
+
+    return { fecha, publicadas: updated.count };
   }
 
   async suspendJornadaPorLluvia(jornadaId: string) {
@@ -547,7 +985,10 @@ ${partidoBlock}
       venue?: string | null;
     },
   ) {
-    const match = await this.prisma.partidoFutbol.findUnique({ where: { id } });
+    const match = await this.prisma.partidoFutbol.findUnique({
+      where: { id },
+      include: { homeTeam: true, awayTeam: true },
+    });
     if (!match) throw new NotFoundException(`Partido ${id} no encontrado`);
 
     let venue = data.venue;
@@ -556,7 +997,37 @@ ${partidoBlock}
       if (cancha) venue = `Cancha ${cancha.numero}`;
     }
 
-    return this.prisma.partidoFutbol.update({
+    const horaInicio = data.horaInicio ?? match.horaInicio;
+    const warnings: string[] = [];
+
+    if (horaInicio && match.torneoId) {
+      const inscripcionIds = [match.homeInscripcionId, match.awayInscripcionId].filter(
+        Boolean,
+      ) as string[];
+
+      for (const insId of inscripcionIds) {
+        const prev = await this.prisma.partidoFutbol.findFirst({
+          where: {
+            torneoId: match.torneoId,
+            id: { not: id },
+            horaInicio,
+            status: { in: ['jugado', 'pendiente'] },
+            OR: [{ homeInscripcionId: insId }, { awayInscripcionId: insId }],
+          },
+          include: { jornada: true, homeTeam: true, awayTeam: true },
+        });
+
+        if (prev) {
+          const teamName =
+            prev.homeInscripcionId === insId ? prev.homeTeam.name : prev.awayTeam.name;
+          warnings.push(
+            `${teamName} ya tiene partido a las ${horaInicio} (J${prev.jornada?.numero ?? '?'})`,
+          );
+        }
+      }
+    }
+
+    const updated = await this.prisma.partidoFutbol.update({
       where: { id },
       data: {
         canchaId: data.canchaId,
@@ -567,6 +1038,8 @@ ${partidoBlock}
       },
       include: this.matchInclude(),
     });
+
+    return { match: updated, warnings };
   }
 
   async updateMatchScore(
@@ -578,8 +1051,8 @@ ${partidoBlock}
     const match = await this.prisma.partidoFutbol.findUnique({ where: { id } });
     if (!match) throw new NotFoundException(`Partido ${id} no encontrado`);
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.partidoFutbol.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.partidoFutbol.update({
         where: { id },
         data: { homeGoals, awayGoals, status: 'jugado' },
         include: this.matchInclude(),
@@ -597,8 +1070,13 @@ ${partidoBlock}
         });
       }
 
-      return updated;
+      return row;
     });
+
+    await this.suspensionSync.syncAfterEventChange(id);
+    await this.suspensionSync.syncAfterMatchPlayed(id);
+
+    return updated;
   }
 
   async listMatchEvents(partidoId: string) {
@@ -613,15 +1091,29 @@ ${partidoBlock}
     partidoId: string,
     data: { personaId: string; tipo: string; minuto?: number; articuloRef?: string },
   ) {
-    return this.prisma.eventoPartido.create({
+    const event = await this.prisma.eventoPartido.create({
       data: { partidoId, ...data },
       include: { persona: true },
     });
+    await this.suspensionSync.syncAfterEventChange(partidoId);
+    return event;
   }
 
   async deleteMatchEvent(eventId: string) {
+    const event = await this.prisma.eventoPartido.findUnique({
+      where: { id: eventId },
+      select: { partidoId: true },
+    });
+    if (!event) throw new NotFoundException('Evento no encontrado');
     await this.prisma.eventoPartido.delete({ where: { id: eventId } });
+    await this.suspensionSync.syncAfterEventChange(event.partidoId);
     return { ok: true };
+  }
+
+  async syncSuspensions(torneoId?: string) {
+    const active = torneoId ?? (await this.getActiveTorneo())?.id;
+    if (!active) throw new BadRequestException('No hay torneo activo');
+    return this.suspensionSync.syncTorneo(active);
   }
 
   async getStandings(torneoId?: string) {

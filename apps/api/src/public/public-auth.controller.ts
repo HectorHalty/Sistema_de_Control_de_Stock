@@ -1,12 +1,28 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { PublicAuthService } from './public-auth.service';
-import { CompleteDniDto, DevAuthDto, GoogleAuthDto } from './dto/public-auth.dto';
+import {
+  CompleteDniDto,
+  DevAuthDto,
+  GoogleAuthDto,
+  LoginDto,
+  RegisterDto,
+} from './dto/public-auth.dto';
 import { PublicAuthGuard } from './guards/public-auth.guard';
 import { PublicUser, type PublicAuthUser } from './decorators/public-user.decorator';
 
 @Controller('public/auth')
 export class PublicAuthController {
   constructor(private auth: PublicAuthService) {}
+
+  @Post('register')
+  register(@Body() dto: RegisterDto) {
+    return this.auth.register(dto);
+  }
+
+  @Post('login')
+  login(@Body() dto: LoginDto) {
+    return this.auth.login(dto.email, dto.password);
+  }
 
   @Post('google')
   loginGoogle(@Body() dto: GoogleAuthDto) {

@@ -14,6 +14,7 @@ export interface PublicJwtPayload {
 export interface PublicSessionUser {
   id: string;
   email: string;
+  nombre?: string | null;
   rol: PublicRol;
   avatarUrl?: string | null;
   dniConfirmado?: string | null;

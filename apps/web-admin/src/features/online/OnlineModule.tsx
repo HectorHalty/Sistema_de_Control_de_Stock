@@ -50,7 +50,7 @@ export function OnlineModule() {
   }
 
   return (
-    <div className="h-full min-h-[calc(100vh-12rem)]">
+    <div className="theme-neon-public dark h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-[#2a2a2a]">
       {tab === 'inicio' && <OnlineInicioPanel />}
       {tab === 'cocina' && <CocinaOnlinePanel />}
       {tab === 'menu' && <MenuWebPanel />}

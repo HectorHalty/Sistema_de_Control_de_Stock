@@ -12,6 +12,8 @@ import type { PublicCheckoutDto } from './dto/public-orders.dto';
 
 @Injectable()
 export class PublicOrdersService {
+  private onlineOperatorId: string | null = null;
+
   constructor(
     private prisma: PrismaService,
     private sales: SalesService,
@@ -173,6 +175,17 @@ export class PublicOrdersService {
   }
 
   private async getOnlineOperatorId() {
+    if (this.onlineOperatorId) return this.onlineOperatorId;
+
+    const online = await this.prisma.usuario.findFirst({
+      where: { username: 'online' },
+      select: { id: true },
+    });
+    if (online) {
+      this.onlineOperatorId = online.id;
+      return online.id;
+    }
+
     const admin = await this.prisma.usuario.findFirst({
       where: { username: 'admin' },
       select: { id: true },
@@ -180,6 +193,7 @@ export class PublicOrdersService {
     if (!admin) {
       throw new BadRequestException('Operador del sistema no configurado');
     }
+    this.onlineOperatorId = admin.id;
     return admin.id;
   }
 }

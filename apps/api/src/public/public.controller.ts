@@ -10,9 +10,14 @@ export class PublicController {
     return this.publicService.getHomeBundle();
   }
 
+  @Get('torneos')
+  listTorneos() {
+    return this.publicService.listTorneosPublic();
+  }
+
   @Get('torneo')
-  getTorneo(@Query('id') id?: string) {
-    return this.publicService.getTorneoDetail(id);
+  getTorneo(@Query('id') id?: string, @Query('categoria') categoria?: string) {
+    return this.publicService.getTorneoDetail(id, categoria);
   }
 
   @Get('reglamento')

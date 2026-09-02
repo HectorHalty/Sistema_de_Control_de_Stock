@@ -13,6 +13,7 @@ import { CapitanesPanel } from './panels/CapitanesPanel';
 import { PlantelPanel } from './panels/PlantelPanel';
 import { FixturePanel } from './panels/FixturePanel';
 import { ResultadosPanel } from './panels/ResultadosPanel';
+import { PosicionesPanel } from './panels/PosicionesPanel';
 import { ReglamentoPanel } from './panels/ReglamentoPanel';
 import { SuspendidosPanel } from './panels/SuspendidosPanel';
 import { MediaPanel } from './panels/MediaPanel';
@@ -24,6 +25,7 @@ const VALID_TABS: FutbolTab[] = [
   'plantel',
   'fixture',
   'resultados',
+  'posiciones',
   'reglamento',
   'suspendidos',
   'media',
@@ -63,13 +65,14 @@ export function FutbolModule() {
   }
 
   return (
-    <div className="h-full min-h-[calc(100vh-12rem)]">
+    <div className="theme-neon-public dark h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-[#2a2a2a]">
       {tab === 'inicio' && <FutbolInicioPanel />}
       {tab === 'equipos' && <EquiposPanel />}
       {tab === 'capitanes' && <CapitanesPanel />}
       {tab === 'plantel' && <PlantelPanel />}
       {tab === 'fixture' && <FixturePanel />}
       {tab === 'resultados' && <ResultadosPanel />}
+      {tab === 'posiciones' && <PosicionesPanel />}
       {tab === 'reglamento' && <ReglamentoPanel />}
       {tab === 'suspendidos' && <SuspendidosPanel />}
       {tab === 'media' && <MediaPanel />}

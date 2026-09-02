@@ -23,14 +23,61 @@ export class FootballController {
 
   @Get('overview')
   @Roles(...FOOTBALL_READ_ROLES)
-  getOverview() {
-    return this.footballService.getOverview();
+  getOverview(@Query('torneoId') torneoId?: string) {
+    return this.footballService.getOverview(torneoId);
   }
 
   @Get('torneos')
   @Roles(...FOOTBALL_READ_ROLES)
   listTorneos() {
     return this.footballService.listTorneos();
+  }
+
+  @Put('torneos/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateTorneo(
+    @Param('id') id: string,
+    @Body() body: { publicado?: boolean; activo?: boolean; nombre?: string },
+  ) {
+    return this.footballService.updateTorneo(id, body);
+  }
+
+  @Post('torneos')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createTorneo(
+    @Body() body: { campeonatoId: string; categoriaId: string; nombre?: string },
+  ) {
+    return this.footballService.createTorneo(body);
+  }
+
+  @Post('torneos/bootstrap')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  bootstrapTorneos(@Body() body: { campeonatoId?: string }) {
+    return this.footballService.bootstrapTorneosCampeonato(body.campeonatoId);
+  }
+
+  @Get('scheduling/saturday')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getSaturdayGrid(@Query('fecha') fecha: string, @Query('campeonatoId') campeonatoId?: string) {
+    return this.footballService.getSaturdayGrid(fecha, campeonatoId);
+  }
+
+  @Post('scheduling/auto-saturday')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  autoScheduleSaturday(
+    @Body() body: { fecha: string; campeonatoId?: string; categoriaOrder?: string[] },
+  ) {
+    return this.footballService.autoScheduleSaturday(
+      body.fecha,
+      body.campeonatoId,
+      body.categoriaOrder,
+    );
+  }
+
+  @Post('scheduling/publish-fecha')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  publishJornadasByFecha(@Body() body: { fecha: string; campeonatoId?: string }) {
+    return this.footballService.publishJornadasByFecha(body.fecha, body.campeonatoId);
   }
 
   @Get('categorias')
@@ -167,6 +214,26 @@ export class FootballController {
     return this.footballService.publishJornada(id);
   }
 
+  @Get('jornadas/:id/preferencias')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getJornadaPreferencias(@Param('id') id: string) {
+    return this.footballService.getJornadaPreferencias(id);
+  }
+
+  @Put('jornadas/:id/preferencias/:inscripcionId')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  upsertJornadaPreferencia(
+    @Param('id') id: string,
+    @Param('inscripcionId') inscripcionId: string,
+    @Body() body: { horaPreferida: string | null },
+  ) {
+    return this.footballService.upsertJornadaPreferencia(
+      id,
+      inscripcionId,
+      body.horaPreferida,
+    );
+  }
+
   @Get('matches')
   @Roles(...FOOTBALL_READ_ROLES)
   findAllMatches(
@@ -267,6 +334,12 @@ export class FootballController {
     @Body() body: { fechasRestantes?: number; activa?: boolean; motivo?: string },
   ) {
     return this.footballService.updateSuspension(id, body);
+  }
+
+  @Post('suspensions/sync')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  syncSuspensions(@Query('torneoId') torneoId?: string) {
+    return this.footballService.syncSuspensions(torneoId);
   }
 
   @Get('reglamento')

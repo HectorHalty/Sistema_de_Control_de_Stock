@@ -71,6 +71,10 @@ export class PublicService {
         torneoId,
         status: 'pendiente',
         date: { gte: now },
+        OR: [
+          { jornadaId: null },
+          { jornada: { publicada: true, suspendida: false } },
+        ],
       },
       include: {
         homeTeam: true,
@@ -93,7 +97,28 @@ export class PublicService {
     }));
   }
 
-  async getTorneoDetail(torneoId?: string) {
+  async listTorneosPublic() {
+    const torneos = await this.prisma.torneo.findMany({
+      where: { activo: true, publicado: true, campeonato: { activo: true } },
+      include: {
+        categoria: true,
+        campeonato: { include: { temporada: true } },
+      },
+      orderBy: [{ campeonato: { nombre: 'asc' } }, { categoria: { nombre: 'asc' } }],
+    });
+
+    return torneos.map((t) => ({
+      id: t.id,
+      nombre: t.nombre,
+      categoria: t.categoria.nombre,
+      categoriaCodigo: t.categoria.codigo,
+      categoriaColor: t.categoria.colorHex,
+      campeonato: t.campeonato.nombre,
+      temporada: t.campeonato.temporada.nombre,
+    }));
+  }
+
+  async getTorneoDetail(torneoId?: string, categoriaCodigo?: string) {
     const torneo = torneoId
       ? await this.prisma.torneo.findUnique({
           where: { id: torneoId },
@@ -102,18 +127,32 @@ export class PublicService {
             campeonato: { include: { temporada: true } },
           },
         })
-      : await this.prisma.torneo.findFirst({
-          where: { activo: true, publicado: true },
-          include: {
-            categoria: true,
-            campeonato: { include: { temporada: true } },
-          },
-          orderBy: { updatedAt: 'desc' },
-        });
+      : categoriaCodigo
+        ? await this.prisma.torneo.findFirst({
+            where: {
+              publicado: true,
+              activo: true,
+              categoria: { codigo: categoriaCodigo },
+              campeonato: { activo: true },
+            },
+            include: {
+              categoria: true,
+              campeonato: { include: { temporada: true } },
+            },
+            orderBy: { updatedAt: 'desc' },
+          })
+        : await this.prisma.torneo.findFirst({
+            where: { activo: true, publicado: true },
+            include: {
+              categoria: true,
+              campeonato: { include: { temporada: true } },
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
 
     if (!torneo) return null;
 
-    const [standings, partidos, equipos] = await Promise.all([
+    const [standings, partidos, equipos, goleadores, suspensiones, tarjetas] = await Promise.all([
       this.reglamentoEngine.getStandingsForTorneo(torneo.id),
       this.prisma.partidoFutbol.findMany({
         where: { torneoId: torneo.id },
@@ -124,7 +163,17 @@ export class PublicService {
         where: { torneoId: torneo.id, activo: true },
         include: { equipo: true },
       }),
+      this.getTopScorers(torneo.id),
+      this.listActiveSuspensions(torneo.id),
+      this.listTarjetas(torneo.id),
     ]);
+
+    const visiblePartidos = partidos.filter(
+      (p) =>
+        p.status === 'jugado' ||
+        !p.jornada ||
+        (p.jornada.publicada && !p.jornada.suspendida),
+    );
 
     return {
       torneo: {
@@ -141,7 +190,7 @@ export class PublicService {
         shortName: e.abbr ?? e.equipo.shortName,
         color: e.color ?? e.equipo.color,
       })),
-      partidos: partidos.map((m) => ({
+      partidos: visiblePartidos.map((m) => ({
         id: m.id,
         fecha: m.date.toISOString(),
         hora: m.horaInicio,
@@ -153,7 +202,146 @@ export class PublicService {
         local: m.homeTeam.name,
         visitante: m.awayTeam.name,
       })),
+      goleadores,
+      suspensiones,
+      tarjetas,
     };
+  }
+
+  async listTarjetas(torneoId: string) {
+    const cardTypes = ['amarilla', 'roja', 'doble_amarilla', 'azul', 'expulsion_directa'];
+    const labelByType: Record<string, string> = {
+      amarilla: 'Amarilla',
+      roja: 'Roja',
+      doble_amarilla: 'Doble amarilla',
+      azul: 'Azul',
+      expulsion_directa: 'Expulsión directa',
+    };
+
+    const eventos = await this.prisma.eventoPartido.findMany({
+      where: {
+        tipo: { in: cardTypes },
+        partido: { torneoId, status: 'jugado' },
+      },
+      include: {
+        persona: true,
+        partido: {
+          include: { homeTeam: true, awayTeam: true, jornada: true },
+        },
+      },
+      orderBy: [{ partido: { date: 'desc' } }, { minuto: 'asc' }],
+      take: 100,
+    });
+
+    if (!eventos.length) return [];
+
+    const personaIds = [...new Set(eventos.map((e) => e.personaId))];
+    const inscripciones = await this.prisma.inscripcionJugador.findMany({
+      where: { torneoId, activa: true, personaId: { in: personaIds } },
+      include: { equipoInscripcion: { include: { equipo: true } } },
+    });
+    const teamByPersona = new Map(
+      inscripciones.map((i) => [i.personaId, i.equipoInscripcion.equipo.name]),
+    );
+
+    return eventos.map((ev) => {
+      const p = ev.partido;
+      const local = p.homeTeam.name;
+      const visitante = p.awayTeam.name;
+      return {
+        id: ev.id,
+        jugador: `${ev.persona.nombre} ${ev.persona.apellido}`.trim(),
+        equipo: teamByPersona.get(ev.personaId) ?? '—',
+        tipo: ev.tipo,
+        tipoLabel: labelByType[ev.tipo] ?? ev.tipo,
+        minuto: ev.minuto,
+        jornada: p.jornada?.numero ?? null,
+        partido: `${local} vs ${visitante}`,
+        fecha: p.date.toISOString(),
+      };
+    });
+  }
+
+  async listActiveSuspensions(torneoId: string) {
+    const rows = await this.prisma.suspension.findMany({
+      where: { torneoId, activa: true, fechasRestantes: { gt: 0 } },
+      include: { persona: true },
+      orderBy: [{ fechasRestantes: 'desc' }, { updatedAt: 'desc' }],
+    });
+
+    const personaIds = rows.map((r) => r.personaId);
+    const inscripciones = personaIds.length
+      ? await this.prisma.inscripcionJugador.findMany({
+          where: { torneoId, activa: true, personaId: { in: personaIds } },
+          include: { equipoInscripcion: { include: { equipo: true } } },
+        })
+      : [];
+
+    const teamByPersona = new Map(
+      inscripciones.map((i) => [i.personaId, i.equipoInscripcion.equipo.name]),
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      jugador: r.persona
+        ? `${r.persona.nombre} ${r.persona.apellido}`.trim()
+        : 'Jugador',
+      dni: r.persona?.dni ?? null,
+      equipo: teamByPersona.get(r.personaId) ?? '—',
+      motivo: r.motivo,
+      fechasRestantes: r.fechasRestantes,
+    }));
+  }
+
+  async getTopScorers(torneoId: string, limit = 20) {
+    const eventos = await this.prisma.eventoPartido.findMany({
+      where: {
+        tipo: 'gol',
+        partido: { torneoId, status: 'jugado' },
+      },
+      select: { personaId: true },
+    });
+
+    if (!eventos.length) return [];
+
+    const counts = new Map<string, number>();
+    for (const ev of eventos) {
+      counts.set(ev.personaId, (counts.get(ev.personaId) ?? 0) + 1);
+    }
+
+    const personaIds = [...counts.keys()];
+    const [personas, inscripciones] = await Promise.all([
+      this.prisma.persona.findMany({
+        where: { id: { in: personaIds } },
+        select: { id: true, nombre: true, apellido: true },
+      }),
+      this.prisma.inscripcionJugador.findMany({
+        where: { torneoId, activa: true, personaId: { in: personaIds } },
+        include: { equipoInscripcion: { include: { equipo: true } } },
+      }),
+    ]);
+
+    const personaMap = new Map(personas.map((p) => [p.id, p]));
+    const teamMap = new Map(
+      inscripciones.map((i) => [i.personaId, i.equipoInscripcion.equipo.name]),
+    );
+
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([personaId, goals], idx) => {
+        const persona = personaMap.get(personaId);
+        const name = persona
+          ? `${persona.nombre} ${persona.apellido}`.trim()
+          : 'Jugador';
+        return {
+          rank: idx + 1,
+          personaId,
+          player: name,
+          team: teamMap.get(personaId) ?? '—',
+          goals,
+        };
+      });
   }
 
   async listReglamento() {

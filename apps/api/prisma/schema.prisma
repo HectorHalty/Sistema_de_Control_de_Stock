@@ -196,6 +196,7 @@ model ProductoVenta {
   kitchenItems  ItemOrdenCocina[]
   webCategory   CategoriaWeb?     @relation(fields: [webCategoryId], references: [id], onDelete: SetNull)
   filtrosWeb    ProductoVentaFiltro[]
+  pedidoItems   ItemPedidoPublico[]
 
   // Evita el mismo nombre de carta duplicado en la misma cocina
   @@unique([name, kitchenId])
@@ -498,6 +499,7 @@ model Torneo {
   jornadas      Jornada[]
   capitanes     CapitanAutorizado[]
   preferencias  PreferenciaHorario[]
+  suspensiones  Suspension[]
 
   @@unique([campeonatoId, categoriaId])
   @@index([activo, publicado])
@@ -588,8 +590,10 @@ model Persona {
 
 model CuentaPublica {
   id              String   @id @default(uuid())
-  googleId        String   @unique
+  googleId        String?  @unique
   email           String   @unique
+  passwordHash    String?  @map("password_hash")
+  nombre          String?
   avatarUrl       String?
   rol             String   @default("usuario") // usuario | seguidor | jugador | capitan
   personaId       String?  @unique
@@ -608,6 +612,7 @@ model CuentaPublica {
 
   @@index([rol])
   @@index([equipoSeguidoId])
+  @@index([dniConfirmado])
   @@map("cuentas_publicas")
 }
 
@@ -808,7 +813,8 @@ model Suspension {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  persona Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  torneo  Torneo?  @relation(fields: [torneoId], references: [id], onDelete: SetNull)
 
   @@index([personaId, activa])
   @@index([torneoId, activa])
@@ -898,6 +904,8 @@ model PedidoPublico {
   @@index([cuentaPublicaId])
   @@index([status])
   @@index([createdAt])
+  @@index([cuentaPublicaId, createdAt])
+  @@index([status, createdAt])
   @@map("pedidos_publicos")
 }
 
@@ -911,9 +919,11 @@ model ItemPedidoPublico {
   emoji          String?
   createdAt      DateTime @default(now())
 
-  pedido PedidoPublico @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedido       PedidoPublico  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  salesProduct ProductoVenta? @relation(fields: [salesProductId], references: [id], onDelete: SetNull)
 
   @@index([pedidoId])
+  @@index([salesProductId])
   @@map("items_pedido_publico")
 }
 
@@ -927,7 +937,6 @@ model TokenRetiroQR {
 
   pedido PedidoPublico @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
-  @@index([token])
   @@map("tokens_retiro_qr")
 }
 

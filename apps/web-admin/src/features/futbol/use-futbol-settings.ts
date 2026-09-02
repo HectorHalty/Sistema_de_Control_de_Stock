@@ -6,10 +6,6 @@ const tournamentCategories = ['Hombres A', 'Hombres B', 'Hombres C', 'Mujeres A'
 export type FutbolTournamentCategory = (typeof tournamentCategories)[number];
 
 export function useFutbolSettings() {
-  const [showPublicFixture, setShowPublicFixture] = useLocalStorage<boolean>(
-    storageKeys.futbol.showPublicFixture,
-    true,
-  );
   const [matchNotifications, setMatchNotifications] = useLocalStorage<boolean>(
     storageKeys.futbol.matchNotifications,
     true,
@@ -20,8 +16,6 @@ export function useFutbolSettings() {
   );
 
   return {
-    showPublicFixture,
-    setShowPublicFixture,
     matchNotifications,
     setMatchNotifications,
     defaultCategory,

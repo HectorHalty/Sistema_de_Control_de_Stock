@@ -501,8 +501,25 @@ export const sponsorsApi = {
  * Football endpoints
  */
 export const footballApi = {
-  overview: (token: string) => apiFetch<FootballOverview>('/football/overview', { token }),
+  overview: (token: string, torneoId?: string) => {
+    const q = torneoId ? `?torneoId=${torneoId}` : '';
+    return apiFetch<FootballOverview>(`/football/overview${q}`, { token });
+  },
   torneos: (token: string) => apiFetch<FootballTorneo[]>('/football/torneos', { token }),
+  createTorneo: (
+    data: { campeonatoId: string; categoriaId: string; nombre?: string },
+    token: string,
+  ) => apiFetch<FootballTorneo>('/football/torneos', { method: 'POST', token, body: data }),
+  bootstrapTorneos: (token: string, campeonatoId?: string) =>
+    apiFetch<{ campeonatoId: string; created: number; categorias: string[] }>(
+      '/football/torneos/bootstrap',
+      { method: 'POST', token, body: { campeonatoId } },
+    ),
+  updateTorneo: (
+    id: string,
+    data: { publicado?: boolean; activo?: boolean; nombre?: string },
+    token: string,
+  ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
   canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
   teams: {
     list: (token: string) => apiFetch<FootballTeam[]>('/football/teams', { token }),
@@ -579,6 +596,22 @@ export const footballApi = {
         `/football/jornadas/${jornadaId}/publish`,
         { method: 'POST', token },
       ),
+    preferencias: {
+      get: (jornadaId: string, token: string) =>
+        apiFetch<FootballJornadaPreferencias>(`/football/jornadas/${jornadaId}/preferencias`, {
+          token,
+        }),
+      upsert: (
+        jornadaId: string,
+        inscripcionId: string,
+        horaPreferida: string | null,
+        token: string,
+      ) =>
+        apiFetch<{ equipoInscripcionId: string; horaPreferida: string | null }>(
+          `/football/jornadas/${jornadaId}/preferencias/${inscripcionId}`,
+          { method: 'PUT', token, body: { horaPreferida } },
+        ),
+    },
   },
   matches: {
     list: (token: string, filters?: { status?: string; torneoId?: string; jornadaId?: string }) => {
@@ -614,7 +647,11 @@ export const footballApi = {
         venue?: string | null;
       },
       token: string,
-    ) => apiFetch<FootballMatch>(`/football/matches/${id}/schedule`, { method: 'PUT', token, body: data }),
+    ) =>
+      apiFetch<{ match: FootballMatch; warnings: string[] }>(
+        `/football/matches/${id}/schedule`,
+        { method: 'PUT', token, body: data },
+      ),
     updateScore: (
       id: string,
       homeGoals: number,
@@ -627,10 +664,47 @@ export const footballApi = {
         token,
         body: { homeGoals, awayGoals, events },
       }),
+    listEvents: (matchId: string, token: string) =>
+      apiFetch<FootballMatchEvent[]>(`/football/matches/${matchId}/events`, { token }),
+    addEvent: (
+      matchId: string,
+      data: { personaId: string; tipo: string; minuto?: number; articuloRef?: string },
+      token: string,
+    ) =>
+      apiFetch<FootballMatchEvent>(`/football/matches/${matchId}/events`, {
+        method: 'POST',
+        token,
+        body: data,
+      }),
+    deleteEvent: (eventId: string, token: string) =>
+      apiFetch<void>(`/football/events/${eventId}`, { method: 'DELETE', token }),
   },
   standings: (token: string, torneoId?: string) => {
     const q = torneoId ? `?torneoId=${torneoId}` : '';
     return apiFetch<StandingRow[]>(`/football/standings${q}`, { token });
+  },
+  scheduling: {
+    saturdayGrid: (token: string, fecha: string, campeonatoId?: string) => {
+      const params = new URLSearchParams({ fecha });
+      if (campeonatoId) params.set('campeonatoId', campeonatoId);
+      return apiFetch<SaturdayGridResponse>(`/football/scheduling/saturday?${params}`, { token });
+    },
+    autoSaturday: (
+      token: string,
+      data: { fecha: string; campeonatoId?: string; categoriaOrder?: string[] },
+    ) =>
+      apiFetch<{
+        fecha: string;
+        scheduled: number;
+        skippedManual: number;
+        unassigned: number;
+        warnings: string[];
+      }>('/football/scheduling/auto-saturday', { method: 'POST', token, body: data }),
+    publishFecha: (token: string, data: { fecha: string; campeonatoId?: string }) =>
+      apiFetch<{ fecha: string; publicadas: number }>(
+        '/football/scheduling/publish-fecha',
+        { method: 'POST', token, body: data },
+      ),
   },
   suspensions: {
     list: (token: string, torneoId?: string) => {
@@ -642,6 +716,10 @@ export const footballApi = {
       data: { fechasRestantes?: number; activa?: boolean; motivo?: string },
       token: string,
     ) => apiFetch<FootballSuspension>(`/football/suspensions/${id}`, { method: 'PUT', token, body: data }),
+    sync: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<{ updated: number }>(`/football/suspensions/sync${q}`, { method: 'POST', token });
+    },
   },
   reglamento: {
     list: (token: string) => apiFetch<FootballReglamento>('/football/reglamento', { token }),
@@ -913,7 +991,7 @@ export interface KitchenOrder {
     status: string;
     tokenRetiro?: { token: string; usadoEn?: string | null } | null;
   } | null;
-  ticket?: { number: number; status: string; origen?: string };
+  ticket?: { number: number; status: string; origen?: string; total?: number; createdAt?: string };
 }
 
 export interface OnlineOverview {
@@ -1149,6 +1227,12 @@ export interface FootballJornada {
   _count?: { partidos: number };
 }
 
+export interface FootballJornadaPreferencias {
+  jornadaId: string;
+  franjas: string[];
+  equipos: { inscripcionId: string; name: string; horaPreferida: string | null }[];
+}
+
 export interface FootballCancha {
   id: string;
   numero: number;
@@ -1160,6 +1244,8 @@ export interface FootballMatch {
   id: string;
   homeTeamId: string;
   awayTeamId: string;
+  homeInscripcionId?: string | null;
+  awayInscripcionId?: string | null;
   date: string;
   status: string;
   homeGoals?: number | null;
@@ -1173,6 +1259,22 @@ export interface FootballMatch {
   awayTeam?: FootballTeam;
   cancha?: FootballCancha | null;
   jornada?: FootballJornada | null;
+  eventos?: FootballMatchEvent[];
+}
+
+export interface FootballMatchEvent {
+  id: string;
+  partidoId: string;
+  personaId: string;
+  tipo: string;
+  minuto?: number | null;
+  articuloRef?: string | null;
+  persona?: {
+    id: string;
+    nombre: string;
+    apellido: string;
+    dni: string;
+  };
 }
 
 export interface FootballSuspension {
@@ -1209,9 +1311,29 @@ export interface FootballReglamento {
 export interface FootballOverview {
   torneo: FootballTorneo | null;
   stats: { equipos: number; partidos: number; capitanes: number; jornadas: number } | null;
+  torneos?: FootballTorneo[];
+}
+
+export interface SaturdayGridResponse {
+  fecha: string;
+  campeonato: string;
+  canchas: FootballCancha[];
+  partidos: {
+    id: string;
+    hora: string | null;
+    canchaId: string | null;
+    canchaNumero?: number;
+    categoria: string;
+    categoriaColor?: string | null;
+    local: string;
+    visitante: string;
+    bloqueadoManual: boolean;
+    jornada: number | null;
+  }[];
 }
 
 export interface StandingRow {
+  inscripcionId?: string;
   teamId: string;
   teamName?: string;
   played: number;
@@ -1220,7 +1342,9 @@ export interface StandingRow {
   lost: number;
   goalsFor: number;
   goalsAgainst: number;
+  goalDiff?: number;
   points: number;
+  descuentoPuntosWO?: number;
 }
 
 // ============ Payload types ============
@@ -1358,6 +1482,7 @@ export interface PresignResult {
 }
 
 export interface ConfirmMediaPayload {
+  key: string;
   title: string;
   type: 'image' | 'video';
   url: string;

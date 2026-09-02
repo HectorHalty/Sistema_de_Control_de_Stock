@@ -36,6 +36,7 @@ export type PublicRol = 'usuario' | 'seguidor' | 'jugador' | 'capitan';
 export interface PublicSessionUser {
   id: string;
   email: string;
+  nombre?: string | null;
   rol: PublicRol;
   avatarUrl?: string | null;
   dniConfirmado?: string | null;
@@ -222,6 +223,16 @@ export interface PublicMenuResponse {
   filters: PublicMenuFilter[];
 }
 
+export interface PublicTorneoSummary {
+  id: string;
+  nombre: string;
+  categoria: string;
+  categoriaCodigo: string;
+  categoriaColor?: string | null;
+  campeonato: string;
+  temporada: string;
+}
+
 export interface PublicTorneoDetail {
   torneo: {
     id: string;
@@ -244,6 +255,38 @@ export interface PublicTorneoDetail {
     local: string;
     visitante: string;
   }[];
+  goleadores: PublicTopScorer[];
+  suspensiones: PublicSuspension[];
+  tarjetas: PublicTarjeta[];
+}
+
+export interface PublicTarjeta {
+  id: string;
+  jugador: string;
+  equipo: string;
+  tipo: string;
+  tipoLabel: string;
+  minuto: number | null;
+  jornada: number | null;
+  partido: string;
+  fecha: string;
+}
+
+export interface PublicSuspension {
+  id: string;
+  jugador: string;
+  dni: string | null;
+  equipo: string;
+  motivo: string;
+  fechasRestantes: number;
+}
+
+export interface PublicTopScorer {
+  rank: number;
+  personaId: string;
+  player: string;
+  team: string;
+  goals: number;
 }
 
 export interface ReglamentoArticulo {
@@ -283,12 +326,23 @@ export interface PublicOrder {
 
 export const publicApi = {
   homeBundle: () => publicFetch<PublicHomeBundle>('/public/home-bundle'),
-  torneo: (id?: string) => publicFetch<PublicTorneoDetail | null>(`/public/torneo${id ? `?id=${id}` : ''}`),
+  torneo: (id?: string, categoria?: string) => {
+    const params = new URLSearchParams();
+    if (id) params.set('id', id);
+    else if (categoria) params.set('categoria', categoria);
+    const q = params.toString();
+    return publicFetch<PublicTorneoDetail | null>(`/public/torneo${q ? `?${q}` : ''}`);
+  },
+  torneos: () => publicFetch<PublicTorneoSummary[]>('/public/torneos'),
   menu: () => publicFetch<PublicMenuResponse>('/public/menu'),
   reglamento: () => publicFetch<{ apartados: ReglamentoApartado[]; anexos: unknown[] }>('/public/reglamento'),
   sponsors: () => publicFetch<PublicSponsor[]>('/public/sponsors'),
 
   auth: {
+    register: (data: { email: string; password: string; nombre: string; dni: string }) =>
+      publicFetch<AuthResponse>('/public/auth/register', { method: 'POST', body: data }),
+    login: (email: string, password: string) =>
+      publicFetch<AuthResponse>('/public/auth/login', { method: 'POST', body: { email, password } }),
     loginGoogle: (idToken: string) =>
       publicFetch<AuthResponse>('/public/auth/google', { method: 'POST', body: { idToken } }),
     loginDev: (email: string, name: string) =>

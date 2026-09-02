@@ -38,9 +38,10 @@ function isActive(path: string, navPath: string, match?: string[]) {
   return path === navPath || path.startsWith(`${navPath}/`);
 }
 
-function displayName(email?: string | null) {
-  if (!email) return 'Visitante';
-  const local = email.split('@')[0] ?? email;
+function displayName(user?: { nombre?: string | null; email?: string | null } | null) {
+  if (user?.nombre?.trim()) return user.nombre.trim();
+  if (!user?.email) return 'Visitante';
+  const local = user.email.split('@')[0] ?? user.email;
   return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -128,6 +129,24 @@ function Sidebar({
         })}
       </nav>
 
+      {user?.rol === 'capitan' && (
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            onClick={() => navigate('/administrar-equipo')}
+            style={
+              path === '/administrar-equipo'
+                ? { background: '#6BFF9E', color: '#0e0e0e' }
+                : { background: '#1c1c1c', color: 'white', border: '1px solid #2a2a2a' }
+            }
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold"
+          >
+            <IconUser />
+            Administrar equipo
+          </button>
+        </div>
+      )}
+
       <SidebarSponsors sponsors={sponsors} />
 
       <div className="px-3 pb-3">
@@ -182,7 +201,7 @@ function Sidebar({
             <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-[#242424] text-[10px] font-black text-[#6BFF9E]">
-              {user ? displayName(user.email).slice(0, 2).toUpperCase() : 'LCH'}
+              {user ? displayName(user).slice(0, 2).toUpperCase() : 'LCH'}
             </div>
           )}
         </div>
@@ -191,7 +210,7 @@ function Sidebar({
             style={{ color: perfilActive ? '#6BFF9E' : 'white' }}
             className="truncate text-xs font-bold"
           >
-            {displayName(user?.email)}
+            {displayName(user)}
           </p>
           <p className="truncate text-[10px] text-gray-500">
             {user ? 'Ver mi perfil' : 'Iniciar sesión'}
@@ -242,7 +261,7 @@ export function PublicLayout() {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6BFF9E]">
               La Chacra Fútbol
             </p>
-            <p className="text-sm font-black">{displayName(user?.email)}</p>
+            <p className="text-sm font-black">{displayName(user)}</p>
           </div>
           <button
             type="button"
@@ -294,7 +313,7 @@ export function PublicLayout() {
                 { path: '/', label: 'Inicio', icon: <IconHome /> },
                 { path: '/torneo', label: 'Torneo', icon: <IconTrophy /> },
                 { path: '/cantina', label: 'Comidas', icon: <IconFood /> },
-                { path: '/fotos', label: 'Fotos', icon: <IconCamera /> },
+                { path: '/pedidos', label: 'Pedidos', icon: <IconReceipt /> },
                 { path: '/perfil', label: 'Perfil', icon: <IconUser /> },
               ].map((item) => {
                 const active =

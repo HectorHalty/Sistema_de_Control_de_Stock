@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { footballApi, getAccessToken, type FootballSuspension } from '@/app/api/client';
 import {
   FutbolError,
@@ -12,7 +13,9 @@ export function SuspendidosPanel() {
   const { torneoId } = useFutbolOverview();
   const [rows, setRows] = useState<FootballSuspension[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const token = getAccessToken();
@@ -39,9 +42,50 @@ export function SuspendidosPanel() {
     await reload();
   }
 
+  async function syncFromEvents() {
+    const token = getAccessToken();
+    if (!token) return;
+    setSyncing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await footballApi.suspensions.sync(token, torneoId ?? undefined);
+      setSuccess(`Sincronizado desde eventos — ${result.updated} partido(s) revisados.`);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo sincronizar');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <FutbolPanelShell title="Suspendidos">
+      <p className="text-sm text-muted-foreground">
+        Las sanciones se generan automáticamente al cargar tarjetas en Resultados (roja: 2 fechas,
+        doble amarilla: 1, 5 amarillas acumuladas: 1). Las fechas restantes se descuentan con cada
+        partido jugado del equipo (excepto jornadas suspendidas por lluvia).
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={syncing || !torneoId}
+          className={`${futbolButtonClass()} inline-flex items-center gap-2`}
+          onClick={() => void syncFromEvents()}
+        >
+          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+          {syncing ? 'Sincronizando...' : 'Sincronizar desde eventos'}
+        </button>
+      </div>
+
+      {success && (
+        <p className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm text-primary">
+          {success}
+        </p>
+      )}
       {error && <FutbolError message={error} />}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (

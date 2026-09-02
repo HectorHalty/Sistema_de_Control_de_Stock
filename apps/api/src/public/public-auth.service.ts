@@ -8,8 +8,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma.service';
 import type { PublicJwtPayload, PublicRol, PublicSessionUser } from './types/public-auth.types';
+import type { RegisterDto } from './dto/public-auth.dto';
+
+const SALT_ROUNDS = 10;
 
 @Injectable()
 export class PublicAuthService {
@@ -24,6 +28,74 @@ export class PublicAuthService {
     if (clientId) {
       this.googleClient = new OAuth2Client(clientId);
     }
+  }
+
+  async register(dto: RegisterDto) {
+    const email = dto.email.trim().toLowerCase();
+    const normalizedDni = dto.dni.replace(/\D/g, '');
+    if (normalizedDni.length < 7) {
+      throw new BadRequestException('DNI inválido');
+    }
+
+    const existing = await this.prisma.cuentaPublica.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('Ya existe una cuenta con ese email');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const { nombre, apellido } = this.splitNombre(dto.nombre.trim());
+
+    const persona = await this.prisma.persona.upsert({
+      where: { dni: normalizedDni },
+      update: {
+        nombre,
+        apellido,
+        email,
+      },
+      create: {
+        dni: normalizedDni,
+        nombre,
+        apellido,
+        email,
+      },
+    });
+
+    const cuenta = await this.prisma.cuentaPublica.create({
+      data: {
+        email,
+        passwordHash,
+        nombre: dto.nombre.trim(),
+        dniConfirmado: normalizedDni,
+        personaId: persona.id,
+        rol: 'usuario',
+      },
+    });
+
+    await this.resolveAndUpdateRole(cuenta.id);
+    const session = await this.buildSessionUser(cuenta.id);
+    const accessToken = await this.signToken(cuenta.id);
+    return { accessToken, user: session };
+  }
+
+  async login(email: string, password: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const cuenta = await this.prisma.cuentaPublica.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!cuenta?.passwordHash) {
+      throw new UnauthorizedException('Email o contraseña incorrectos');
+    }
+
+    const match = await bcrypt.compare(password, cuenta.passwordHash);
+    if (!match) {
+      throw new UnauthorizedException('Email o contraseña incorrectos');
+    }
+
+    await this.resolveAndUpdateRole(cuenta.id);
+    const session = await this.buildSessionUser(cuenta.id);
+    const accessToken = await this.signToken(cuenta.id);
+    return { accessToken, user: session };
   }
 
   async loginWithGoogle(idToken: string) {
@@ -42,7 +114,7 @@ export class PublicAuthService {
   private async verifyGoogleToken(idToken: string) {
     if (!this.googleClient) {
       throw new BadRequestException(
-        'Google OAuth no configurado. Usá POST /public/auth/dev en desarrollo o configurá GOOGLE_CLIENT_ID.',
+        'Google OAuth no configurado. Usá POST /public/auth/login o configurá GOOGLE_CLIENT_ID.',
       );
     }
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID')!;
@@ -73,11 +145,16 @@ export class PublicAuthService {
     if (cuenta) {
       cuenta = await this.prisma.cuentaPublica.update({
         where: { id: cuenta.id },
-        data: { googleId, email, avatarUrl: avatarUrl ?? cuenta.avatarUrl },
+        data: {
+          googleId,
+          email,
+          nombre: cuenta.nombre ?? name,
+          avatarUrl: avatarUrl ?? cuenta.avatarUrl,
+        },
       });
     } else {
       cuenta = await this.prisma.cuentaPublica.create({
-        data: { googleId, email, avatarUrl, rol: 'usuario' },
+        data: { googleId, email, nombre: name, avatarUrl, rol: 'usuario' },
       });
     }
 
@@ -97,9 +174,22 @@ export class PublicAuthService {
       throw new BadRequestException('DNI inválido');
     }
 
+    const persona = await this.prisma.persona.upsert({
+      where: { dni: normalizedDni },
+      update: {},
+      create: {
+        dni: normalizedDni,
+        nombre: 'Usuario',
+        apellido: 'Web',
+      },
+    });
+
     await this.prisma.cuentaPublica.update({
       where: { id: cuentaId },
-      data: { dniConfirmado: normalizedDni },
+      data: {
+        dniConfirmado: normalizedDni,
+        personaId: persona.id,
+      },
     });
 
     const rol = await this.resolveAndUpdateRole(cuentaId);
@@ -142,10 +232,7 @@ export class PublicAuthService {
       const inscripcion = await this.prisma.inscripcionJugador.findFirst({
         where: {
           activa: true,
-          persona: {
-            dni,
-            email: { equals: email, mode: 'insensitive' },
-          },
+          persona: { dni },
         },
         include: { persona: true, equipoInscripcion: true },
       });
@@ -221,6 +308,7 @@ export class PublicAuthService {
     return {
       id: cuenta.id,
       email: cuenta.email,
+      nombre: cuenta.nombre,
       rol: cuenta.rol as PublicRol,
       avatarUrl: cuenta.avatarUrl,
       dniConfirmado: cuenta.dniConfirmado,
@@ -231,6 +319,17 @@ export class PublicAuthService {
       needsDni: !cuenta.dniConfirmado,
       puedeSeguirEquipo: cuenta.rol !== 'jugador' && cuenta.rol !== 'capitan',
       puedeSerCapitan,
+    };
+  }
+
+  private splitNombre(full: string) {
+    const parts = full.trim().split(/\s+/);
+    if (parts.length <= 1) {
+      return { nombre: parts[0] ?? full, apellido: '' };
+    }
+    return {
+      nombre: parts[0] ?? full,
+      apellido: parts.slice(1).join(' '),
     };
   }
 
