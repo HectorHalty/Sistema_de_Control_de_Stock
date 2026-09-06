@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:deep": "vitest run test/integration/platform-migration-deep.test.ts",
+    "test:db": "node scripts/reset-test-db.mjs && vitest run --config vitest.db.config.ts",
+    "db:drift": "node scripts/drift-check.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "node prisma/seed.cjs",
