@@ -71,8 +71,8 @@ export function OrdersPage() {
   // Sync status filter with URL (supports dashboard deep-links)
   useEffect(() => {
     const status = searchParams.get('status');
-    if (status === 'Pendiente' || status === 'Recibido' || status === 'Confirmado') {
-      setStatusFilter(status === 'Confirmado' ? 'Recibido' : status);
+    if (status === 'Pendiente' || status === 'Recibido') {
+      setStatusFilter(status);
     } else if (status === 'all' || status === null) {
       setStatusFilter('all');
     }

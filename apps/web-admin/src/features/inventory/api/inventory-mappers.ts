@@ -28,7 +28,7 @@ export function mapApiProductToLocal(api: ApiProduct): Product {
     code: api.code,
     description: api.description ?? '',
     category: api.category?.name ?? '',
-    unit: api.unit === 'kg' ? 'kg' : 'unidades',
+    unit: api.unit as Product['unit'],
     orderUnit: api.orderUnit,
     image: api.image ?? '',
     stockByWarehouse: (api.stockLevels ?? []).map(sl => ({

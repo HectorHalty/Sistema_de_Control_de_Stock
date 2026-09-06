@@ -71,7 +71,7 @@ export type PosProduct = {
 export type PosIngredient = {
   id: string;
   name: string;
-  unit: 'unidades' | 'kg';
+  unit: 'unidades' | 'kg' | 'litros' | 'cajas';
   stock: number;
 };
 
@@ -786,7 +786,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       const updated: StoreProduct = {
         ...stockProduct,
         name: ing.name,
-        unit: ing.unit === 'kg' ? 'kg' : 'unidades',
+        unit: ing.unit,
         stockByWarehouse: stockProduct.stockByWarehouse.map((w, idx) =>
           idx === 0 ? { ...w, quantity: ing.stock } : w,
         ),

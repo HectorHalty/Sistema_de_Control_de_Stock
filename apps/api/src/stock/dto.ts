@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsInt, IsNumber, IsEnum, Min, IsUUID, MaxLength, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { UnidadMedida } from '@prisma/client';
 
 export class CreateProductDto {
   @IsString()
@@ -19,9 +20,8 @@ export class CreateProductDto {
   categoryId: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  unit?: string;
+  @IsEnum(UnidadMedida)
+  unit?: UnidadMedida;
 
   @IsOptional()
   @IsInt()
@@ -62,9 +62,8 @@ export class UpdateProductDto {
   categoryId?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  unit?: string;
+  @IsEnum(UnidadMedida)
+  unit?: UnidadMedida;
 
   @IsOptional()
   @IsInt()
@@ -136,9 +135,8 @@ export class StockCountEntryDto {
   @MaxLength(200)
   productName: string;
 
-  @IsString()
-  @MaxLength(50)
-  unit: string;
+  @IsEnum(UnidadMedida)
+  unit: UnidadMedida;
 
   @IsNumber()
   expected: number;

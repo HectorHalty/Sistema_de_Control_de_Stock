@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { EstadoOrdenCompra, Prisma, UnidadMedida } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { CreateProductDto, UpdateProductDto, AdjustStockDto,
   CreateEmployeeConsumptionDto, CreateStockCountSessionDto,
@@ -50,7 +50,7 @@ export class StockService {
           code: dto.code,
           description: dto.description,
           categoryId: dto.categoryId,
-          unit: dto.unit || 'unidades',
+          unit: dto.unit ?? UnidadMedida.unidades,
           orderUnit: dto.orderUnit,
           image: dto.image,
         },
@@ -330,9 +330,12 @@ export class StockService {
 
   // ============ Purchase orders ============
 
-  findAllPurchaseOrders(status?: string) {
+  async findAllPurchaseOrders(status?: string) {
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !(status in EstadoOrdenCompra)) return [];
     return this.prisma.ordenCompra.findMany({
-      where: status ? { status } : undefined,
+      where: status ? { status: status as EstadoOrdenCompra } : undefined,
       include: { items: true },
       orderBy: { createdAt: 'desc' },
     });

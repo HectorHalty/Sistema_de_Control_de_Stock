@@ -46,7 +46,7 @@ describe('mapApiProductToLocal', () => {
     });
   });
 
-  it('normaliza unit desconocido a "unidades" y stockLevels ausente a []', () => {
+  it('conserva unit "litros" y normaliza stockLevels ausente a []', () => {
     const api = {
       id: 'uuid-2',
       name: 'Sin stock',
@@ -56,9 +56,14 @@ describe('mapApiProductToLocal', () => {
     } as unknown as StockProduct;
 
     const local = mapApiProductToLocal(api);
-    expect(local.unit).toBe('unidades');
+    expect(local.unit).toBe('litros');
     expect(local.stockByWarehouse).toEqual([]);
     expect(local.category).toBe('');
+  });
+
+  it('conserva unit "cajas"', () => {
+    const api = { id: 'b', name: 'Gaseosa', code: 'GAS-1', categoryId: 'c', unit: 'cajas' } as unknown as StockProduct;
+    expect(mapApiProductToLocal(api).unit).toBe('cajas');
   });
 
   it('respeta unit "kg"', () => {

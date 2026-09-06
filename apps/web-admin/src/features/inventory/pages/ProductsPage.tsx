@@ -10,6 +10,13 @@ import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inven
 
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
 
+const UNIT_LABELS = {
+  unidades: 'Unidades',
+  kg: 'Kilogramos',
+  litros: 'Litros',
+  cajas: 'Cajas',
+} as const;
+
 export function ProductsPage() {
   const {
     products,
@@ -215,7 +222,7 @@ export function ProductsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Unidad</p>
-                      <p className="text-sm" style={{ fontWeight: 500 }}>{product.unit === 'kg' ? 'Kilogramos' : 'Unidades'}</p>
+                      <p className="text-sm" style={{ fontWeight: 500 }}>{UNIT_LABELS[product.unit]}</p>
                     </div>
                   </div>
                   <div className="mb-3">
@@ -337,7 +344,7 @@ export function ProductsPage() {
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Unidad de Medida</p>
-                              <p className="text-sm" style={{ fontWeight: 500 }}>{product.unit === 'kg' ? 'Kilogramos' : 'Unidades'}</p>
+                              <p className="text-sm" style={{ fontWeight: 500 }}>{UNIT_LABELS[product.unit]}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Unidad de Pedido</p>
@@ -703,22 +710,16 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
         <div>
           <label className="block text-sm mb-1">Unidad de Medida</label>
           <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setForm(p => ({ ...p, unit: 'unidades' }))}
-              className={`p-3 rounded-lg border-2 text-left transition-all ${form.unit === 'unidades' ? 'border-primary bg-primary/5' : 'border-border'}`}
-            >
-              <p className="text-sm" style={{ fontWeight: 500 }}>Unidades</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Productos individuales</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm(p => ({ ...p, unit: 'kg' }))}
-              className={`p-3 rounded-lg border-2 text-left transition-all ${form.unit === 'kg' ? 'border-primary bg-primary/5' : 'border-border'}`}
-            >
-              <p className="text-sm" style={{ fontWeight: 500 }}>Kilogramos</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Productos a granel / peso</p>
-            </button>
+            {(['unidades', 'kg', 'litros', 'cajas'] as const).map(u => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => setForm(p => ({ ...p, unit: u }))}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${form.unit === u ? 'border-primary bg-primary/5' : 'border-border'}`}
+              >
+                {UNIT_LABELS[u]}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -777,14 +778,14 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   value={s.quantity}
                   onChange={e => {
                     const raw = e.target.value;
-                    const parsed = form.unit === 'kg' ? parseFloat(raw) : parseInt(raw, 10);
+                    const parsed = form.unit === 'kg' || form.unit === 'litros' ? parseFloat(raw) : parseInt(raw, 10);
                     const newStock = [...form.stockByWarehouse];
                     newStock[idx] = { ...newStock[idx], quantity: Number.isNaN(parsed) ? 0 : parsed };
                     setForm(p => ({ ...p, stockByWarehouse: newStock }));
                   }}
                   className="w-24 px-3 py-2 rounded-lg bg-input-background border border-border outline-none text-sm text-right text-foreground"
                   min={0}
-                  step={form.unit === 'kg' ? 0.001 : 1}
+                  step={form.unit === 'kg' || form.unit === 'litros' ? 0.001 : 1}
                 />
                 <button type="button" onClick={() => removeWarehouseStock(s.warehouseId)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
                   <X size={14} />

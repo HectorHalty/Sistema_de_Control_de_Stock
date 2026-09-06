@@ -1,3 +1,12 @@
+-- CreateEnum
+CREATE TYPE "UnidadMedida" AS ENUM ('unidades', 'kg', 'litros', 'cajas');
+
+-- CreateEnum
+CREATE TYPE "TipoMovimientoStock" AS ENUM ('venta', 'devolucion', 'venta_anulada', 'ajuste_manual', 'consumo', 'entrada');
+
+-- CreateEnum
+CREATE TYPE "EstadoOrdenCompra" AS ENUM ('Pendiente', 'Recibido');
+
 -- CreateTable
 CREATE TABLE "usuarios" (
     "id" TEXT NOT NULL,
@@ -41,7 +50,7 @@ CREATE TABLE "productos" (
     "code" TEXT NOT NULL,
     "description" TEXT,
     "categoryId" TEXT NOT NULL,
-    "unit" TEXT NOT NULL DEFAULT 'unidades',
+    "unit" "UnidadMedida" NOT NULL DEFAULT 'unidades',
     "orderUnit" INTEGER,
     "image" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -704,7 +713,7 @@ CREATE TABLE "entradas_auditoria" (
 CREATE TABLE "movimientos_stock" (
     "id" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "type" TEXT NOT NULL,
+    "type" "TipoMovimientoStock" NOT NULL,
     "productId" TEXT NOT NULL,
     "warehouseId" TEXT,
     "quantity" DECIMAL(12,3) NOT NULL,
@@ -726,7 +735,7 @@ CREATE TABLE "consumos_empleado" (
     "warehouseId" TEXT NOT NULL,
     "warehouseName" TEXT NOT NULL,
     "quantity" DECIMAL(12,3) NOT NULL,
-    "unit" TEXT NOT NULL DEFAULT 'unidades',
+    "unit" "UnidadMedida" NOT NULL DEFAULT 'unidades',
     "previousStock" DECIMAL(12,3) NOT NULL,
     "newStock" DECIMAL(12,3) NOT NULL,
     "operatorId" TEXT,
@@ -755,7 +764,7 @@ CREATE TABLE "entradas_conteo" (
     "sessionId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
-    "unit" TEXT NOT NULL DEFAULT 'unidades',
+    "unit" "UnidadMedida" NOT NULL DEFAULT 'unidades',
     "expected" DECIMAL(12,3) NOT NULL,
     "counted" DECIMAL(12,3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -770,7 +779,7 @@ CREATE TABLE "ordenes_compra" (
     "date" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "supplierId" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'Pendiente',
+    "status" "EstadoOrdenCompra" NOT NULL DEFAULT 'Pendiente',
     "receivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -787,33 +796,6 @@ CREATE TABLE "items_orden_compra" (
     "quantityReceived" DECIMAL(12,3),
 
     CONSTRAINT "items_orden_compra_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "logs_consumo" (
-    "id" TEXT NOT NULL,
-    "day" TEXT NOT NULL,
-    "dateType" TEXT NOT NULL DEFAULT 'regular',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "logs_consumo_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "entradas_consumo" (
-    "id" TEXT NOT NULL,
-    "logId" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "productName" TEXT NOT NULL,
-    "warehouseId" TEXT NOT NULL,
-    "warehouseName" TEXT NOT NULL,
-    "previousStock" DECIMAL(12,3) NOT NULL,
-    "newStock" DECIMAL(12,3) NOT NULL,
-    "consumed" DECIMAL(12,3) NOT NULL,
-    "unit" TEXT NOT NULL DEFAULT 'unidades',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "entradas_consumo_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -911,6 +893,9 @@ CREATE UNIQUE INDEX "proveedores_name_key" ON "proveedores"("name");
 
 -- CreateIndex
 CREATE INDEX "proveedores_productos_productId_idx" ON "proveedores_productos"("productId");
+
+-- CreateIndex
+CREATE INDEX "proveedores_productos_supplierId_idx" ON "proveedores_productos"("supplierId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "proveedores_productos_supplierId_productId_key" ON "proveedores_productos"("supplierId", "productId");
@@ -1312,6 +1297,9 @@ CREATE INDEX "ordenes_compra_createdAt_idx" ON "ordenes_compra"("createdAt");
 CREATE INDEX "ordenes_compra_status_createdAt_idx" ON "ordenes_compra"("status", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "ordenes_compra_supplierId_idx" ON "ordenes_compra"("supplierId");
+
+-- CreateIndex
 CREATE INDEX "items_orden_compra_purchaseOrderId_idx" ON "items_orden_compra"("purchaseOrderId");
 
 -- CreateIndex
@@ -1319,21 +1307,6 @@ CREATE INDEX "items_orden_compra_productId_idx" ON "items_orden_compra"("product
 
 -- CreateIndex
 CREATE UNIQUE INDEX "items_orden_compra_purchaseOrderId_productId_key" ON "items_orden_compra"("purchaseOrderId", "productId");
-
--- CreateIndex
-CREATE INDEX "logs_consumo_day_idx" ON "logs_consumo"("day");
-
--- CreateIndex
-CREATE INDEX "logs_consumo_dateType_idx" ON "logs_consumo"("dateType");
-
--- CreateIndex
-CREATE INDEX "logs_consumo_day_dateType_idx" ON "logs_consumo"("day", "dateType");
-
--- CreateIndex
-CREATE INDEX "entradas_consumo_logId_idx" ON "entradas_consumo"("logId");
-
--- CreateIndex
-CREATE INDEX "entradas_consumo_productId_idx" ON "entradas_consumo"("productId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "configuraciones_key_key" ON "configuraciones"("key");
@@ -1406,9 +1379,6 @@ ALTER TABLE "items_orden_cocina" ADD CONSTRAINT "items_orden_cocina_kitchenOrder
 
 -- AddForeignKey
 ALTER TABLE "items_orden_cocina" ADD CONSTRAINT "items_orden_cocina_salesProductId_fkey" FOREIGN KEY ("salesProductId") REFERENCES "productos_venta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "productos_online" ADD CONSTRAINT "productos_online_stockProductId_fkey" FOREIGN KEY ("stockProductId") REFERENCES "productos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "campeonatos" ADD CONSTRAINT "campeonatos_temporadaId_fkey" FOREIGN KEY ("temporadaId") REFERENCES "temporadas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1559,7 +1529,4 @@ ALTER TABLE "items_orden_compra" ADD CONSTRAINT "items_orden_compra_purchaseOrde
 
 -- AddForeignKey
 ALTER TABLE "items_orden_compra" ADD CONSTRAINT "items_orden_compra_productId_fkey" FOREIGN KEY ("productId") REFERENCES "productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "entradas_consumo" ADD CONSTRAINT "entradas_consumo_logId_fkey" FOREIGN KEY ("logId") REFERENCES "logs_consumo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -10,7 +10,7 @@ export interface Product {
   code: string;
   description: string;
   category: string;
-  unit: 'unidades' | 'kg';
+  unit: 'unidades' | 'kg' | 'litros' | 'cajas';
   orderUnit?: number;
   image: string;
   stockByWarehouse: { warehouseId: string; quantity: number }[];

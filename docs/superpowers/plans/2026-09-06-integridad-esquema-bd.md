@@ -766,7 +766,7 @@ cualquier error como conflicto de unicidad."
 - Consumes: `node scripts/generate-baseline.mjs` (Task 2), `testPrisma`/`resetTestDb` (Task 1).
 - Produces: enums `UnidadMedida`, `TipoMovimientoStock`, `EstadoOrdenCompra` en el cliente Prisma, importables como `import { UnidadMedida } from '@prisma/client'`. La migración `20260906120100_constraints` que las tareas 5 a 8 amplían.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Crear `apps/api/test/db/stock-constraints.test.ts`:
 
@@ -894,7 +894,7 @@ describe('restricciones de stock', () => {
 });
 ```
 
-- [ ] **Step 2: Correr los tests para verificar que fallan**
+- [x] **Step 2: Correr los tests para verificar que fallan**
 
 Desde `apps/api`:
 
@@ -904,7 +904,7 @@ npm run test:db
 
 Esperado: FAIL en al menos los tests de stock negativo, tipo de movimiento inventado, unidad inventada, estado de pedido inventado y tablas heredadas. Los de FK y borrado de categoría pueden pasar ya, porque esas restricciones sí existen.
 
-- [ ] **Step 3: Agregar los enums al schema**
+- [x] **Step 3: Agregar los enums al schema**
 
 En `apps/api/prisma/schema.prisma`, después del bloque `datasource db` (línea 12) y antes de `// ==================== AUTH ====================`, agregar:
 
@@ -933,7 +933,7 @@ enum EstadoOrdenCompra {
 }
 ```
 
-- [ ] **Step 4: Aplicar los cambios a los modelos de stock**
+- [x] **Step 4: Aplicar los cambios a los modelos de stock**
 
 En `apps/api/prisma/schema.prisma`:
 
@@ -987,7 +987,7 @@ En `ItemOrdenCompra` (línea 1085), hacer explícita la política de borrado:
   product       Producto    @relation(fields: [productId], references: [id], onDelete: Restrict)
 ```
 
-- [ ] **Step 5: Borrar los modelos heredados de consumo**
+- [x] **Step 5: Borrar los modelos heredados de consumo**
 
 En `apps/api/prisma/schema.prisma`, borrar el bloque completo de las líneas 1093 a 1127: el comentario `// ==================== CONSUMOS (legacy) ====================` y los modelos `LogConsumo` y `EntradaConsumo`.
 
@@ -999,7 +999,7 @@ rg -n "logConsumo|LogConsumo|entradaConsumo|EntradaConsumo" apps/
 
 Esperado: sin salida.
 
-- [ ] **Step 6: Crear la migración de constraints**
+- [x] **Step 6: Crear la migración de constraints**
 
 Crear `apps/api/prisma/migrations/20260906120100_constraints/migration.sql`. Es el único SQL escrito a mano del proyecto; solo agrega `CHECK`, nunca borra ni modifica datos.
 
@@ -1012,7 +1012,7 @@ ALTER TABLE "niveles_stock"
   ADD CONSTRAINT "niveles_stock_quantity_no_negativa" CHECK ("quantity" >= 0);
 ```
 
-- [ ] **Step 7: Regenerar la baseline y recrear las bases**
+- [x] **Step 7: Regenerar la baseline y recrear las bases**
 
 Desde `apps/api`:
 
@@ -1025,7 +1025,7 @@ Esperado: aplica las dos migraciones (`baseline` y `constraints`) y corre el see
 
 Si el seed falla porque `inventory.seed.cjs` usa un valor de `unit` que no está en el enum, corregir el seed, no el enum: los valores del enum salen justamente de ese archivo (`unidades`, `kg`, `litros`, `cajas`).
 
-- [ ] **Step 8: Correr los tests para verificar que pasan**
+- [x] **Step 8: Correr los tests para verificar que pasan**
 
 Desde `apps/api`:
 
@@ -1035,7 +1035,7 @@ npm run test:db
 
 Esperado: PASS, incluidos los 10 tests de `stock-constraints.test.ts`.
 
-- [ ] **Step 9: Verificar que no hay deriva**
+- [x] **Step 9: Verificar que no hay deriva**
 
 Desde `apps/api`:
 
@@ -1047,7 +1047,7 @@ Esperado: `Sin deriva: schema.prisma y prisma/migrations coinciden.`
 
 Si reporta deriva señalando las `CHECK` constraints, aplicar el plan de contingencia del spec: mover el contenido de `20260906120100_constraints/migration.sql` a `scripts/apply-constraints.mjs` (que lo ejecute con `prisma db execute --file`), borrar la carpeta de migración, agregar el script `db:constraints` a `package.json`, encadenarlo en `test:db` después del reset, y documentarlo en `docs/RUNBOOK.md`.
 
-- [ ] **Step 10: Adaptar el backend al tipo de `unit`**
+- [x] **Step 10: Adaptar el backend al tipo de `unit`**
 
 En `apps/api/src/stock/stock.service.ts:53`, el default en texto deja de tipar:
 
@@ -1076,7 +1076,7 @@ import { IsEnum } from 'class-validator';
 import { UnidadMedida } from '@prisma/client';
 ```
 
-- [ ] **Step 11: Corregir la pérdida de la unidad en el mapper del admin**
+- [x] **Step 11: Corregir la pérdida de la unidad en el mapper del admin**
 
 En `apps/web-admin/src/features/inventory/api/inventory-mappers.ts:31`, la coerción a dos valores hace que un producto en `cajas` o `litros` se muestre como `unidades`. Reemplazar la línea que fuerza el tipo por el paso directo del valor:
 
@@ -1096,7 +1096,7 @@ Aplicar el mismo tipo en `apps/web-admin/src/features/sales/pos/VentasPosContext
         unit: ing.unit,
 ```
 
-- [ ] **Step 12: Ampliar el selector de unidades en la UI**
+- [x] **Step 12: Ampliar el selector de unidades en la UI**
 
 En `apps/web-admin/src/features/inventory/pages/ProductsPage.tsx`, el formulario ofrece solo dos botones (líneas 708-717). Reemplazar ese par de botones por un mapeo sobre las cuatro unidades:
 
@@ -1142,7 +1142,7 @@ Y en la línea 780:
                     const parsed = form.unit === 'kg' || form.unit === 'litros' ? parseFloat(raw) : parseInt(raw, 10);
 ```
 
-- [ ] **Step 13: Quitar el estado heredado `Confirmado` del admin**
+- [x] **Step 13: Quitar el estado heredado `Confirmado` del admin**
 
 En `apps/web-admin/src/features/inventory/pages/OrdersPage.tsx:74-75`, `'Confirmado'` no existe en la base y se mapea a `'Recibido'`. Reemplazar el bloque por:
 
@@ -1152,7 +1152,7 @@ En `apps/web-admin/src/features/inventory/pages/OrdersPage.tsx:74-75`, `'Confirm
     }
 ```
 
-- [ ] **Step 14: Verificar compilación y suites**
+- [x] **Step 14: Verificar compilación y suites**
 
 Desde la raíz del repo:
 
@@ -1175,7 +1175,7 @@ npm run build
 
 Esperado: todas PASS.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add -A apps/api/prisma apps/api/src/stock apps/api/test/db apps/web-admin/src/features/inventory apps/web-admin/src/features/sales/pos/VentasPosContext.tsx

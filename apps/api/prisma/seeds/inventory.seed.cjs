@@ -102,7 +102,7 @@ async function seedInventory(prisma) {
     if (!existing) {
       await prisma.movimientoStock.create({
         data: {
-          type: 'ingreso',
+          type: 'entrada',
           productId: carneId,
           warehouseId: principalId,
           quantity: 50,
