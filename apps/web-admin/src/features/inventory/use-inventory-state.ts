@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
-import { stockApi, isApiError } from '@/app/api/client';
-import { clearApiReachabilityCache, isApiReachable, shouldAllowLocalFallback } from '@/app/api/adapters';
+import { stockApi, isApiError, settingsApi } from '@/app/api/client';
+import { clearApiReachabilityCache, isApiReachable } from '@/app/api/adapters';
 import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
@@ -25,6 +25,12 @@ import {
   initialWarehouses,
 } from './seeds';
 import { isLocalOnlyId } from '@/shared/utils/local-ids';
+import { operatorFields, optionalUuid, scheduleBackgroundHydrate, emptyToNull, emptyToNullInt } from '@/shared/utils/persist-mutation';
+import {
+  mergeServerWithPendingLocal,
+  resolveCategoryForProduct,
+  uuidProductIds,
+} from './catalog-persistence';
 import type { AuditEntry, AuditModule, Category, ConsumptionLog, EmployeeConsumptionEntry, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
 
 function appendAudit(
@@ -41,7 +47,6 @@ function appendAudit(
 }
 
 export function useInventoryState() {
-  const allowLocalFallback = shouldAllowLocalFallback();
   const [products, setProducts] = useLocalStorage<Product[]>(storageKeys.inventory.products, initialProducts);
   const [warehouses, setWarehouses] = useLocalStorage<Warehouse[]>(storageKeys.inventory.warehouses, initialWarehouses);
   const [orders, setOrders] = useLocalStorage<Order[]>(storageKeys.inventory.orders, initialOrders);
@@ -58,9 +63,7 @@ export function useInventoryState() {
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   // En producción usamos API estricta (sin fallback silencioso) para evitar desincronización.
-  const [inventoryApiAvailable, setInventoryApiAvailable] = useState<boolean | null>(
-    allowLocalFallback ? null : true,
-  );
+  const [inventoryApiAvailable, setInventoryApiAvailable] = useState<boolean | null>(true);
   // Evita que una hidratación inicial en vuelo pise cambios hechos mientras carga.
   const mountHydrationGen = useRef(0);
 
@@ -92,34 +95,31 @@ export function useInventoryState() {
   const hydrateCategories = useCallback(async (mountGen?: number) => {
     const cats = await stockApi.categories.list();
     const server = cats.map(mapApiCategoryToLocal);
-    applyHydration(mountGen, () => setCategories(prev => {
-      const serverIds = new Set(server.map(c => c.id));
-      const serverNames = new Set(server.map(c => c.name.toLowerCase()));
-      const pendingLocal = prev.filter(
-        c => isLocalOnlyId(c.id) && !serverIds.has(c.id) && !serverNames.has(c.name.toLowerCase()),
-      );
-      return [...server, ...pendingLocal].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    }));
+    applyHydration(mountGen, () => setCategories(prev =>
+      mergeServerWithPendingLocal(server, prev, {
+        nameOf: c => c.name,
+        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+      }),
+    ));
   }, [setCategories, applyHydration]);
 
   const hydrateWarehouses = useCallback(async (mountGen?: number) => {
     const whs = await stockApi.warehouses.list();
     const server = whs.map(mapApiWarehouseToLocal);
-    applyHydration(mountGen, () => setWarehouses(prev => {
-      const serverIds = new Set(server.map(w => w.id));
-      const pendingLocal = prev.filter(w => isLocalOnlyId(w.id) && !serverIds.has(w.id));
-      return [...server, ...pendingLocal].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    }));
+    applyHydration(mountGen, () => setWarehouses(prev =>
+      mergeServerWithPendingLocal(server, prev, {
+        nameOf: w => w.name,
+        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+      }),
+    ));
   }, [setWarehouses, applyHydration]);
 
   const hydrateProducts = useCallback(async (mountGen?: number) => {
     const prods = await stockApi.products.list();
     const server = prods.map(mapApiProductToLocal);
-    applyHydration(mountGen, () => setProducts(prev => {
-      const serverIds = new Set(server.map(p => p.id));
-      const pendingLocal = prev.filter(p => isLocalOnlyId(p.id) && !serverIds.has(p.id));
-      return reassignProductCodes([...server, ...pendingLocal]);
-    }));
+    applyHydration(mountGen, () => setProducts(prev =>
+      reassignProductCodes(mergeServerWithPendingLocal(server, prev)),
+    ));
     return server;
   }, [setProducts, applyHydration]);
 
@@ -140,12 +140,21 @@ export function useInventoryState() {
 
   const hydrateSuppliers = useCallback(async (mountGen?: number) => {
     const rows = await stockApi.suppliers.list();
-    applyHydration(mountGen, () => setSuppliers(rows.map(mapApiSupplierToLocal)));
+    const server = rows.map(mapApiSupplierToLocal);
+    applyHydration(mountGen, () => setSuppliers(prev =>
+      mergeServerWithPendingLocal(server, prev, {
+        nameOf: s => s.name,
+        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+      }),
+    ));
   }, [setSuppliers, applyHydration]);
 
   const hydrateOrders = useCallback(async (mountGen?: number) => {
     const rows = await stockApi.purchaseOrders.list();
-    applyHydration(mountGen, () => setOrders(rows.map(mapApiPurchaseOrderToLocal)));
+    const server = rows.map(mapApiPurchaseOrderToLocal);
+    applyHydration(mountGen, () => setOrders(prev =>
+      mergeServerWithPendingLocal(server, prev, { keepPendingLocal: false }),
+    ));
   }, [setOrders, applyHydration]);
 
   useEffect(() => {
@@ -154,7 +163,7 @@ export function useInventoryState() {
     isApiReachable().then(async ok => {
       if (cancelled) return;
       if (!ok) {
-        setInventoryApiAvailable(allowLocalFallback ? false : true);
+        setInventoryApiAvailable(false);
         return;
       }
       try {
@@ -173,7 +182,7 @@ export function useInventoryState() {
         }
       } catch {
         if (!cancelled && mountGen === mountHydrationGen.current) {
-          setInventoryApiAvailable(allowLocalFallback ? false : true);
+          setInventoryApiAvailable(false);
         }
       }
     });
@@ -189,107 +198,108 @@ export function useInventoryState() {
     hydrateCountSessions,
     hydrateSuppliers,
     hydrateOrders,
-    allowLocalFallback,
   ]);
+
+  const persistCategoryId = useCallback(
+    async (categoryName: string): Promise<string> => {
+      const found = categories.find(
+        c => c.name.trim().toLowerCase() === categoryName.trim().toLowerCase(),
+      );
+      if (!found) throw new Error(`Categoría no encontrada: ${categoryName}`);
+      if (!isLocalOnlyId(found.id)) return found.id;
+      const created = await stockApi.categories.create(
+        { name: found.name, icon: found.icon || 'Package' },
+        '',
+      );
+      const mapped = mapApiCategoryToLocal(created);
+      setCategories(prev => {
+        const without = prev.filter(
+          c => c.id !== mapped.id && c.name.toLowerCase() !== mapped.name.toLowerCase(),
+        );
+        return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      });
+      return resolveCategoryForProduct([mapped], mapped.name).id;
+    },
+    [categories, setCategories],
+  );
 
   const createProduct = useCallback(
     async (input: Product): Promise<void> => {
-      const localProduct: Product = {
-        ...input,
-        id: input.id || `p${Date.now()}`,
-        code: input.code || '',
-      };
-      if (allowLocalFallback) {
-        setProducts(prev => reassignProductCodes([
-          ...prev.filter(p => p.id !== localProduct.id),
-          localProduct,
-        ]));
-      }
-
-      if (inventoryApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
       try {
-        const categoryId = categories.find(c => c.name === input.category)?.id;
-        if (!categoryId) throw new Error(`Categoría no encontrada: ${input.category}`);
+        const categoryId = await persistCategoryId(input.category);
         const code = nextProductCode(products, input.category, getCategoryCodePrefix, formatProductCode);
         const created = await stockApi.products.create(
           {
             name: input.name,
             code,
-            description: input.description || undefined,
+            description: emptyToNull(input.description) ?? undefined,
             categoryId,
             unit: input.unit,
-            orderUnit: input.orderUnit,
-            image: input.image || undefined,
+            orderUnit: emptyToNullInt(input.orderUnit) ?? undefined,
+            image: emptyToNull(input.image) ?? undefined,
           },
           '',
         );
         for (const s of input.stockByWarehouse) {
-          if (s.quantity > 0) {
+          if (s.quantity > 0 && !isLocalOnlyId(s.warehouseId)) {
             await stockApi.products.adjustStock(created.id, s.warehouseId, s.quantity, '');
           }
         }
         markApiSynced();
-        await hydrateProducts();
+        const mapped = mapApiProductToLocal(created);
+        setProducts(prev => reassignProductCodes([
+          ...prev.filter(p => p.id !== mapped.id && p.id !== input.id),
+          mapped,
+        ]));
+        scheduleBackgroundHydrate(() => hydrateProducts());
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateProducts(); } catch {}
-        }
+        try { await hydrateProducts(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
+    [persistCategoryId, products, hydrateProducts, setProducts, markApiSynced],
   );
 
   const updateProduct = useCallback(
     async (input: Product, previous: Product): Promise<void> => {
-      if (allowLocalFallback) {
-        setProducts(prev => reassignProductCodes(prev.map(p => (p.id === input.id ? input : p))));
-      }
-
-      if (inventoryApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
       try {
-        const categoryId = categories.find(c => c.name === input.category)?.id;
-        if (!categoryId) throw new Error(`Categoría no encontrada: ${input.category}`);
+        const categoryId = await persistCategoryId(input.category);
         if (isLocalOnlyId(input.id)) {
           const code = nextProductCode(products, input.category, getCategoryCodePrefix, formatProductCode);
           const created = await stockApi.products.create(
             {
               name: input.name,
               code,
-              description: input.description || undefined,
+              description: emptyToNull(input.description) ?? undefined,
               categoryId,
               unit: input.unit,
-              orderUnit: input.orderUnit,
-              image: input.image || undefined,
+              orderUnit: emptyToNullInt(input.orderUnit) ?? undefined,
+              image: emptyToNull(input.image) ?? undefined,
             },
             '',
           );
           for (const s of input.stockByWarehouse) {
-            if (s.quantity > 0) {
+            if (s.quantity > 0 && !isLocalOnlyId(s.warehouseId)) {
               await stockApi.products.adjustStock(created.id, s.warehouseId, s.quantity, '');
             }
           }
           markApiSynced();
-          await hydrateProducts();
+          setProducts(prev => reassignProductCodes([
+            ...prev.filter(p => p.id !== input.id && p.id !== created.id),
+            mapApiProductToLocal(created),
+          ]));
+          scheduleBackgroundHydrate(() => hydrateProducts());
           return;
         }
-        await stockApi.products.update(
+        const updated = await stockApi.products.update(
           input.id,
           {
             name: input.name,
-            description: input.description || undefined,
+            description: emptyToNull(input.description),
             categoryId,
             unit: input.unit,
-            orderUnit: input.orderUnit,
-            image: input.image || undefined,
+            orderUnit: emptyToNullInt(input.orderUnit),
+            image: emptyToNull(input.image),
           },
           '',
         );
@@ -298,66 +308,45 @@ export function useInventoryState() {
           ...previous.stockByWarehouse.map(s => s.warehouseId),
         ]);
         for (const wid of warehouseIds) {
+          if (isLocalOnlyId(wid)) continue;
           const after = input.stockByWarehouse.find(s => s.warehouseId === wid)?.quantity ?? 0;
           const before = previous.stockByWarehouse.find(s => s.warehouseId === wid)?.quantity ?? 0;
           const delta = after - before;
           if (delta !== 0) await stockApi.products.adjustStock(input.id, wid, delta, '');
         }
         markApiSynced();
-        await hydrateProducts();
+        setProducts(prev => reassignProductCodes(prev.map(p => (p.id === updated.id ? mapApiProductToLocal(updated) : p))));
+        scheduleBackgroundHydrate(() => hydrateProducts());
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateProducts(); } catch {}
-        }
+        try { await hydrateProducts(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, inventoryApiAvailable, categories, products, hydrateProducts, setProducts, markApiSynced],
+    [persistCategoryId, products, hydrateProducts, setProducts, markApiSynced],
   );
 
   const deleteProduct = useCallback(
     async (id: string): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setProducts(prev => reassignProductCodes(prev.filter(p => p.id !== id)));
-        return;
-      }
       try {
-        await stockApi.products.remove(id, '');
+        if (!isLocalOnlyId(id)) await stockApi.products.remove(id, '');
         markApiSynced();
         setProducts(prev => reassignProductCodes(prev.filter(p => p.id !== id)));
-        await hydrateProducts();
-        return;
+        scheduleBackgroundHydrate(() => hydrateProducts());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setProducts(prev => reassignProductCodes(prev.filter(p => p.id !== id)));
+        try { await hydrateProducts(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateProducts, setProducts, markApiSynced],
+    [hydrateProducts, setProducts, markApiSynced],
   );
 
   const createCategory = useCallback(
-    async (input: { name: string; icon: string }): Promise<void> => {
+    async (input: { name: string; icon: string }): Promise<Category> => {
       const name = input.name.trim();
-      const localCategory: Category = {
-        id: `cat${Date.now()}`,
-        name,
-        icon: input.icon,
-      };
-      if (allowLocalFallback) {
-        setCategories(prev => {
-          const without = prev.filter(c => c.name.toLowerCase() !== name.toLowerCase());
-          return [...without, localCategory].sort((a, b) => a.name.localeCompare(b.name, 'es'));
-        });
-      }
-
-      if (inventoryApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
+      if (!name) throw new Error('El nombre de la categoría es obligatorio');
       try {
         const created = await stockApi.categories.create(
-          { name, icon: input.icon },
+          { name, icon: input.icon || 'Package' },
           '',
         );
         markApiSynced();
@@ -368,68 +357,59 @@ export function useInventoryState() {
           );
           return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
         });
-        await hydrateCategories();
+        scheduleBackgroundHydrate(() => hydrateCategories());
+        return mapped;
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateCategories(); } catch {}
-        }
+        try { await hydrateCategories(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+    [hydrateCategories, setCategories, markApiSynced],
   );
 
   const updateCategory = useCallback(
     async (input: Category): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setCategories(prev => prev.map(c => (c.id === input.id ? input : c)));
-        return;
-      }
+      const payload = {
+        name: input.name,
+        icon: input.icon || 'Package',
+      };
       try {
-        await stockApi.categories.update(
-          input.id,
-          { name: input.name, icon: input.icon },
-          '',
-        );
+        const updated = await stockApi.categories.update(input.id, payload, '');
         markApiSynced();
-        await hydrateCategories();
-        return;
+        const mapped = mapApiCategoryToLocal(updated);
+        setCategories(prev => {
+          const next = prev.map(c => (c.id === mapped.id ? mapped : c));
+          return next.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        });
+        scheduleBackgroundHydrate(() => hydrateCategories());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setCategories(prev => prev.map(c => (c.id === input.id ? input : c)));
+        try { await hydrateCategories(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+    [hydrateCategories, setCategories, markApiSynced],
   );
 
   const deleteCategory = useCallback(
     async (id: string): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setCategories(prev => prev.filter(c => c.id !== id));
-        return;
-      }
       try {
-        await stockApi.categories.remove(id, '');
+        if (!isLocalOnlyId(id)) await stockApi.categories.remove(id, '');
         markApiSynced();
-        await hydrateCategories();
-        return;
-      } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
         setCategories(prev => prev.filter(c => c.id !== id));
+        scheduleBackgroundHydrate(() => hydrateCategories());
+      } catch (e) {
+        try { await hydrateCategories(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateCategories, setCategories, markApiSynced],
+    [hydrateCategories, setCategories, markApiSynced],
   );
 
   const createWarehouse = useCallback(
     async (input: Omit<Warehouse, 'id'>): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setWarehouses(prev => [...prev, { ...input, id: `w${Date.now()}` }]);
-        return;
-      }
       try {
         const created = await stockApi.warehouses.create(
-          { name: input.name, location: input.location, icon: input.icon },
+          { name: input.name, location: input.location, icon: input.icon || 'Warehouse' },
           '',
         );
         markApiSynced();
@@ -440,37 +420,37 @@ export function useInventoryState() {
           );
           return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
         });
-        await hydrateWarehouses();
-        return;
+        scheduleBackgroundHydrate(() => hydrateWarehouses());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setWarehouses(prev => [...prev, { ...input, id: `w${Date.now()}` }]);
+        try { await hydrateWarehouses(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateWarehouses, setWarehouses, markApiSynced],
+    [hydrateWarehouses, setWarehouses, markApiSynced],
   );
 
   const updateWarehouse = useCallback(
     async (input: Warehouse): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setWarehouses(prev => prev.map(w => (w.id === input.id ? input : w)));
-        return;
-      }
+      const payload = {
+        name: input.name,
+        location: input.location,
+        icon: input.icon || 'Warehouse',
+      };
       try {
-        await stockApi.warehouses.update(
-          input.id,
-          { name: input.name, location: input.location, icon: input.icon },
-          '',
-        );
+        const updated = await stockApi.warehouses.update(input.id, payload, '');
         markApiSynced();
-        await hydrateWarehouses();
-        return;
+        const mapped = mapApiWarehouseToLocal(updated);
+        setWarehouses(prev => {
+          const next = prev.map(w => (w.id === mapped.id ? mapped : w));
+          return next.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        });
+        scheduleBackgroundHydrate(() => hydrateWarehouses());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setWarehouses(prev => prev.map(w => (w.id === input.id ? input : w)));
+        try { await hydrateWarehouses(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateWarehouses, setWarehouses, markApiSynced],
+    [hydrateWarehouses, setWarehouses, markApiSynced],
   );
 
   const deleteWarehouse = useCallback(
@@ -483,20 +463,6 @@ export function useInventoryState() {
         })));
       };
 
-      const refreshCatalog = async () => {
-        try {
-          await Promise.all([hydrateWarehouses(), hydrateProducts()]);
-        } catch {
-          // La UI ya refleja el borrado local.
-        }
-      };
-
-      if (inventoryApiAvailable === false) {
-        stripFromLocal();
-        return;
-      }
-
-      // Almacén creado solo en localStorage (id w123…): no existe en el servidor.
       if (isLocalOnlyId(id)) {
         invalidateMountHydration();
         stripFromLocal();
@@ -508,7 +474,7 @@ export function useInventoryState() {
         markApiSynced();
         stripFromLocal();
         clearApiReachabilityCache();
-        await refreshCatalog();
+        scheduleBackgroundHydrate(() => Promise.all([hydrateWarehouses(), hydrateProducts()]));
         setInventoryApiAvailable(true);
       } catch (e) {
         const alreadyGone = isApiError(e) && e.status === 404;
@@ -517,13 +483,11 @@ export function useInventoryState() {
           stripFromLocal();
           return;
         }
-        if (inventoryApiAvailable === true) throw e;
-        invalidateMountHydration();
-        stripFromLocal();
+        try { await Promise.all([hydrateWarehouses(), hydrateProducts()]); } catch { /* rethrow original */ }
+        throw e;
       }
     },
     [
-      inventoryApiAvailable,
       hydrateWarehouses,
       hydrateProducts,
       setWarehouses,
@@ -535,23 +499,21 @@ export function useInventoryState() {
 
   const addStockAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
     appendAudit(setAuditLog, 'stock', entry);
+    void settingsApi.audit.create({
+      module: 'stock',
+      action: entry.action,
+      element: entry.element,
+      previousValue: entry.previousValue,
+      newValue: entry.newValue,
+      userName: entry.user,
+    }, '').catch(() => undefined);
   }, [setAuditLog]);
 
   const addStockMovements = useCallback(
-    (entries: Omit<StockMovement, 'id' | 'createdAtISO'>[], createdAtISO?: string) => {
-      // Con API disponible, los movimientos los registra el servidor.
-      if (inventoryApiAvailable) return;
-      const filtered = entries.filter(e => e.quantity !== 0);
-      if (filtered.length === 0) return;
-      const ts = createdAtISO ?? new Date().toISOString();
-      const movements: StockMovement[] = filtered.map((e, i) => ({
-        ...e,
-        id: `mov-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-        createdAtISO: ts,
-      }));
-      setStockMovements(prev => [...movements, ...prev]);
+    (_entries: Omit<StockMovement, 'id' | 'createdAtISO'>[], _createdAtISO?: string) => {
+      // Los movimientos los registra el servidor; no se fabrican en localStorage.
     },
-    [inventoryApiAvailable, setStockMovements],
+    [],
   );
 
   const registerEmployeeConsumption = useCallback(
@@ -564,58 +526,44 @@ export function useInventoryState() {
       operatorRole?: string;
       note?: string;
     }): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        throw new Error('API no disponible');
-      }
-      try {
-        await stockApi.employeeConsumptions.create(input, '');
-        markApiSynced();
-        await Promise.all([hydrateProducts(), hydrateMovements(), hydrateEmployeeConsumptions()]);
-        return;
-      } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        throw new Error('API no disponible');
-      }
+      const { operatorId, operatorName, ...rest } = input;
+      await stockApi.employeeConsumptions.create({
+        ...rest,
+        ...operatorFields({ operatorId, operatorName }),
+      }, '');
+      markApiSynced();
+      scheduleBackgroundHydrate(() =>
+        Promise.all([hydrateProducts(), hydrateMovements(), hydrateEmployeeConsumptions()]),
+      );
     },
-    [inventoryApiAvailable, hydrateProducts, hydrateMovements, hydrateEmployeeConsumptions, markApiSynced],
+    [hydrateProducts, hydrateMovements, hydrateEmployeeConsumptions, markApiSynced],
   );
 
   const saveStockCountSession = useCallback(
     async (session: StockCountSession): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setStockCountSessions(prev => [session, ...prev]);
-        return;
-      }
-      try {
-        await stockApi.countSessions.create(
-          {
-            date: session.date,
-            dateType: session.dateType,
-            operatorId: session.operatorId,
-            operatorName: session.operatorName,
-            entries: session.entries.map(e => ({
-              productId: e.productId,
-              productName: e.productName,
-              unit: e.unit,
-              expected: e.expected,
-              counted: e.counted,
-            })),
-          },
-          '',
-        );
-        markApiSynced();
-        await hydrateCountSessions();
-        return;
-      } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setStockCountSessions(prev => [session, ...prev]);
-      }
+      await stockApi.countSessions.create(
+        {
+          date: session.date,
+          dateType: session.dateType,
+          operatorId: optionalUuid(session.operatorId),
+          operatorName: session.operatorName,
+          entries: session.entries.map(e => ({
+            productId: e.productId,
+            productName: e.productName,
+            unit: e.unit,
+            expected: e.expected,
+            counted: e.counted,
+          })),
+        },
+        '',
+      );
+      markApiSynced();
+      scheduleBackgroundHydrate(() => hydrateCountSessions());
     },
-    [inventoryApiAvailable, hydrateCountSessions, setStockCountSessions, markApiSynced],
+    [hydrateCountSessions, markApiSynced],
   );
 
   const refreshOperations = useCallback(async () => {
-    if (!inventoryApiAvailable) return;
     await Promise.all([
       hydrateMovements(),
       hydrateEmployeeConsumptions(),
@@ -623,64 +571,59 @@ export function useInventoryState() {
       hydrateSuppliers(),
       hydrateOrders(),
     ]);
-  }, [inventoryApiAvailable, hydrateMovements, hydrateEmployeeConsumptions, hydrateCountSessions, hydrateSuppliers, hydrateOrders]);
+  }, [hydrateMovements, hydrateEmployeeConsumptions, hydrateCountSessions, hydrateSuppliers, hydrateOrders]);
 
   const createSupplier = useCallback(
     async (input: { name: string; productIds: string[] }): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setSuppliers(prev => [...prev, { id: `sup${Date.now()}`, name: input.name, productIds: input.productIds }]);
-        return;
-      }
+      const productIds = uuidProductIds(input.productIds);
       try {
-        await stockApi.suppliers.create(input, '');
+        const created = await stockApi.suppliers.create({ name: input.name, productIds }, '');
         markApiSynced();
-        await hydrateSuppliers();
-        return;
+        const mapped = mapApiSupplierToLocal(created);
+        setSuppliers(prev => {
+          const without = prev.filter(
+            s => s.id !== mapped.id && s.name.toLowerCase() !== mapped.name.toLowerCase(),
+          );
+          return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        });
+        scheduleBackgroundHydrate(() => hydrateSuppliers());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setSuppliers(prev => [...prev, { id: `sup${Date.now()}`, name: input.name, productIds: input.productIds }]);
+        try { await hydrateSuppliers(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateSuppliers, setSuppliers, markApiSynced],
+    [hydrateSuppliers, setSuppliers, markApiSynced],
   );
 
   const updateSupplier = useCallback(
     async (input: Supplier): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setSuppliers(prev => prev.map(s => (s.id === input.id ? input : s)));
-        return;
-      }
       try {
-        await stockApi.suppliers.update(input.id, { name: input.name, productIds: input.productIds }, '');
+        const updated = await stockApi.suppliers.update(input.id, { name: input.name, productIds: uuidProductIds(input.productIds) }, '');
         markApiSynced();
-        await hydrateSuppliers();
-        return;
+        const mapped = mapApiSupplierToLocal(updated);
+        setSuppliers(prev => prev.map(s => (s.id === mapped.id ? mapped : s)));
+        scheduleBackgroundHydrate(() => hydrateSuppliers());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setSuppliers(prev => prev.map(s => (s.id === input.id ? input : s)));
+        try { await hydrateSuppliers(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateSuppliers, setSuppliers, markApiSynced],
+    [hydrateSuppliers, setSuppliers, markApiSynced],
   );
 
   const deleteSupplier = useCallback(
     async (id: string): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        setSuppliers(prev => prev.filter(s => s.id !== id));
-        return;
-      }
       try {
-        await stockApi.suppliers.remove(id, '');
+        if (!isLocalOnlyId(id)) await stockApi.suppliers.remove(id, '');
         markApiSynced();
         setSuppliers(prev => prev.filter(s => s.id !== id));
-        await hydrateSuppliers();
-        return;
+        scheduleBackgroundHydrate(() => hydrateSuppliers());
       } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        setSuppliers(prev => prev.filter(s => s.id !== id));
+        try { await hydrateSuppliers(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [inventoryApiAvailable, hydrateSuppliers, setSuppliers, markApiSynced],
+    [hydrateSuppliers, setSuppliers, markApiSynced],
   );
 
   const createPurchaseOrder = useCallback(
@@ -689,37 +632,46 @@ export function useInventoryState() {
       provider: string;
       items: { productId: string; quantityOrdered: number }[];
     }): Promise<Order> => {
-      if (inventoryApiAvailable === false) {
-        const newOrder: Order = {
-          id: 'PED-' + String(orders.length + 1).padStart(3, '0'),
-          date: new Date().toISOString().split('T')[0],
-          provider: input.provider,
-          status: 'Pendiente',
-          items: input.items.map(i => ({ productId: i.productId, quantityOrdered: i.quantityOrdered })),
-        };
-        setOrders(prev => [...prev, newOrder]);
-        return newOrder;
+      const items = input.items.filter(i => !isLocalOnlyId(i.productId));
+      const supplierId = input.supplierId && !isLocalOnlyId(input.supplierId) ? input.supplierId : undefined;
+      if (items.length === 0) {
+        throw new Error('El pedido no tiene productos sincronizados con el servidor.');
       }
-      try {
-        const created = await stockApi.purchaseOrders.create(input, '');
-        markApiSynced();
-        const order = mapApiPurchaseOrderToLocal(created);
-        await hydrateOrders();
-        return order;
-      } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        const newOrder: Order = {
-          id: 'PED-' + String(orders.length + 1).padStart(3, '0'),
-          date: new Date().toISOString().split('T')[0],
-          provider: input.provider,
-          status: 'Pendiente',
-          items: input.items.map(i => ({ productId: i.productId, quantityOrdered: i.quantityOrdered })),
-        };
-        setOrders(prev => [...prev, newOrder]);
-        return newOrder;
-      }
+      const created = await stockApi.purchaseOrders.create({
+        supplierId,
+        provider: input.provider,
+        items,
+      }, '');
+      markApiSynced();
+      const order = mapApiPurchaseOrderToLocal(created);
+      setOrders(prev => [order, ...prev.filter(o => o.id !== order.id)]);
+      scheduleBackgroundHydrate(() => hydrateOrders());
+      return order;
     },
-    [inventoryApiAvailable, orders.length, hydrateOrders, setOrders, markApiSynced],
+    [hydrateOrders, setOrders, markApiSynced],
+  );
+
+  const updatePurchaseOrder = useCallback(
+    async (input: {
+      orderId: string;
+      supplierId?: string | null;
+      provider?: string;
+      items: { productId: string; quantityOrdered: number }[];
+    }): Promise<Order> => {
+      const items = input.items.filter(i => !isLocalOnlyId(i.productId) && i.quantityOrdered > 0);
+      if (items.length === 0) throw new Error('El pedido no tiene productos sincronizados con el servidor.');
+      const updated = await stockApi.purchaseOrders.update(input.orderId, {
+        supplierId: input.supplierId,
+        provider: input.provider,
+        items,
+      }, '');
+      markApiSynced();
+      const order = mapApiPurchaseOrderToLocal(updated);
+      setOrders(prev => prev.map(o => (o.id === order.id || o.id === input.orderId ? order : o)));
+      scheduleBackgroundHydrate(() => hydrateOrders());
+      return order;
+    },
+    [hydrateOrders, setOrders, markApiSynced],
   );
 
   const receivePurchaseOrder = useCallback(
@@ -733,26 +685,22 @@ export function useInventoryState() {
       operatorId?: string;
       operatorName?: string;
     }): Promise<void> => {
-      if (inventoryApiAvailable === false) {
-        throw new Error('API no disponible');
-      }
-      try {
-        await stockApi.purchaseOrders.receive(input.orderId, {
-          items: input.items,
+      const received = await stockApi.purchaseOrders.receive(input.orderId, {
+        items: input.items,
+        ...operatorFields({
           operatorId: input.operatorId,
           operatorName: input.operatorName,
-        }, '');
-        markApiSynced();
-        await Promise.all([hydrateOrders(), hydrateProducts(), hydrateMovements()]);
-        return;
-      } catch (e) {
-        if (inventoryApiAvailable === true) throw e;
-        throw new Error('API no disponible');
-      }
+        }),
+      }, '');
+      markApiSynced();
+      const order = mapApiPurchaseOrderToLocal(received);
+      setOrders(prev => prev.map(o => (o.id === order.id || o.id === input.orderId ? order : o)));
+      scheduleBackgroundHydrate(() =>
+        Promise.all([hydrateOrders(), hydrateProducts(), hydrateMovements()]),
+      );
     },
-    [inventoryApiAvailable, hydrateOrders, hydrateProducts, hydrateMovements, markApiSynced],
+    [hydrateOrders, hydrateProducts, hydrateMovements, markApiSynced],
   );
-
   const getTotalStock = useCallback((product: Product) => {
     return product.stockByWarehouse.reduce((sum, s) => sum + s.quantity, 0);
   }, []);
@@ -802,6 +750,7 @@ export function useInventoryState() {
     updateSupplier,
     deleteSupplier,
     createPurchaseOrder,
+    updatePurchaseOrder,
     receivePurchaseOrder,
     createProduct,
     updateProduct,

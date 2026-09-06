@@ -233,6 +233,8 @@ export class FootballService {
     id: string,
     data: { abbr?: string; color?: string; activo?: boolean; descuentoPuntosWO?: number },
   ) {
+    const existing = await this.prisma.equipoInscripcion.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Inscripción ${id} no encontrada`);
     return this.prisma.equipoInscripcion.update({
       where: { id },
       data,
@@ -273,6 +275,8 @@ export class FootballService {
   }
 
   async updateCaptain(id: string, data: { email?: string; dni?: string; activo?: boolean }) {
+    const existing = await this.prisma.capitanAutorizado.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Capitán ${id} no encontrado`);
     const payload = { ...data };
     if (payload.dni) payload.dni = payload.dni.replace(/\D/g, '');
     return this.prisma.capitanAutorizado.update({
@@ -286,6 +290,8 @@ export class FootballService {
   }
 
   async deleteCaptain(id: string) {
+    const existing = await this.prisma.capitanAutorizado.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Capitán ${id} no encontrado`);
     await this.prisma.capitanAutorizado.delete({ where: { id } });
     return { ok: true };
   }
@@ -991,10 +997,13 @@ ${partidoBlock}
     });
     if (!match) throw new NotFoundException(`Partido ${id} no encontrado`);
 
-    let venue = data.venue;
+    let venue: string | null | undefined = data.venue;
     if (data.canchaId) {
       const cancha = await this.prisma.cancha.findUnique({ where: { id: data.canchaId } });
       if (cancha) venue = `Cancha ${cancha.numero}`;
+    }
+    if (data.canchaId === null && data.venue === undefined) {
+      venue = null;
     }
 
     const horaInicio = data.horaInicio ?? match.horaInicio;
@@ -1034,7 +1043,7 @@ ${partidoBlock}
         horaInicio: data.horaInicio,
         jornadaId: data.jornadaId,
         bloqueadoManual: data.bloqueadoManual,
-        venue: venue ?? undefined,
+        venue: venue === undefined ? undefined : venue,
       },
       include: this.matchInclude(),
     });
@@ -1058,16 +1067,18 @@ ${partidoBlock}
         include: this.matchInclude(),
       });
 
-      if (events?.length) {
+      if (events !== undefined) {
         await tx.eventoPartido.deleteMany({ where: { partidoId: id } });
-        await tx.eventoPartido.createMany({
-          data: events.map((e) => ({
-            partidoId: id,
-            personaId: e.personaId,
-            tipo: e.tipo,
-            minuto: e.minuto,
-          })),
-        });
+        if (events.length) {
+          await tx.eventoPartido.createMany({
+            data: events.map((e) => ({
+              partidoId: id,
+              personaId: e.personaId,
+              tipo: e.tipo,
+              minuto: e.minuto,
+            })),
+          });
+        }
       }
 
       return row;
@@ -1136,6 +1147,8 @@ ${partidoBlock}
     id: string,
     data: { fechasRestantes?: number; activa?: boolean; motivo?: string },
   ) {
+    const existing = await this.prisma.suspension.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Suspensión ${id} no encontrada`);
     return this.prisma.suspension.update({
       where: { id },
       data,
@@ -1156,6 +1169,8 @@ ${partidoBlock}
     id: string,
     data: { titulo?: string; contenido?: string; aplicable?: boolean },
   ) {
+    const existing = await this.prisma.reglamentoArticulo.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Artículo ${id} no encontrado`);
     return this.prisma.reglamentoArticulo.update({ where: { id }, data });
   }
 

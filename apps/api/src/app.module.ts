@@ -15,6 +15,7 @@ import { OnlineCatalogModule } from './online-catalog/online-catalog.module';
 import { OnlineModule } from './online/online.module';
 import { SseModule } from './sse/sse.module';
 import { PrintingModule } from './printing/printing.module';
+import { SettingsModule } from './settings/settings.module';
 import { HealthController } from './common/health.controller';
 
 @Module({
@@ -38,6 +39,7 @@ import { HealthController } from './common/health.controller';
     OnlineModule,
     SseModule,
     PrintingModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
 })

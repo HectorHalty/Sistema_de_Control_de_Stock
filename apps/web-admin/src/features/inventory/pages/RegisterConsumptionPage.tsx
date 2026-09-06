@@ -110,7 +110,7 @@ export function RegisterConsumptionPage() {
           warehouseId,
           quantity: qty,
           operatorId: currentUser.id,
-          operatorName: currentUser.name,
+          operatorName: currentUser.username,
           operatorRole: currentUser.role,
         });
         addAudit({
@@ -167,7 +167,7 @@ export function RegisterConsumptionPage() {
           warehouseId,
           quantity: -qty,
           reference: entry.id,
-          operatorId: currentUser.username,
+          operatorId: currentUser.id,
           operatorName: currentUser.username,
         },
       ],

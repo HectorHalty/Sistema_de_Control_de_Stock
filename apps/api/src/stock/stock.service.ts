@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import {
-  CreateProductDto, UpdateProductDto, AdjustStockDto,
+import { CreateProductDto, UpdateProductDto, AdjustStockDto,
   CreateEmployeeConsumptionDto, CreateStockCountSessionDto,
   CreateSupplierDto, UpdateSupplierDto,
-  CreatePurchaseOrderDto, ReceivePurchaseOrderDto,
+  CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
+  CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
 } from './dto';
 import { StockMovementsService } from './stock-movements.service';
+import { isPrismaUniqueConflict } from '../common/prisma-errors';
 
 @Injectable()
 export class StockService {
@@ -73,10 +74,18 @@ export class StockService {
   }
 
   async updateProduct(id: string, dto: UpdateProductDto) {
-    await this.findProductById(id); // throws if not found
+    await this.findProductById(id);
     return this.prisma.producto.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.code !== undefined ? { code: dto.code } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+        ...(dto.unit !== undefined ? { unit: dto.unit } : {}),
+        ...(dto.orderUnit !== undefined ? { orderUnit: dto.orderUnit } : {}),
+        ...(dto.image !== undefined ? { image: dto.image } : {}),
+      },
       include: { stockLevels: { include: { warehouse: true } } },
     });
   }
@@ -97,7 +106,6 @@ export class StockService {
 
   async adjustStock(productId: string, dto: AdjustStockDto) {
     return this.prisma.$transaction(async (tx) => {
-      // Find or create stock level for this product/warehouse
       let stockLevel = await tx.nivelStock.findUnique({
         where: { productId_warehouseId: { productId, warehouseId: dto.warehouseId } },
       });
@@ -108,9 +116,13 @@ export class StockService {
         });
       }
 
-      // Prisma devuelve Decimal como objeto; lo paso a number para la aritmética
-      // y redondeo a 3 decimales para evitar derivas de punto flotante.
-      const current = Number(stockLevel.quantity);
+      await tx.$queryRaw`
+        SELECT id FROM "niveles_stock" WHERE id::text = ${stockLevel.id} FOR UPDATE
+      `;
+      const locked = await tx.nivelStock.findUnique({ where: { id: stockLevel.id } });
+      if (!locked) throw new NotFoundException(`Stock level ${stockLevel.id} not found`);
+
+      const current = Number(locked.quantity);
       const newQuantity = Math.round((current + dto.quantity) * 1000) / 1000;
       if (newQuantity < 0) {
         throw new ConflictException(
@@ -119,7 +131,7 @@ export class StockService {
       }
 
       const updated = await tx.nivelStock.update({
-        where: { id: stockLevel.id },
+        where: { id: locked.id },
         data: { quantity: newQuantity },
         include: { warehouse: true },
       });
@@ -169,7 +181,13 @@ export class StockService {
         });
       }
 
-      const previousStock = Number(stockLevel.quantity);
+      await tx.$queryRaw`
+        SELECT id FROM "niveles_stock" WHERE id::text = ${stockLevel.id} FOR UPDATE
+      `;
+      const locked = await tx.nivelStock.findUnique({ where: { id: stockLevel.id } });
+      if (!locked) throw new NotFoundException(`Stock level ${stockLevel.id} not found`);
+
+      const previousStock = Number(locked.quantity);
       const qty = Math.round(dto.quantity * 1000) / 1000;
       const newStock = Math.round((previousStock - qty) * 1000) / 1000;
       if (newStock < 0) {
@@ -179,7 +197,7 @@ export class StockService {
       }
 
       await tx.nivelStock.update({
-        where: { id: stockLevel.id },
+        where: { id: locked.id },
         data: { quantity: newStock },
       });
 
@@ -265,15 +283,22 @@ export class StockService {
   }
 
   async createSupplier(dto: CreateSupplierDto) {
-    return this.prisma.proveedor.create({
-      data: {
-        name: dto.name,
-        products: dto.productIds?.length
-          ? { create: dto.productIds.map(productId => ({ productId })) }
-          : undefined,
-      },
-      include: { products: true },
-    });
+    try {
+      return await this.prisma.proveedor.create({
+        data: {
+          name: dto.name,
+          products: dto.productIds?.length
+            ? { create: dto.productIds.map(productId => ({ productId })) }
+            : undefined,
+        },
+        include: { products: true },
+      });
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException(`Ya existe un proveedor con el nombre "${dto.name}"`);
+      }
+      throw e;
+    }
   }
 
   async updateSupplier(id: string, dto: UpdateSupplierDto) {
@@ -374,6 +399,57 @@ export class StockService {
     });
   }
 
+  async updatePurchaseOrder(id: string, dto: UpdatePurchaseOrderDto) {
+    const order = await this.findPurchaseOrderById(id);
+    if (order.status === 'Recibido') {
+      throw new ConflictException('No se puede editar un pedido ya recibido');
+    }
+    if (dto.items && dto.items.length === 0) {
+      throw new ConflictException('El pedido debe tener al menos un ítem');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      let provider = dto.provider;
+      if (dto.supplierId) {
+        const supplier = await tx.proveedor.findUnique({ where: { id: dto.supplierId } });
+        if (!supplier) throw new NotFoundException(`Supplier ${dto.supplierId} not found`);
+        provider = provider ?? supplier.name;
+      }
+
+      if (dto.items) {
+        const nextIds = dto.items.map(i => i.productId);
+        await tx.itemOrdenCompra.deleteMany({
+          where: { purchaseOrderId: order.id, productId: { notIn: nextIds } },
+        });
+        for (const item of dto.items) {
+          await tx.itemOrdenCompra.upsert({
+            where: {
+              purchaseOrderId_productId: {
+                purchaseOrderId: order.id,
+                productId: item.productId,
+              },
+            },
+            create: {
+              purchaseOrderId: order.id,
+              productId: item.productId,
+              quantityOrdered: item.quantityOrdered,
+            },
+            update: { quantityOrdered: item.quantityOrdered },
+          });
+        }
+      }
+
+      return tx.ordenCompra.update({
+        where: { id: order.id },
+        data: {
+          ...(provider !== undefined ? { provider } : {}),
+          ...(dto.supplierId !== undefined ? { supplierId: dto.supplierId } : {}),
+        },
+        include: { items: true },
+      });
+    });
+  }
+
   async receivePurchaseOrder(idOrNumber: string, dto: ReceivePurchaseOrderDto) {
     const order = await this.prisma.ordenCompra.findFirst({
       where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] },
@@ -382,6 +458,16 @@ export class StockService {
     if (!order) throw new NotFoundException(`Purchase order ${idOrNumber} not found`);
     if (order.status === 'Recibido') {
       throw new ConflictException('El pedido ya fue recibido');
+    }
+
+    const receivedIds = new Set(dto.items.map(i => i.productId));
+    const unknown = dto.items.filter(i => !order.items.some(line => line.productId === i.productId));
+    if (unknown.length > 0) {
+      throw new NotFoundException(`Product ${unknown[0].productId} not in order`);
+    }
+    const missing = order.items.filter(i => !receivedIds.has(i.productId));
+    if (missing.length > 0) {
+      throw new ConflictException('La recepción debe incluir todos los productos del pedido');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -404,6 +490,12 @@ export class StockService {
 
         const allocSum = recv.allocations.reduce((s, a) => s + a.quantity, 0);
         const qtyReceived = Math.round(recv.quantityReceived * 1000) / 1000;
+        const ordered = Math.round(Number(line.quantityOrdered) * 1000) / 1000;
+        if (qtyReceived > ordered) {
+          throw new ConflictException(
+            `La cantidad recibida de ${recv.productId} (${qtyReceived}) supera lo pedido (${ordered})`,
+          );
+        }
         if (Math.round(allocSum * 1000) / 1000 !== qtyReceived) {
           throw new ConflictException(
             `Allocations for product ${recv.productId} must sum to ${qtyReceived}`,
@@ -459,6 +551,18 @@ export class StockService {
 
       await this.movements.recordMany(tx, movementEntries);
 
+      const fullyReceived = order.items.every(line => {
+        const recv = dto.items.find(i => i.productId === line.productId);
+        if (!recv) return false;
+        return Math.round(recv.quantityReceived * 1000) / 1000
+          >= Math.round(Number(line.quantityOrdered) * 1000) / 1000;
+      });
+      if (!fullyReceived) {
+        throw new ConflictException(
+          'La recepción es parcial: confirmá todas las cantidades pedidas o editá el pedido antes de recibir',
+        );
+      }
+
       return tx.ordenCompra.update({
         where: { id: order.id },
         data: { status: 'Recibido', receivedAt },
@@ -472,14 +576,41 @@ export class StockService {
     return this.prisma.deposito.findMany({ orderBy: { name: 'asc' } });
   }
 
-  async createWarehouse(dto: { name: string; location: string; icon?: string }) {
-    return this.prisma.deposito.create({ data: dto });
+  async createWarehouse(dto: CreateWarehouseDto) {
+    try {
+      return await this.prisma.deposito.create({
+        data: {
+          name: dto.name,
+          location: dto.location,
+          icon: dto.icon,
+        },
+      });
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException(`Ya existe un almacén con el nombre "${dto.name}"`);
+      }
+      throw e;
+    }
   }
 
-  async updateWarehouse(id: string, dto: { name?: string; location?: string; icon?: string }) {
+  async updateWarehouse(id: string, dto: UpdateWarehouseDto) {
     const existing = await this.prisma.deposito.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Warehouse ${id} not found`);
-    return this.prisma.deposito.update({ where: { id }, data: dto });
+    try {
+      return await this.prisma.deposito.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.location !== undefined ? { location: dto.location } : {}),
+          ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+        },
+      });
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException(`Ya existe un almacén con el nombre "${dto.name}"`);
+      }
+      throw e;
+    }
   }
 
   async deleteWarehouse(id: string) {
@@ -494,14 +625,49 @@ export class StockService {
     return this.prisma.categoria.findMany({ orderBy: { name: 'asc' } });
   }
 
-  async createCategory(dto: { name: string; icon?: string }) {
-    return this.prisma.categoria.create({ data: dto });
+  async createCategory(dto: CreateCategoryDto) {
+    try {
+      return await this.prisma.categoria.create({
+        data: {
+          name: dto.name,
+          icon: dto.icon ?? 'Package',
+        },
+      });
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        const existing = await this.prisma.categoria.findUnique({ where: { name: dto.name } });
+        if (existing) {
+          if (dto.icon && dto.icon !== existing.icon) {
+            return this.prisma.categoria.update({
+              where: { id: existing.id },
+              data: { icon: dto.icon },
+            });
+          }
+          return existing;
+        }
+        throw new ConflictException(`Ya existe una categoría con el nombre "${dto.name}"`);
+      }
+      throw e;
+    }
   }
 
-  async updateCategory(id: string, dto: { name?: string; icon?: string }) {
+  async updateCategory(id: string, dto: UpdateCategoryDto) {
     const existing = await this.prisma.categoria.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Category ${id} not found`);
-    return this.prisma.categoria.update({ where: { id }, data: dto });
+    try {
+      return await this.prisma.categoria.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+        },
+      });
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException(`Ya existe una categoría con el nombre "${dto.name}"`);
+      }
+      throw e;
+    }
   }
 
   async deleteCategory(id: string) {

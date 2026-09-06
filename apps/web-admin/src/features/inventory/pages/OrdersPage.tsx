@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
-import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter, Share2 } from 'lucide-react';
+import { getApiErrorMessage } from '@/app/api/client';
+import { operatorFields } from '@/shared/utils/persist-mutation';
+import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter, Share2, Pencil } from 'lucide-react';
 import type { Order, Product } from '@/app/components/store';
 import { getUnitLabel, roundUpToOrderUnit } from '@/app/components/store';
 import { useSearchParams } from 'react-router';
@@ -12,14 +14,14 @@ import jsPDF from 'jspdf';
 import { generateMovementBasedSuggestions, type SuggestionParams } from '@/features/kitchen/domain';
 import { isOrderReceived, sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
 
-type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival';
+type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival' | 'edit-order';
 type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
 
 export function OrdersPage() {
   const ctx = useAppContext();
   const {
-    orders, setOrders, products, addAudit, addStockMovements, getTotalStock, warehouses, suppliers, stockMovements,
-    inventoryApiAvailable, createPurchaseOrder, receivePurchaseOrder, setProducts,
+    orders, products, addAudit, getTotalStock, warehouses, suppliers, stockMovements,
+    createPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder, currentUser,
   } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<OrderView>('list');
@@ -41,6 +43,9 @@ export function OrdersPage() {
     allocations: { warehouseId: string; quantity: number }[];
   }[]>([]);
   const [arrivalDefaultWarehouseId, setArrivalDefaultWarehouseId] = useState<string>('');
+  const [savingArrival, setSavingArrival] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editItems, setEditItems] = useState<{ productId: string; quantity: number }[]>([]);
 
   const filteredOrders = useMemo(() => {
     const list = statusFilter === 'all'
@@ -119,15 +124,51 @@ export function OrdersPage() {
       productId: i.productId,
       quantityOrdered: i.quantity,
     }));
-    const newOrder = await createPurchaseOrder({
-      supplierId: supplierId || undefined,
-      provider: selectedSupplier?.name || provider || 'Proveedor General',
-      items,
-    });
-    addAudit({ user: 'Admin', action: 'Creación Pedido ' + newOrder.id, element: newOrder.id, newValue: 'Pendiente' });
-    setSuccessMsg('Pedido ' + newOrder.id + ' creado exitosamente');
-    setLastCreatedOrder(newOrder);
-    setView('create-step3');
+    try {
+      const newOrder = await createPurchaseOrder({
+        supplierId: supplierId || undefined,
+        provider: selectedSupplier?.name || provider || 'Proveedor General',
+        items,
+      });
+      addAudit({ user: 'Admin', action: 'Creación Pedido ' + newOrder.id, element: newOrder.id, newValue: 'Pendiente' });
+      setSuccessMsg('Pedido ' + newOrder.id + ' creado exitosamente');
+      setLastCreatedOrder(newOrder);
+      setView('create-step3');
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo crear el pedido'));
+    }
+  };
+
+  const startEditOrder = (order: Order) => {
+    setSelectedOrder(order);
+    setEditItems(order.items.map(i => ({ productId: i.productId, quantity: i.quantityOrdered })));
+    setView('edit-order');
+  };
+
+  const saveEditOrder = async () => {
+    if (!selectedOrder) return;
+    const items = editItems.filter(i => i.quantity > 0).map(i => ({
+      productId: i.productId,
+      quantityOrdered: i.quantity,
+    }));
+    if (items.length === 0) {
+      window.alert('El pedido debe tener al menos un producto con cantidad.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const updated = await updatePurchaseOrder({
+        orderId: selectedOrder.id,
+        items,
+      });
+      setSelectedOrder(updated);
+      setSuccessMsg('Pedido actualizado');
+      setView('list');
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo guardar el pedido'));
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const buildOrderPDFBlob = (order: Order): Blob => {
@@ -372,8 +413,8 @@ export function OrdersPage() {
     if (arrivalHasErrors) return;
 
     const receivedAtISO = new Date().toISOString();
-
-    if (inventoryApiAvailable) {
+    setSavingArrival(true);
+    try {
       await receivePurchaseOrder({
         orderId: selectedOrder.id,
         items: arrivalItems.map(it => ({
@@ -381,64 +422,16 @@ export function OrdersPage() {
           quantityReceived: it.received,
           allocations: it.allocations,
         })),
-        operatorId: 'Admin',
-        operatorName: 'Admin',
+        ...operatorFields({
+          operatorId: currentUser.id,
+          operatorName: currentUser.username,
+        }),
       });
-    } else {
-      // Modo offline: actualizar estado local
-      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? {
-        ...o,
-        status: 'Recibido' as const,
-        receivedAtISO,
-        items: o.items.map((item, idx) => ({ ...item, quantityReceived: arrivalItems[idx]?.received || 0 })),
-      } : o));
-
-      const addMap = new Map<string, number>();
-      for (const it of arrivalItems) {
-        for (const a of it.allocations) {
-          const key = `${it.productId}__${a.warehouseId}`;
-          addMap.set(key, (addMap.get(key) || 0) + (a.quantity || 0));
-        }
-      }
-
-      addStockMovements(
-        Array.from(addMap.entries())
-          .map(([key, qty]) => {
-            const [productId, warehouseId] = key.split('__');
-            return { productId, warehouseId, qty };
-          })
-          .filter(a => a.warehouseId && a.qty > 0)
-          .map(a => ({
-            type: 'entrada' as const,
-            productId: a.productId,
-            warehouseId: a.warehouseId,
-            quantity: a.qty,
-            reference: selectedOrder.id,
-            operatorId: 'Admin',
-            operatorName: 'Admin',
-          })),
-        receivedAtISO,
-      );
-
-      setProducts(prev => prev.map(p => {
-        const additions = Array.from(addMap.entries())
-          .filter(([key]) => key.startsWith(p.id + '__'))
-          .map(([key, qty]) => ({
-            warehouseId: key.split('__')[1],
-            qty,
-          }))
-          .filter(a => a.warehouseId && a.qty !== 0);
-
-        if (additions.length === 0) return p;
-
-        const next = [...p.stockByWarehouse];
-        for (const a of additions) {
-          const idx = next.findIndex(s => s.warehouseId === a.warehouseId);
-          if (idx >= 0) next[idx] = { ...next[idx], quantity: next[idx].quantity + a.qty };
-          else next.push({ warehouseId: a.warehouseId, quantity: a.qty });
-        }
-        return { ...p, stockByWarehouse: next };
-      }));
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo confirmar el arribo'));
+      return;
+    } finally {
+      setSavingArrival(false);
     }
 
     const whName = (id: string) => warehouses.find(w => w.id === id)?.name || id;
@@ -641,6 +634,46 @@ export function OrdersPage() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'edit-order' && selectedOrder) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <button onClick={() => setView('list')} className="hover:text-[#3d7a3d]">Pedidos</button>
+          <ChevronRight size={14} />
+          <span className="text-foreground">Editar {selectedOrder.id}</span>
+        </div>
+        <div className="bg-card rounded-xl border border-border shadow-sm divide-y divide-border">
+          {editItems.map((item, idx) => (
+            <div key={item.productId} className="px-4 py-3 flex items-center justify-between gap-3">
+              <p className="text-sm flex-1 truncate" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
+              <input
+                type="number"
+                min={0}
+                value={item.quantity}
+                onChange={e => {
+                  const next = [...editItems];
+                  next[idx] = { ...next[idx], quantity: parseInt(e.target.value, 10) || 0 };
+                  setEditItems(next);
+                }}
+                className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setView('list')} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
+          <button
+            onClick={() => void saveEditOrder()}
+            disabled={savingEdit}
+            className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm disabled:opacity-50"
+          >
+            {savingEdit ? 'Guardando…' : 'Guardar cantidades'}
+          </button>
         </div>
       </div>
     );
@@ -1017,14 +1050,14 @@ export function OrdersPage() {
             <button onClick={() => { setView('list'); setSelectedOrder(null); }} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
             <button
               onClick={confirmArrival}
-              disabled={arrivalHasErrors}
+              disabled={arrivalHasErrors || savingArrival}
               className={`px-6 py-2.5 rounded-lg text-white text-sm flex items-center gap-2 ${
-                arrivalHasErrors ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#3d7a3d] hover:bg-[#2f5f2f]'
+                arrivalHasErrors || savingArrival ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#3d7a3d] hover:bg-[#2f5f2f]'
               }`}
               title={arrivalHasErrors ? 'Revisá la distribución por almacén (la suma debe coincidir con recibido).' : 'Confirmar llegada'}
             >
               <Truck size={16} />
-              Confirmar Llegada
+              {savingArrival ? 'Confirmando…' : 'Confirmar Llegada'}
             </button>
           </div>
         </div>
@@ -1098,13 +1131,22 @@ export function OrdersPage() {
                 PDF
               </button>
               {order.status === 'Pendiente' && (
-                <button
-                  onClick={() => startArrival(order)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#3d7a3d] text-white hover:bg-[#2f5f2f] transition-colors flex-1 justify-center"
-                >
-                  <Truck size={13} />
-                  Confirmar Llegada
-                </button>
+                <>
+                  <button
+                    onClick={() => startEditOrder(order)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors border border-border/60"
+                  >
+                    <Pencil size={13} />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => startArrival(order)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#3d7a3d] text-white hover:bg-[#2f5f2f] transition-colors flex-1 justify-center"
+                  >
+                    <Truck size={13} />
+                    Confirmar Llegada
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1151,12 +1193,20 @@ export function OrdersPage() {
                         <FileText size={16} />
                       </button>
                       {order.status === 'Pendiente' && (
-                        <button
-                          onClick={() => startArrival(order)}
-                          className="text-xs text-[#3d7a3d] hover:underline"
-                        >
-                          Confirmar Llegada
-                        </button>
+                        <>
+                          <button
+                            onClick={() => startEditOrder(order)}
+                            className="text-xs text-muted-foreground hover:underline"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => startArrival(order)}
+                            className="text-xs text-[#3d7a3d] hover:underline"
+                          >
+                            Confirmar Llegada
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>

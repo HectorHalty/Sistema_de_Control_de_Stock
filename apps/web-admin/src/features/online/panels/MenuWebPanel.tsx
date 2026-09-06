@@ -3,12 +3,14 @@ import {
   onlineApi,
   salesApi,
   getAccessToken,
+  getApiErrorMessage,
   type Kitchen,
   type SalesProduct,
   type WebCategory,
   type WebFilter,
   type WebMenuProduct,
 } from '@/app/api/client';
+import { ProductEmojiPicker } from '@/features/sales/components/ProductEmojiPicker';
 import { OnlineMediaUpload } from '../OnlineMediaUpload';
 import { SalesProductPicker } from '../SalesProductPicker';
 import { OnlineError, OnlinePanelShell, onlineButtonClass, onlineFieldClass } from '../online-shared';
@@ -21,7 +23,7 @@ const emptyProduct = {
   category: 'Comidas',
   kitchenId: '',
   price: '',
-  emoji: '',
+  emoji: '🍽️',
   descripcionWeb: '',
   imagenWeb: '',
   webCategoryId: '',
@@ -87,7 +89,7 @@ export function MenuWebPanel() {
       category: product.category,
       kitchenId: product.kitchenId,
       price: String(product.price),
-      emoji: product.emoji ?? '',
+      emoji: product.emoji || '🍽️',
       descripcionWeb: '',
       imagenWeb: '',
       webCategoryId: '',
@@ -101,8 +103,9 @@ export function MenuWebPanel() {
     if (!token) return;
     setSavingId(row.id);
     try {
-      await onlineApi.menu.update(row.id, patch, token);
-      await reload();
+      const updated = await onlineApi.menu.update(row.id, patch, token);
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...updated } : r)));
+      void reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar');
     } finally {
@@ -127,7 +130,7 @@ export function MenuWebPanel() {
           category: draft.category.trim() || undefined,
           kitchenId: draft.kitchenId || undefined,
           price: Number(draft.price) || 0,
-          emoji: draft.emoji || undefined,
+          emoji: draft.emoji || '🍽️',
           descripcionWeb: draft.descripcionWeb || null,
           imagenWeb: draft.imagenWeb || null,
           visibleWeb: true,
@@ -151,46 +154,72 @@ export function MenuWebPanel() {
     e.preventDefault();
     const token = getAccessToken();
     if (!token || !newCategory.trim()) return;
-    await onlineApi.categories.create({ name: newCategory.trim() }, token);
-    setNewCategory('');
-    await reload();
+    setError(null);
+    try {
+      await onlineApi.categories.create({ name: newCategory.trim() }, token);
+      setNewCategory('');
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear la categoría');
+    }
   }
 
   async function addFilter(e: React.FormEvent) {
     e.preventDefault();
     const token = getAccessToken();
     if (!token || !newFilter.trim()) return;
-    await onlineApi.filters.create({ label: newFilter.trim() }, token);
-    setNewFilter('');
-    await reload();
+    setError(null);
+    try {
+      await onlineApi.filters.create({ label: newFilter.trim() }, token);
+      setNewFilter('');
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el filtro');
+    }
   }
 
   async function toggleCategory(cat: WebCategory) {
     const token = getAccessToken();
     if (!token) return;
-    await onlineApi.categories.update(cat.id, { active: !cat.active }, token);
-    await reload();
+    try {
+      await onlineApi.categories.update(cat.id, { active: !cat.active }, token);
+      await reload();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo actualizar la categoría'));
+    }
   }
 
   async function removeCategory(id: string) {
     const token = getAccessToken();
     if (!token || !confirm('¿Eliminar esta categoría?')) return;
-    await onlineApi.categories.remove(id, token);
-    await reload();
+    try {
+      await onlineApi.categories.remove(id, token);
+      await reload();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo eliminar la categoría'));
+    }
   }
 
   async function toggleFilter(f: WebFilter) {
     const token = getAccessToken();
     if (!token) return;
-    await onlineApi.filters.update(f.id, { active: !f.active }, token);
-    await reload();
+    try {
+      await onlineApi.filters.update(f.id, { active: !f.active }, token);
+      await reload();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo actualizar el filtro'));
+    }
   }
 
   async function removeFilter(id: string) {
     const token = getAccessToken();
     if (!token || !confirm('¿Eliminar este filtro?')) return;
-    await onlineApi.filters.remove(id, token);
-    await reload();
+    try {
+      await onlineApi.filters.remove(id, token);
+      await reload();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo eliminar el filtro'));
+    }
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -360,13 +389,12 @@ export function MenuWebPanel() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <input
-                className={onlineFieldClass()}
-                placeholder="Emoji"
-                value={draft.emoji}
-                onChange={(e) => setDraft({ ...draft, emoji: e.target.value })}
-                disabled={!draft.salesProductId}
-              />
+              <div className={!draft.salesProductId ? 'pointer-events-none opacity-50' : ''}>
+                <ProductEmojiPicker
+                  value={draft.emoji || '🍽️'}
+                  onChange={(emoji) => setDraft({ ...draft, emoji })}
+                />
+              </div>
               <div className="md:col-span-2">
                 <OnlineMediaUpload
                   label="Imagen del producto"
@@ -482,6 +510,12 @@ export function MenuWebPanel() {
                             <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
+                        <div>
+                          <ProductEmojiPicker
+                            value={row.emoji || '🍽️'}
+                            onChange={(emoji) => saveProduct(row, { emoji: emoji || '🍽️' })}
+                          />
+                        </div>
                         <div className="md:col-span-2">
                           <OnlineMediaUpload
                             value={row.imagenWeb ?? ''}

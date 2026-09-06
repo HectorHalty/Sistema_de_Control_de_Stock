@@ -54,7 +54,40 @@ const SPONSORS = [
   },
 ];
 
+const WEB_FILTERS = [
+  { slug: 'popular', label: 'Popular', sortOrder: 0 },
+  { slug: 'economico', label: 'Económico', sortOrder: 1 },
+  { slug: 'bebidas', label: 'Bebidas', sortOrder: 2 },
+  { slug: 'sin_tacc', label: 'Sin Tacc', sortOrder: 3 },
+];
+
+/** Mapeo menú → códigos de stock para recetas (si existen). */
+const RECIPES = {
+  'Hamburguesa clásica': [
+    { code: 'STK-CARNE-001', quantity: 1 },
+    { code: 'STK-PAN-001', quantity: 1 },
+    { code: 'STK-QUESO-001', quantity: 1 },
+  ],
+  'Papas fritas': [{ code: 'STK-PAPA-001', quantity: 0.25 }],
+  'Empanadas x3': [{ code: 'STK-EMPA-001', quantity: 3 }],
+  'Pizza muzzarella': [
+    { code: 'STK-MASA-001', quantity: 1 },
+    { code: 'STK-MUZZ-001', quantity: 0.2 },
+  ],
+  'Gaseosa 500ml': [{ code: 'STK-GASE-001', quantity: 0.083 }],
+  'Cerveza artesanal': [{ code: 'STK-CERV-001', quantity: 0.5 }],
+  'Agua mineral': [{ code: 'STK-AGUA-001', quantity: 0.083 }],
+};
+
 async function seedCantinaPublica(prisma) {
+  for (const f of WEB_FILTERS) {
+    await prisma.filtroWeb.upsert({
+      where: { slug: f.slug },
+      update: { label: f.label, sortOrder: f.sortOrder, active: true },
+      create: f,
+    });
+  }
+
   const categoryMap = new Map();
   for (const cat of WEB_CATEGORIES) {
     const row = await prisma.categoriaWeb.upsert({
@@ -74,6 +107,10 @@ async function seedCantinaPublica(prisma) {
 
     const webCategoryId = categoryMap.get(item.category) ?? null;
     const filterIds = (item.filters ?? []).map((slug) => filterMap.get(slug)).filter(Boolean);
+    if (item.popular) {
+      const popularId = filterMap.get('popular');
+      if (popularId && !filterIds.includes(popularId)) filterIds.push(popularId);
+    }
 
     const product = await prisma.productoVenta.upsert({
       where: { name_kitchenId: { name: item.name, kitchenId: kitchen.id } },
@@ -108,6 +145,26 @@ async function seedCantinaPublica(prisma) {
         skipDuplicates: true,
       });
     }
+
+    const recipeLines = RECIPES[item.name] ?? [];
+    for (const line of recipeLines) {
+      const stock = await prisma.producto.findUnique({ where: { code: line.code } });
+      if (!stock) continue;
+      await prisma.itemReceta.upsert({
+        where: {
+          salesProductId_stockProductId: {
+            salesProductId: product.id,
+            stockProductId: stock.id,
+          },
+        },
+        update: { quantity: line.quantity },
+        create: {
+          salesProductId: product.id,
+          stockProductId: stock.id,
+          quantity: line.quantity,
+        },
+      });
+    }
   }
 
   for (const sponsor of SPONSORS) {
@@ -122,7 +179,9 @@ async function seedCantinaPublica(prisma) {
     }
   }
 
-  console.log(`Cantina pública: ${MENU_ITEMS.length} ítems, ${WEB_CATEGORIES.length} categorías web.`);
+  console.log(
+    `Cantina pública: ${MENU_ITEMS.length} ítems, ${WEB_CATEGORIES.length} categorías, ${WEB_FILTERS.length} filtros, recetas vinculadas.`,
+  );
 }
 
 module.exports = { seedCantinaPublica };

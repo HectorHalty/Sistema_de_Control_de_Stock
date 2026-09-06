@@ -6,7 +6,12 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StockService } from './stock.service';
-import { CreateProductDto, UpdateProductDto, AdjustStockDto, CreateEmployeeConsumptionDto, CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto, CreatePurchaseOrderDto, ReceivePurchaseOrderDto } from './dto';
+import {
+  CreateProductDto, UpdateProductDto, AdjustStockDto, CreateEmployeeConsumptionDto,
+  CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto,
+  CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
+  CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
+} from './dto';
 import {
   STOCK_COUNT_ROLES,
   STOCK_CONSUMPTION_ROLES,
@@ -69,13 +74,13 @@ export class StockController {
 
   @Post('warehouses')
   @Roles(...STOCK_MUTATION_ROLES)
-  createWarehouse(@Body() dto: { name: string; location: string; icon?: string }) {
+  createWarehouse(@Body() dto: CreateWarehouseDto) {
     return this.stockService.createWarehouse(dto);
   }
 
   @Put('warehouses/:id')
   @Roles(...STOCK_MUTATION_ROLES)
-  updateWarehouse(@Param('id') id: string, @Body() dto: { name?: string; location?: string; icon?: string }) {
+  updateWarehouse(@Param('id') id: string, @Body() dto: UpdateWarehouseDto) {
     return this.stockService.updateWarehouse(id, dto);
   }
 
@@ -93,13 +98,13 @@ export class StockController {
 
   @Post('categories')
   @Roles(...STOCK_MUTATION_ROLES)
-  createCategory(@Body() dto: { name: string; icon?: string }) {
+  createCategory(@Body() dto: CreateCategoryDto) {
     return this.stockService.createCategory(dto);
   }
 
   @Put('categories/:id')
   @Roles(...STOCK_MUTATION_ROLES)
-  updateCategory(@Param('id') id: string, @Body() dto: { name?: string; icon?: string }) {
+  updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.stockService.updateCategory(id, dto);
   }
 
@@ -195,6 +200,12 @@ export class StockController {
   @Roles(...STOCK_MUTATION_ROLES)
   createPurchaseOrder(@Body() dto: CreatePurchaseOrderDto) {
     return this.stockService.createPurchaseOrder(dto);
+  }
+
+  @Put('purchase-orders/:id')
+  @Roles(...STOCK_MUTATION_ROLES)
+  updatePurchaseOrder(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto) {
+    return this.stockService.updatePurchaseOrder(id, dto);
   }
 
   @Post('purchase-orders/:id/receive')

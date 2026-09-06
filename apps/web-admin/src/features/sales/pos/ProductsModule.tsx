@@ -9,6 +9,7 @@ import { getSalesCategoryEmoji, mergeSalesCategories } from "@/features/sales/li
 import { Product } from "./mockData";
 import { getStationStyle } from "./station-styles";
 import { useStore } from "./VentasPosContext";
+import { getApiErrorMessage } from "@/app/api/client";
 
 export function ProductsModule() {
   const {
@@ -34,8 +35,8 @@ export function ProductsModule() {
       await storeSave(p);
       setEditing(null);
       setCreating(false);
-    } catch {
-      // El modal muestra el error; los datos ya quedaron en localStorage.
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo guardar el producto'));
     }
   };
 
@@ -97,7 +98,10 @@ export function ProductsModule() {
           return (
             <section key={cat}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{getSalesCategoryEmoji(cat, salesCategoryEmojis)}</span>
+                <ProductEmojiPicker
+                  value={getSalesCategoryEmoji(cat, salesCategoryEmojis)}
+                  onChange={(emoji) => addSalesCategory(cat, emoji)}
+                />
                 <h4 className="text-foreground">{cat}</h4>
                 <span className="text-xs text-muted-foreground">({list.length})</span>
               </div>
@@ -218,9 +222,9 @@ function KitchensManager() {
     }
     try {
       if (editing) {
-        await updateKitchen(editing.id, { name: trimmed, emoji });
+        await updateKitchen(editing.id, { name: trimmed, emoji: emoji || '🍽️' });
       } else {
-        await createKitchen({ name: trimmed, emoji });
+        await createKitchen({ name: trimmed, emoji: emoji || '🍽️' });
       }
       closeForm();
     } catch (e) {
@@ -585,6 +589,7 @@ function ProductEditor({
               try {
                 await onSave({
                   ...draft,
+                  emoji: draft.emoji || '🍽️',
                   kind: draft.kind === 'promo' ? 'promo' : 'simple',
                 });
               } catch (e) {

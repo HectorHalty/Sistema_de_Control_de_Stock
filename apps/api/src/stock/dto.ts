@@ -55,7 +55,7 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsUUID()
@@ -68,11 +68,11 @@ export class UpdateProductDto {
 
   @IsOptional()
   @IsInt()
-  orderUnit?: number;
+  orderUnit?: number | null;
 
   @IsOptional()
   @IsString()
-  image?: string;
+  image?: string | null;
 }
 
 export class AdjustStockDto {
@@ -218,6 +218,23 @@ export class CreatePurchaseOrderDto {
   items: PurchaseOrderItemDto[];
 }
 
+export class UpdatePurchaseOrderDto {
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  provider?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderItemDto)
+  items?: PurchaseOrderItemDto[];
+}
+
 export class ReceiveAllocationDto {
   @IsUUID()
   warehouseId: string;
@@ -255,4 +272,59 @@ export class ReceivePurchaseOrderDto {
   @IsString()
   @MaxLength(120)
   operatorName?: string;
+}
+
+export class CreateCategoryDto {
+  @IsString()
+  @MaxLength(120)
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class CreateWarehouseDto {
+  @IsString()
+  @MaxLength(120)
+  name: string;
+
+  @IsString()
+  @MaxLength(200)
+  location: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class UpdateWarehouseDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
 }

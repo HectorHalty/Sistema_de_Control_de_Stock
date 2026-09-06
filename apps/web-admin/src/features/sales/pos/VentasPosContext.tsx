@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { useSalesApiAdapter, usePrintingApiAdapter } from '@/app/api/adapters';
+import { scheduleBackgroundHydrate } from '@/shared/utils/persist-mutation';
 import { getSessionUserId, isUuid } from '@/shared/auth/session';
 import {
   buildRequiredStockFromCart,
@@ -18,6 +19,9 @@ import {
   getTotalStockQuantity,
   restoreStockForTicket,
   validateStockForCart,
+  allocateStockForCart,
+  applyStockAllocations,
+  cartHasLocalStockIds,
 } from '../stock-link';
 import type { SalesCartLine } from '../stock-link';
 import type { StockMovement } from '@/app/components/store';
@@ -280,10 +284,13 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       deductLocally = true,
     ) => {
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
+      let stored = ticket;
       // Si la venta se confirmó contra la API, el stock ya se descontó server-side;
       // evitamos el doble descuento local y re-hidratamos el stock más abajo.
       if (deductLocally) {
-        ctx.setProducts(prev => deductStockForSale(prev, cart, ctx.salesProducts));
+        const allocations = allocateStockForCart(cart, ctx.salesProducts, ctx.products);
+        stored = { ...ticket, stockAllocations: allocations };
+        ctx.setProducts(prev => applyStockAllocations(prev, allocations, -1));
         ctx.addStockMovements(
           buildStockMovementsFromCart(
             cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
@@ -296,7 +303,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           ticket.createdAtISO,
         );
       }
-      ctx.setSalesTickets(prev => [ticket, ...prev]);
+      ctx.setSalesTickets(prev => [stored, ...prev]);
       if (table) {
         ctx.setSalesTables(prev =>
           prev.map(x =>
@@ -342,93 +349,64 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
 
       const table = selectedTableId ? ctx.salesTables.find(x => x.id === selectedTableId) : null;
       const note = t.context || (table ? `Mesa: ${table.name}` : undefined);
-      const offlineMode = ctx.salesApiAvailable === false;
 
-      if (!offlineMode) {
-        if (salesApi.apiAvailable === false) {
-          setToast('Servidor no disponible. La venta no se puede guardar sin conexión a la API.');
-          return null;
-        }
-
-        const operatorId = currentUser.id;
-        if (!operatorId) {
-          setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
-          return null;
-        }
-
-        const unsynced = cart.filter(i => !isUuid(i.salesProductId));
-        if (unsynced.length > 0) {
-          setToast(
-            'Hay productos no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.',
-          );
-          return null;
-        }
-
-        // Validación rápida con caché local; el servidor valida stock de forma autoritativa en checkout.
-        if (ctx.validateStockOnSale !== false) {
-          const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
-          if (!validation.ok) {
-            setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
-            return null;
-          }
-        }
-
-        const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const apiResult = await salesApi.checkout({
-          items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-          operatorId,
-          note,
-          idempotencyKey,
-        });
-
-        if (apiResult.ok && 'result' in apiResult) {
-          const ticket = mapApiTicketToLocal(
-            apiResult.result.ticket,
-            ctx.salesProducts,
-            currentUser.name,
-          );
-          ctx.invalidateSalesHydration();
-          ctx.invalidateInventoryHydration();
-          ctx.setSalesTicketCounter(ticket.number);
-          const pos = finishSaleLocal(ticket, cart, true);
-          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
-          void ctx.refreshStockProducts().catch(() => undefined);
-          return pos;
-        }
-        if ('error' in apiResult && apiResult.error) {
-          setToast(`Error en venta: ${apiResult.error}`);
-          return null;
-        }
-        setToast('No se pudo guardar la venta en el servidor.');
+      const operatorId = currentUser.id;
+      if (!operatorId) {
+        setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
         return null;
       }
 
-      const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
-      if (!validation.ok) {
-        setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+      const unsynced = cart.filter(i => !isUuid(i.salesProductId));
+      if (unsynced.length > 0) {
+        setToast(
+          'Hay productos no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.',
+        );
         return null;
       }
 
-      const nextCounter = ctx.salesTicketCounter + 1;
-      const newTicket: SalesTicket = {
-        id: `sale-${Date.now()}`,
-        number: nextCounter,
-        createdAtISO: new Date().toISOString(),
-        status: 'emitido',
-        items: cart.map(i => ({
-          salesProductId: i.salesProductId,
-          name: i.name,
-          unitPrice: i.unitPrice,
-          quantity: i.quantity,
-          kitchenId: i.kitchenId,
-        })),
-        total: t.total,
-        operatorId: currentUser.id,
-        operatorName: currentUser.name,
+      if (cartHasLocalStockIds(cart, ctx.salesProducts)) {
+        setToast(
+          'Hay ingredientes de stock no sincronizados. Guardá primero el producto de inventario y volvé a armar la receta.',
+        );
+        return null;
+      }
+
+      if (ctx.validateStockOnSale !== false) {
+        const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
+        if (!validation.ok) {
+          setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+          return null;
+        }
+      }
+
+      const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const apiResult = await salesApi.checkout({
+        items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+        operatorId,
         note,
-      };
-      ctx.setSalesTicketCounter(nextCounter);
-      return finishSaleLocal(newTicket, cart);
+        idempotencyKey,
+      });
+
+      if (apiResult.ok && 'result' in apiResult) {
+        const ticket = mapApiTicketToLocal(
+          apiResult.result.ticket,
+          ctx.salesProducts,
+          currentUser.name,
+        );
+        ctx.invalidateSalesHydration();
+        ctx.invalidateInventoryHydration();
+        ctx.setSalesTicketCounter(ticket.number);
+        const pos = finishSaleLocal(ticket, cart, false);
+        scheduleBackgroundHydrate(() => ctx.hydrateTickets(ctx.salesProducts));
+        scheduleBackgroundHydrate(() => ctx.refreshStockProducts());
+        return pos;
+      }
+      if ('error' in apiResult && apiResult.error) {
+        setToast(`Error en venta: ${apiResult.error}`);
+        return null;
+      }
+      setToast('No se pudo guardar la venta en el servidor.');
+      return null;
     },
     [ctx, currentUser, enrichCartKitchens, selectedTableId, salesApi, finishSaleLocal],
   );
@@ -447,7 +425,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           const synced = mapApiTicketToLocal(apiResult.result, ctx.salesProducts, currentUser.name);
           ctx.invalidateSalesHydration();
           ctx.invalidateInventoryHydration();
-          void ctx.refreshStockProducts().catch(() => undefined);
+          scheduleBackgroundHydrate(() => ctx.refreshStockProducts());
           ctx.setSalesTickets(prev =>
             prev.map(t => (t.id === id ? { ...synced, status: 'anulado' as const } : t)),
           );
@@ -541,8 +519,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           ctx.invalidateInventoryHydration();
           ctx.setSalesTicketCounter(ticket.number);
           ctx.setSalesTickets(prev => [ticket, ...prev]);
-          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
-          void ctx.refreshStockProducts().catch(() => undefined);
+          scheduleBackgroundHydrate(() => ctx.hydrateTickets(ctx.salesProducts));
+          scheduleBackgroundHydrate(() => ctx.refreshStockProducts());
 
           const historyEntry: SalesHistoryEntry = {
             id: `h-${Date.now()}`,
@@ -673,8 +651,8 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
           ctx.invalidateSalesHydration();
           ctx.invalidateInventoryHydration();
           ctx.setSalesTickets(prev => prev.map(t => (t.id === id ? synced : t)));
-          void ctx.hydrateTickets(ctx.salesProducts).catch(() => undefined);
-          void ctx.refreshStockProducts().catch(() => undefined);
+          scheduleBackgroundHydrate(() => ctx.hydrateTickets(ctx.salesProducts));
+          scheduleBackgroundHydrate(() => ctx.refreshStockProducts());
           return ticketToPos(synced, currentUser.name, ctx.kitchens);
         }
         if (!apiResult.apiUnavailable && 'error' in apiResult) {
@@ -751,13 +729,15 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         category: p.category,
         kitchenId: kitchen?.id || ctx.kitchens[0]?.id || '',
         price: p.price,
-        emoji: p.emoji,
+        emoji: p.emoji || '🍽️',
         active: true,
         kind: p.kind === 'promo' ? 'promo' : 'simple',
-        recipe: (p.recipe || []).map(r => ({
-          stockProductId: r.ingredientId,
-          quantity: r.qty,
-        })),
+        recipe: (p.recipe || [])
+          .filter(r => r.ingredientId && isUuid(r.ingredientId))
+          .map(r => ({
+            stockProductId: r.ingredientId,
+            quantity: r.qty,
+          })),
         bundle: (p.bundle || []).map(b => ({
           salesProductId: b.productId,
           quantity: b.qty,

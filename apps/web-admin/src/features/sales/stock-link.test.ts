@@ -1,6 +1,14 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { Product, SalesProduct } from '@/app/components/store';
-import { getMaxSellableUnits, isSalesProductAvailable, deductStockForSale, computeSellableStock } from './stock-link';
+import {
+  getMaxSellableUnits,
+  isSalesProductAvailable,
+  deductStockForSale,
+  computeSellableStock,
+  allocateStockForCart,
+  applyStockAllocations,
+  restoreStockForTicket,
+} from './stock-link';
 
 const stockProducts: Product[] = [
   {
@@ -99,5 +107,64 @@ describe('stock-link', () => {
       catalog,
     );
     expect(updated.find(p => p.id === 'p1')?.stockByWarehouse[0].quantity).toBe(3);
+  });
+
+  it('expands nested promos the same way as the API', () => {
+    const megaPromo: SalesProduct = {
+      ...promoFernet,
+      id: 'sp-mega',
+      name: 'Mega 2 promos',
+      bundle: [{ salesProductId: 'sp-promo', quantity: 2 }],
+    };
+    const catalog = [vasoFernet, promoFernet, megaPromo];
+    expect(getMaxSellableUnits(megaPromo, stockProducts, catalog)).toBe(1);
+    const updated = deductStockForSale(
+      stockProducts,
+      [{ salesProductId: 'sp-mega', quantity: 1 }],
+      catalog,
+    );
+    expect(updated.find(p => p.id === 'p1')?.stockByWarehouse[0].quantity).toBe(1);
+  });
+
+  it('restores the same warehouses as the sale snapshot', () => {
+    const twoWh: Product[] = [
+      {
+        ...stockProducts[0],
+        stockByWarehouse: [
+          { warehouseId: 'w1', quantity: 5 },
+          { warehouseId: 'w2', quantity: 3 },
+        ],
+      },
+    ];
+    const allocs = allocateStockForCart(
+      [{ salesProductId: 'sp-vaso', quantity: 6 }],
+      [vasoFernet],
+      twoWh,
+    );
+    expect(allocs).toEqual([
+      { stockProductId: 'p1', warehouseId: 'w1', quantity: 5 },
+      { stockProductId: 'p1', warehouseId: 'w2', quantity: 1 },
+    ]);
+    const afterSale = applyStockAllocations(twoWh, allocs, -1);
+    expect(afterSale[0].stockByWarehouse.find(w => w.warehouseId === 'w1')?.quantity).toBe(0);
+    expect(afterSale[0].stockByWarehouse.find(w => w.warehouseId === 'w2')?.quantity).toBe(2);
+
+    const restored = restoreStockForTicket(
+      afterSale,
+      {
+        id: 't1',
+        number: 1,
+        createdAtISO: new Date().toISOString(),
+        status: 'emitido',
+        items: [{ salesProductId: 'sp-vaso', name: 'Vaso', unitPrice: 500, quantity: 6, kitchenId: 'k1' }],
+        total: 3000,
+        operatorId: 'op',
+        operatorName: 'Op',
+        stockAllocations: allocs,
+      },
+      [vasoFernet],
+    );
+    expect(restored[0].stockByWarehouse.find(w => w.warehouseId === 'w1')?.quantity).toBe(5);
+    expect(restored[0].stockByWarehouse.find(w => w.warehouseId === 'w2')?.quantity).toBe(3);
   });
 });

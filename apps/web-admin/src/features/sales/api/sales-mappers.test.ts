@@ -26,7 +26,7 @@ describe('mapApiSalesProductToLocal', () => {
       category: 'Comidas',
       kitchenId: 'k-1',
       price: 3500,
-      emoji: '',
+      emoji: '🍽️',
       kind: 'simple',
       active: true,
       recipe: [

@@ -22,6 +22,8 @@ export function ProductsPage() {
     updateProduct,
     deleteProduct,
     createCategory,
+    updateCategory,
+    currentUser,
   } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -65,8 +67,8 @@ export function ProductsPage() {
           warehouseId: m.warehouseId,
           quantity: m.delta,
           reference: 'Edición de producto',
-          operatorId: 'Admin',
-          operatorName: 'Admin',
+          operatorId: currentUser.id,
+          operatorName: currentUser.username,
         }));
 
       try {
@@ -388,7 +390,10 @@ export function ProductsPage() {
           warehouses={warehouses}
           categories={categories}
           onAddCategory={async (cat: Category) => {
-            await createCategory({ name: cat.name, icon: cat.icon });
+            return createCategory({ name: cat.name, icon: cat.icon || 'Package' });
+          }}
+          onUpdateCategory={async (cat: Category) => {
+            await updateCategory({ ...cat, icon: cat.icon || 'Package' });
           }}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditingProduct(null); }}
@@ -427,12 +432,13 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
   );
 }
 
-function ProductFormModal({ product, allProducts, warehouses, categories, onAddCategory, onSave, onClose }: {
+function ProductFormModal({ product, allProducts, warehouses, categories, onAddCategory, onUpdateCategory, onSave, onClose }: {
   product: Product | null;
   allProducts: Product[];
   warehouses: { id: string; name: string }[];
   categories: Category[];
-  onAddCategory: (cat: Category) => void | Promise<void>;
+  onAddCategory: (cat: Category) => void | Category | Promise<void | Category>;
+  onUpdateCategory: (cat: Category) => void | Promise<void>;
   onSave: (p: Product) => void;
   onClose: () => void;
 }) {
@@ -447,6 +453,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('Package');
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [iconEditCategoryId, setIconEditCategoryId] = useState<string | null>(null);
 
   const addWarehouseStock = () => {
     const available = warehouses.filter(w => !form.stockByWarehouse.find(s => s.warehouseId === w.id));
@@ -469,11 +476,11 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
     const newCat: Category = {
       id: 'cat' + Date.now(),
       name: newCategoryName.trim(),
-      icon: newCategoryIcon,
+      icon: newCategoryIcon || 'Package',
     };
     try {
-      await onAddCategory(newCat);
-      setForm(prev => ({ ...prev, category: newCat.name }));
+      const persisted = await onAddCategory(newCat);
+      setForm(prev => ({ ...prev, category: persisted?.name ?? newCat.name }));
       setNewCategoryName('');
       setNewCategoryIcon('Package');
       setShowIconPicker(false);
@@ -618,21 +625,61 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                     )}
                     {categories.map(cat => {
                       const CIcon = getCategoryIcon(cat.icon);
+                      const editingIcon = iconEditCategoryId === cat.id;
                       return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => {
-                            setForm(prev => ({ ...prev, category: cat.name }));
-                            setShowCategoryDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-sm hover:bg-muted transition-colors text-left text-foreground ${form.category === cat.name ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
-                        >
-                          <div className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center">
-                            <CIcon size={14} className="text-[#3d7a3d]" />
+                        <div key={cat.id} className="border-b border-border last:border-b-0">
+                          <div className="flex items-stretch">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm(prev => ({ ...prev, category: cat.name }));
+                                setShowCategoryDropdown(false);
+                                setIconEditCategoryId(null);
+                              }}
+                              className={`min-w-0 flex-1 px-3 py-2.5 flex items-center gap-2.5 text-sm hover:bg-muted transition-colors text-left text-foreground ${form.category === cat.name ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]' : ''}`}
+                            >
+                              <div className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center">
+                                <CIcon size={14} className="text-[#3d7a3d]" />
+                              </div>
+                              <span>{cat.name}</span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Cambiar icono"
+                              onClick={() => setIconEditCategoryId(prev => prev === cat.id ? null : cat.id)}
+                              className="px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <Edit size={14} />
+                            </button>
                           </div>
-                          <span>{cat.name}</span>
-                        </button>
+                          {editingIcon && (
+                            <div className="grid grid-cols-7 gap-1 p-2 bg-card border-t border-border max-h-36 overflow-y-auto">
+                              {AVAILABLE_ICON_NAMES.map(name => {
+                                const IconComp = getCategoryIcon(name);
+                                return (
+                                  <button
+                                    key={name}
+                                    type="button"
+                                    onClick={() => {
+                                      void (async () => {
+                                        try {
+                                          await onUpdateCategory({ ...cat, icon: name });
+                                          setIconEditCategoryId(null);
+                                        } catch (e) {
+                                          window.alert(e instanceof Error ? e.message : 'No se pudo guardar el icono');
+                                        }
+                                      })();
+                                    }}
+                                    className={`p-2 rounded-md hover:bg-muted transition-colors ${cat.icon === name ? 'bg-primary/10 ring-1 ring-primary' : ''}`}
+                                    title={name}
+                                  >
+                                    <IconComp size={16} className={cat.icon === name ? 'text-primary' : 'text-muted-foreground'} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -683,8 +730,13 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
             type="number"
             value={form.orderUnit || ''}
             onChange={e => {
-              const val = parseInt(e.target.value);
-              setForm(p => ({ ...p, orderUnit: val > 0 ? val : undefined }));
+              const raw = e.target.value;
+              if (raw === '') {
+                setForm(p => ({ ...p, orderUnit: 0 }));
+                return;
+              }
+              const val = parseInt(raw, 10);
+              setForm(p => ({ ...p, orderUnit: val > 0 ? val : 0 }));
             }}
             className="w-full px-3 py-2 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm text-foreground"
             min={1}

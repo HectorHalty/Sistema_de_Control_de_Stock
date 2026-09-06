@@ -352,7 +352,7 @@ export class OnlineService {
           visibleWeb: rest.visibleWeb,
           descripcionWeb: rest.descripcionWeb,
           imagenWeb: rest.imagenWeb,
-          emoji: rest.emoji ?? undefined,
+          ...(rest.emoji !== undefined ? { emoji: rest.emoji || '🍽️' } : {}),
           price: rest.price,
           webCategoryId: rest.webCategoryId,
           popularWeb: rest.popularWeb,
@@ -431,7 +431,7 @@ export class OnlineService {
       where: { id },
       data: {
         label: data.label,
-        slug: data.slug ? slugify(data.slug) : undefined,
+        slug: data.slug ? slugify(data.slug) : data.label ? slugify(data.label) : undefined,
         sortOrder: data.sortOrder,
         active: data.active,
       },

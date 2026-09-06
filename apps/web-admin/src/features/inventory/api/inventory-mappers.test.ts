@@ -80,6 +80,11 @@ describe('mapApiWarehouseToLocal / mapApiCategoryToLocal', () => {
     const cat = { id: 'c', name: 'Bebidas' } as Category;
     expect(mapApiCategoryToLocal(cat)).toEqual({ id: 'c', name: 'Bebidas', icon: 'Package' });
   });
+
+  it('conserva el icono persistido del almacén', () => {
+    const wh = { id: 'w', name: 'Heladera', location: 'Bar', icon: 'Refrigerator' } as Warehouse;
+    expect(mapApiWarehouseToLocal(wh).icon).toBe('Refrigerator');
+  });
 });
 
 describe('nextProductCode', () => {

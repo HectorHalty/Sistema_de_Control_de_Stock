@@ -357,6 +357,18 @@ export const stockApi = {
       token: string,
     ) =>
       apiFetch<ApiPurchaseOrder>('/stock/purchase-orders', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: {
+        supplierId?: string | null;
+        provider?: string;
+        items: { productId: string; quantityOrdered: number }[];
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiPurchaseOrder>(`/stock/purchase-orders/${encodeURIComponent(id)}`, {
+        method: 'PUT', token, body: data,
+      }),
     receive: (
       id: string,
       data: {
@@ -821,6 +833,63 @@ export const onlineCatalogApi = {
   },
 };
 
+/**
+ * Admin settings endpoints (config, printers, sales categories, tables).
+ */
+export const settingsApi = {
+  config: {
+    list: (scope?: string) => {
+      const q = scope ? `?scope=${encodeURIComponent(scope)}` : '';
+      return apiFetch<Array<{ id: string; key: string; scope: string; value: unknown }>>(`/settings/config${q}`);
+    },
+    upsert: (data: { key: string; scope: string; value: unknown }, token: string) =>
+      apiFetch<{ id: string; key: string; scope: string; value: unknown }>('/settings/config', {
+        method: 'PUT', token, body: data,
+      }),
+  },
+  salesCategories: {
+    list: () => apiFetch<Array<{ id: string; name: string; emoji: string; sortOrder: number }>>('/settings/sales-categories'),
+    create: (data: { name: string; emoji?: string; sortOrder?: number }, token: string) =>
+      apiFetch<{ id: string; name: string; emoji: string; sortOrder: number }>('/settings/sales-categories', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; emoji?: string; sortOrder?: number }, token: string) =>
+      apiFetch<{ id: string; name: string; emoji: string; sortOrder: number }>(`/settings/sales-categories/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/sales-categories/${id}`, { method: 'DELETE', token }),
+  },
+  printers: {
+    list: () => apiFetch<Array<{ id: string; name: string; type: string; ip: string; port: number; paperWidth: number; connected: boolean; isDefault: boolean }>>('/settings/printers'),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/printers', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/printers/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/printers/${id}`, { method: 'DELETE', token }),
+  },
+  tables: {
+    list: () => apiFetch<Array<{ id: string; name: string; status: string; currentOrderId?: string | null }>>('/settings/tables'),
+    create: (data: { name: string; status?: string }, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/tables', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/tables/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/tables/${id}`, { method: 'DELETE', token }),
+  },
+  teamAccounts: {
+    list: () => apiFetch<Array<{ id: string; team: string; openedAt: string; status: string; items: unknown }>>('/settings/team-accounts'),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/team-accounts', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/team-accounts/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/team-accounts/${id}`, { method: 'DELETE', token }),
+  },
+  audit: {
+    list: (limit?: number) => apiFetch<unknown[]>(`/settings/audit${limit ? `?limit=${limit}` : ''}`),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<unknown>('/settings/audit', { method: 'POST', token, body: data }),
+  },
+};
+
 // ============ Type definitions shared between API and frontend ============
 
 export interface StockProduct {
@@ -961,7 +1030,15 @@ export interface SalesTicket {
   operatorId: string;
   note?: string;
   operator?: { username: string };
-  items: { id: string; salesProductId: string; name: string; unitPrice: number; quantity: number }[];
+  items: {
+    id: string;
+    salesProductId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
+  }[];
+  stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
   kitchenOrders?: KitchenOrder[];
 }
 
@@ -1356,8 +1433,8 @@ export interface CreateProductPayload {
 }
 
 export interface UpdateProductPayload {
-  name?: string; code?: string; description?: string;
-  categoryId?: string; unit?: string; orderUnit?: number; image?: string;
+  name?: string; code?: string; description?: string | null;
+  categoryId?: string; unit?: string; orderUnit?: number | null; image?: string | null;
 }
 
 export interface CreateSalesProductPayload {

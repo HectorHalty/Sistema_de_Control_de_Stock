@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
@@ -23,7 +24,7 @@ export class OnlineCatalogService {
 
   async create(data: {
     name: string; description?: string; price: number; image?: string;
-    images?: string[]; category: string; attributes?: Record<string, any>;
+    images?: string[]; category: string; attributes?: Record<string, unknown> | null;
     stockProductId?: string;
   }) {
     return this.prisma.productoOnline.create({
@@ -43,7 +44,7 @@ export class OnlineCatalogService {
 
   async update(id: string, data: {
     name?: string; description?: string; price?: number; image?: string;
-    images?: string[]; category?: string; attributes?: Record<string, any>;
+    images?: string[]; category?: string; attributes?: Record<string, unknown> | null;
     active?: boolean; stockProductId?: string;
   }) {
     await this.findById(id);
@@ -52,7 +53,9 @@ export class OnlineCatalogService {
       where: { id },
       data: {
         ...rest,
-        ...(attributes ? { attributes: JSON.parse(JSON.stringify(attributes)) } : {}),
+        ...(attributes !== undefined
+          ? { attributes: attributes === null ? Prisma.JsonNull : JSON.parse(JSON.stringify(attributes)) }
+          : {}),
       },
     });
   }

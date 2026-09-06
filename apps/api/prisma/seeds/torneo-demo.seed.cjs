@@ -270,7 +270,73 @@ async function seedTorneoDemo(prisma) {
           ],
         });
       }
+
+      const existingCard = await prisma.eventoPartido.findFirst({
+        where: { partidoId: playedMatch.id, personaId: scorerPersona.id, tipo: 'roja' },
+      });
+      if (!existingCard) {
+        await prisma.eventoPartido.create({
+          data: {
+            partidoId: playedMatch.id,
+            personaId: scorerPersona.id,
+            tipo: 'roja',
+            minuto: 78,
+          },
+        });
+      }
+
+      const existingSusp = await prisma.suspension.findFirst({
+        where: { personaId: scorerPersona.id, torneoId: torneo.id, activa: true },
+      });
+      if (!existingSusp) {
+        await prisma.suspension.create({
+          data: {
+            personaId: scorerPersona.id,
+            torneoId: torneo.id,
+            motivo: 'Tarjeta roja directa — partido demo Jornada 1',
+            fechasRestantes: 2,
+            activa: true,
+            origenPartidoId: playedMatch.id,
+          },
+        });
+      }
     }
+  }
+
+  // Plantel mínimo en segundo equipo para probar plantel/capitanes
+  const segundo = equipoRecords[1];
+  const extraPlayers = [
+    { dni: '35111222', nombre: 'Martín', apellido: 'Sosa', email: 'martin.sosa@demo.test' },
+    { dni: '35222333', nombre: 'Ana', apellido: 'Ruiz', email: 'ana.ruiz@demo.test' },
+    { dni: '35333444', nombre: 'Pedro', apellido: 'Vega', email: 'pedro.vega@demo.test' },
+  ];
+  for (const j of extraPlayers) {
+    const persona = await prisma.persona.upsert({
+      where: { dni: j.dni },
+      update: { nombre: j.nombre, apellido: j.apellido, email: j.email },
+      create: {
+        dni: j.dni,
+        nombre: j.nombre,
+        apellido: j.apellido,
+        email: j.email,
+        fechaNacimiento: new Date('1998-03-10'),
+      },
+    });
+    await prisma.inscripcionJugador.upsert({
+      where: { personaId_torneoId: { personaId: persona.id, torneoId: torneo.id } },
+      update: {
+        equipoInscripcionId: segundo.inscripcion.id,
+        rolPlantel: 'jugador',
+        activa: true,
+      },
+      create: {
+        personaId: persona.id,
+        torneoId: torneo.id,
+        equipoInscripcionId: segundo.inscripcion.id,
+        rolPlantel: 'jugador',
+        activa: true,
+      },
+    });
   }
 
   console.log(`Torneo demo: ${DEMO_EQUIPOS.length} equipos, categoría Libre A, jornada 1.`);

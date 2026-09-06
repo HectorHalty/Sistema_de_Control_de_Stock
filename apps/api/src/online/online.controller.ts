@@ -15,6 +15,15 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, type AuthUser } from '../common/decorators/current-user.decorator';
 import { OnlineService } from './online.service';
 import { ONLINE_MUTATION_ROLES, ONLINE_READ_ROLES } from '../common/roles';
+import {
+  CreateOnlineCategoryDto,
+  CreateOnlineFilterDto,
+  CreateWebMenuProductDto,
+  RedeemQrDto,
+  UpdateOnlineCategoryDto,
+  UpdateOnlineFilterDto,
+  UpdateWebMenuProductDto,
+} from './dto';
 
 @Controller('online')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,47 +60,13 @@ export class OnlineController {
 
   @Post('menu')
   @Roles(...ONLINE_MUTATION_ROLES)
-  createMenu(
-    @Body()
-    body: {
-      name: string;
-      category: string;
-      kitchenId: string;
-      price: number;
-      emoji?: string;
-      descripcionWeb?: string;
-      imagenWeb?: string;
-      visibleWeb?: boolean;
-      webCategoryId?: string;
-      popularWeb?: boolean;
-      filterIds?: string[];
-      recipe?: { stockProductId: string; quantity: number }[];
-    },
-  ) {
+  createMenu(@Body() body: CreateWebMenuProductDto) {
     return this.online.createWebMenuProduct(body);
   }
 
   @Put('menu/:id')
   @Roles(...ONLINE_MUTATION_ROLES)
-  updateMenu(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      category?: string;
-      kitchenId?: string;
-      visibleWeb?: boolean;
-      descripcionWeb?: string | null;
-      imagenWeb?: string | null;
-      emoji?: string | null;
-      price?: number;
-      webCategoryId?: string | null;
-      popularWeb?: boolean;
-      webSortOrder?: number;
-      filterIds?: string[];
-      active?: boolean;
-    },
-  ) {
+  updateMenu(@Param('id') id: string, @Body() body: UpdateWebMenuProductDto) {
     return this.online.updateWebMenu(id, body);
   }
 
@@ -103,16 +78,13 @@ export class OnlineController {
 
   @Post('categories')
   @Roles(...ONLINE_MUTATION_ROLES)
-  createCategory(@Body() body: { name: string; sortOrder?: number }) {
+  createCategory(@Body() body: CreateOnlineCategoryDto) {
     return this.online.createCategory(body);
   }
 
   @Put('categories/:id')
   @Roles(...ONLINE_MUTATION_ROLES)
-  updateCategory(
-    @Param('id') id: string,
-    @Body() body: { name?: string; sortOrder?: number; active?: boolean },
-  ) {
+  updateCategory(@Param('id') id: string, @Body() body: UpdateOnlineCategoryDto) {
     return this.online.updateCategory(id, body);
   }
 
@@ -136,16 +108,13 @@ export class OnlineController {
 
   @Post('filters')
   @Roles(...ONLINE_MUTATION_ROLES)
-  createFilter(@Body() body: { label: string; slug?: string; sortOrder?: number }) {
+  createFilter(@Body() body: CreateOnlineFilterDto) {
     return this.online.createFilter(body);
   }
 
   @Put('filters/:id')
   @Roles(...ONLINE_MUTATION_ROLES)
-  updateFilter(
-    @Param('id') id: string,
-    @Body() body: { label?: string; slug?: string; sortOrder?: number; active?: boolean },
-  ) {
+  updateFilter(@Param('id') id: string, @Body() body: UpdateOnlineFilterDto) {
     return this.online.updateFilter(id, body);
   }
 
@@ -157,7 +126,7 @@ export class OnlineController {
 
   @Post('redeem-qr')
   @Roles(...ONLINE_MUTATION_ROLES)
-  redeemQr(@Body() body: { token: string }, @CurrentUser() user: AuthUser) {
+  redeemQr(@Body() body: RedeemQrDto, @CurrentUser() user: AuthUser) {
     return this.online.redeemQr(body.token, user.id);
   }
 }

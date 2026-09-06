@@ -8,6 +8,7 @@ import type {
   SalesTicket as ApiSalesTicket,
 } from '@/app/api/client';
 import type { SalesProduct, Kitchen, SalesTicket, SalesProductKind } from '@/features/sales/types';
+import { parseStockAllocations } from '@/features/sales/stock-link';
 
 /** Asegura campos de promo en productos cacheados antes del feature de bundles. */
 export function normalizeSalesProduct(p: SalesProduct): SalesProduct {
@@ -28,7 +29,7 @@ export function mapApiSalesProductToLocal(api: ApiSalesProduct): SalesProduct {
     category: api.category,
     kitchenId: api.kitchenId,
     price: Number(api.price),
-    emoji: api.emoji ?? '',
+    emoji: api.emoji || '🍽️',
     kind,
     active: api.active,
     recipe: (api.recipe ?? []).map(r => ({
@@ -94,5 +95,10 @@ export function mapApiTicketToLocal(
     operatorId: api.operatorId,
     operatorName: api.operator?.username || operatorNameFallback,
     note: api.note,
+    stockAllocations: (() => {
+      const fromTicket = parseStockAllocations(api.stockAllocations);
+      if (fromTicket.length > 0) return fromTicket;
+      return parseStockAllocations(api.items.flatMap(i => i.stockAllocations ?? []));
+    })(),
   };
 }

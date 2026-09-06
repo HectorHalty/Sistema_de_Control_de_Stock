@@ -8,24 +8,31 @@ import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './
 import {
   aggregateSalesLineItems,
   computeReturnableFromTotals,
-  netRestoreQuantitiesAfterPartialReturns,
   round3,
 } from './sales-integrity';
 import {
   SALES_PRODUCT_API_INCLUDE,
+  allocateDeduction,
   assertNoPromoCycle,
+  assertSimpleProductsHaveRecipes,
   assertValidPromoBundle,
   buildRequiredByStockProduct,
+  invertSaleMovements,
   loadSalesProductsForStock,
+  mergeAllocations,
+  parseStockAllocations,
+  scaleAllocations,
+  splitAllocationsToItems,
+  type StockAllocation,
 } from './sales-stock';
 
-interface MissingStockItem {
-  stockProductId: string;
-  required: number;
-  available: number;
+function isPrismaUniqueConflict(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
 }
 
-interface TicketItemData extends Omit<Prisma.ItemTicketVentaUncheckedCreateWithoutTicketInput, 'createdAt'> {}
+interface TicketItemData extends Omit<Prisma.ItemTicketVentaUncheckedCreateWithoutTicketInput, 'createdAt'> {
+  stockAllocations?: Prisma.InputJsonValue;
+}
 
 @Injectable()
 export class SalesService {
@@ -40,365 +47,291 @@ export class SalesService {
 
   async checkout(dto: CheckoutDto) {
     const operatorId = dto.operatorId ?? 'local';
-    // Idempotency check
-    if (dto.idempotencyKey) {
-      const existing = await this.prisma.ticketVenta.findUnique({
-        where: { idempotencyKey: dto.idempotencyKey },
-        include: { items: true, operator: { select: { name: true, username: true } } },
-      });
-      if (existing) {
-        return { ok: true, ticket: existing, idempotent: true };
-      }
-    }
+    const ticketInclude = { items: true, operator: { select: { name: true, username: true } } } as const;
 
-    // Validate sales products exist and are active
-    const salesProductIds = [...new Set(dto.items.map(i => i.salesProductId))];
-    const salesProducts = await this.prisma.productoVenta.findMany({
-      where: { id: { in: salesProductIds }, active: true },
-    });
-
-    if (salesProducts.length !== salesProductIds.length) {
-      const found = new Set(salesProducts.map(p => p.id));
-      const missing = salesProductIds.filter(id => !found.has(id));
-      throw new NotFoundException(`Sales products not found or inactive: ${missing.join(', ')}`);
-    }
-
-    const salesProductMap = await loadSalesProductsForStock(this.prisma, salesProductIds);
-    const requiredByStockProduct = buildRequiredByStockProduct(dto.items, salesProductMap);
-    const salesProductMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
-
-    // Execute transaction with row-level locking
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Lock stock levels FOR UPDATE to prevent concurrent modification
-      const stockProductIds = Object.keys(requiredByStockProduct);
-      const lockedLevels = await tx.$queryRaw`
-        SELECT sl.*, p.name as "productName"
-        FROM "niveles_stock" sl
-        JOIN "productos" p ON p.id = sl."productId"
-        WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
-        FOR UPDATE
-      ` as Array<{ productId: string; quantity: number; warehouseId: string; productName: string }>;
-
-      // Build available totals per stock product (Decimal llega como string en SQL crudo)
-      const availableByProduct: Record<string, number> = {};
-      for (const level of lockedLevels) {
-        availableByProduct[level.productId] = round3(
-          (availableByProduct[level.productId] || 0) + Number(level.quantity),
-        );
-      }
-
-      // Validate stock availability
-      const missing: MissingStockItem[] = [];
-      for (const [stockProductId, requiredQty] of Object.entries(requiredByStockProduct)) {
-        const available = availableByProduct[stockProductId] || 0;
-        if (available < requiredQty) {
-          missing.push({ stockProductId, required: requiredQty, available });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (dto.idempotencyKey) {
+          const existing = await tx.ticketVenta.findUnique({
+            where: { idempotencyKey: dto.idempotencyKey },
+            include: ticketInclude,
+          });
+          if (existing) {
+            return { ok: true as const, ticket: existing, idempotent: true };
+          }
         }
-      }
 
-      if (missing.length > 0) {
-        throw new ConflictException({
-          message: 'Insufficient stock for checkout',
-          missing,
+        const salesProductIds = [...new Set(dto.items.map(i => i.salesProductId))];
+        const salesProducts = await tx.productoVenta.findMany({
+          where: { id: { in: salesProductIds }, active: true },
         });
-      }
+        if (salesProducts.length !== salesProductIds.length) {
+          const found = new Set(salesProducts.map(p => p.id));
+          const missing = salesProductIds.filter(id => !found.has(id));
+          throw new NotFoundException(`Sales products not found or inactive: ${missing.join(', ')}`);
+        }
 
-      // Deduct stock atomically and registrar movimientos por almacén
-      let remainingByProduct = { ...requiredByStockProduct };
-      const movementEntries: Array<{
-        type: 'venta';
-        productId: string;
-        warehouseId: string;
-        quantity: number;
-        reference: string;
-        operatorId: string;
-      }> = [];
+        const salesProductMap = await loadSalesProductsForStock(tx, salesProductIds);
+        assertSimpleProductsHaveRecipes(dto.items, salesProductMap);
+        const requiredByStockProduct = buildRequiredByStockProduct(dto.items, salesProductMap);
+        const salesProductMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
-      for (const level of lockedLevels) {
-        const required = remainingByProduct[level.productId] || 0;
-        if (required <= 0) continue;
+        const stockProductIds = Object.keys(requiredByStockProduct);
+        const lockedLevels = await this.lockStockLevels(tx, stockProductIds);
+        const { allocations, missing } = allocateDeduction(lockedLevels, requiredByStockProduct);
+        if (missing.length > 0) {
+          throw new ConflictException({
+            message: 'Insufficient stock for checkout',
+            missing,
+          });
+        }
 
-        const deduction = round3(Math.min(Number(level.quantity), required));
-        remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
+        await this.applyStockDelta(tx, allocations, -1);
 
-        await tx.$executeRaw`
-          UPDATE "niveles_stock" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
-          WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
-        `;
+        const ticketNumber = await this.nextTicketNumber(tx);
+        const perItemAlloc = splitAllocationsToItems(dto.items, salesProductMap, allocations);
 
-        movementEntries.push({
-          type: 'venta',
-          productId: level.productId,
-          warehouseId: level.warehouseId,
-          quantity: -deduction,
-          reference: '', // se completa con ticket.id después de crear el ticket
-          operatorId: operatorId,
+        let total = 0;
+        const ticketItems: TicketItemData[] = [];
+        dto.items.forEach((item, index) => {
+          const sp = salesProductMapForPricing.get(item.salesProductId)!;
+          total += Number(sp.price) * item.quantity;
+          ticketItems.push({
+            salesProductId: item.salesProductId,
+            name: sp.name,
+            unitPrice: sp.price,
+            quantity: item.quantity,
+            stockAllocations: perItemAlloc[index] as unknown as Prisma.InputJsonValue,
+          });
         });
-      }
 
-      // Número de ticket atómico (evita MAX+1 y colisiones concurrentes)
-      const ticketNumber = await this.nextTicketNumber(tx);
-
-      // Calculate total
-      let total = 0;
-      const ticketItems: TicketItemData[] = [];
-      for (const item of dto.items) {
-        const sp = salesProductMapForPricing.get(item.salesProductId)!;
-        const lineTotal = Number(sp.price) * item.quantity;
-        total += lineTotal;
-        ticketItems.push({
-          salesProductId: item.salesProductId,
-          name: sp.name,
-          unitPrice: sp.price,
-          quantity: item.quantity,
-        });
-      }
-
-      // Create ticket
-      const ticket = await tx.ticketVenta.create({
-        data: {
-          number: ticketNumber,
-          status: 'emitido',
-          total,
-          operatorId: operatorId,
-          note: dto.note,
-          idempotencyKey: dto.idempotencyKey,
-          items: { create: ticketItems },
-        },
-        include: { items: true, operator: { select: { name: true, username: true } } },
-      });
-
-      const operatorName = ticket.operator?.name ?? ticket.operator?.username ?? operatorId;
-      await this.movements.recordMany(
-        tx,
-        movementEntries.map(m => ({
-          ...m,
-          reference: ticket.id,
-          operatorName,
-        })),
-      );
-
-      // Create kitchen orders
-      const kitchenGroups: Record<string, typeof ticketItems> = {};
-      for (const item of ticketItems) {
-        const sp = salesProductMapForPricing.get(item.salesProductId)!;
-        const kitchenId = sp.kitchenId;
-        if (!kitchenGroups[kitchenId]) kitchenGroups[kitchenId] = [];
-        kitchenGroups[kitchenId].push(item);
-      }
-
-      const kitchens = await tx.cocina.findMany({
-        where: { id: { in: Object.keys(kitchenGroups) }, active: true },
-      });
-      const kitchenMap = new Map(kitchens.map(k => [k.id, k]));
-
-      for (const [kitchenId, items] of Object.entries(kitchenGroups)) {
-        const kitchen = kitchenMap.get(kitchenId);
-        if (!kitchen) continue;
-
-        await tx.ordenCocina.create({
+        const ticket = await tx.ticketVenta.create({
           data: {
-            ticketId: ticket.id,
-            ticketNumber: ticket.number,
-            kitchenId,
-            status: 'pending',
-            operatorName,
-            items: {
-              create: items.map(i => ({
-                salesProductId: i.salesProductId,
-                name: i.name,
-                quantity: i.quantity,
-              })),
-            },
+            number: ticketNumber,
+            status: 'emitido',
+            total,
+            operatorId,
+            note: dto.note,
+            idempotencyKey: dto.idempotencyKey,
+            stockAllocations: allocations as unknown as Prisma.InputJsonValue,
+            items: { create: ticketItems },
           },
+          include: ticketInclude,
         });
+
+        const operatorName = ticket.operator?.name ?? ticket.operator?.username ?? operatorId;
+        await this.movements.recordMany(
+          tx,
+          allocations.map(a => ({
+            type: 'venta' as const,
+            productId: a.stockProductId,
+            warehouseId: a.warehouseId,
+            quantity: -a.quantity,
+            reference: ticket.id,
+            operatorId,
+            operatorName,
+          })),
+        );
+
+        const kitchenGroups: Record<string, typeof ticketItems> = {};
+        for (const item of ticketItems) {
+          const sp = salesProductMapForPricing.get(item.salesProductId)!;
+          const kitchenId = sp.kitchenId;
+          if (!kitchenGroups[kitchenId]) kitchenGroups[kitchenId] = [];
+          kitchenGroups[kitchenId].push(item);
+        }
+
+        const kitchens = await tx.cocina.findMany({
+          where: { id: { in: Object.keys(kitchenGroups) }, active: true },
+        });
+        const kitchenMap = new Map(kitchens.map(k => [k.id, k]));
+
+        for (const [kitchenId, items] of Object.entries(kitchenGroups)) {
+          const kitchen = kitchenMap.get(kitchenId);
+          if (!kitchen) continue;
+          await tx.ordenCocina.create({
+            data: {
+              ticketId: ticket.id,
+              ticketNumber: ticket.number,
+              kitchenId,
+              status: 'pending',
+              operatorName,
+              items: {
+                create: items.map(i => ({
+                  salesProductId: i.salesProductId,
+                  name: i.name,
+                  quantity: i.quantity,
+                })),
+              },
+            },
+          });
+        }
+
+        return { ok: true as const, ticket, idempotent: false };
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+      });
+    } catch (e) {
+      if (dto.idempotencyKey && isPrismaUniqueConflict(e)) {
+        const existing = await this.prisma.ticketVenta.findUnique({
+          where: { idempotencyKey: dto.idempotencyKey },
+          include: ticketInclude,
+        });
+        if (existing) return { ok: true as const, ticket: existing, idempotent: true };
       }
-
-      return { ok: true, ticket, idempotent: false };
-    }, {
-      maxWait: 5000,
-      timeout: 10000,
-    });
-
-    return result;
+      throw e;
+    }
   }
 
   // ============ CRITICAL: Transactional Return ============
 
   async returnSale(dto: ReturnDto) {
     const operatorId = dto.operatorId ?? 'local';
-    // Idempotency check
-    if (dto.idempotencyKey) {
-      const existing = await this.prisma.ticketVenta.findFirst({
-        where: { idempotencyKey: dto.idempotencyKey },
-      });
-      if (existing) {
-        return { ok: true, ticket: existing, idempotent: true };
-      }
-    }
 
-    return this.prisma.$transaction(async (tx) => {
-      const ticket = await tx.ticketVenta.findUnique({
-        where: { id: dto.ticketId },
-        include: { items: true },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (dto.idempotencyKey) {
+          const existing = await tx.ticketVenta.findFirst({
+            where: { idempotencyKey: dto.idempotencyKey },
+          });
+          if (existing) {
+            return { ok: true as const, ticket: existing, idempotent: true };
+          }
+        }
 
-      if (!ticket) throw new NotFoundException(`Ticket ${dto.ticketId} not found`);
-      if (ticket.status === 'devuelto') throw new ConflictException('Ticket already returned');
-      if (ticket.status === 'anulado') throw new ConflictException('Ticket is voided');
+        await tx.$queryRaw`
+          SELECT id FROM "tickets_venta" WHERE id::text = ${dto.ticketId} FOR UPDATE
+        `;
 
-      const salesProductIds = [...new Set(ticket.items.map(i => i.salesProductId))];
-      const spMap = await loadSalesProductsForStock(tx, salesProductIds);
-      const restoreByStockProduct = buildRequiredByStockProduct(
-        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-        spMap,
-      );
-
-      // Restore stock atomically
-      const restoreMovements: Array<{
-        type: 'devolucion';
-        productId: string;
-        warehouseId: string;
-        quantity: number;
-        reference: string;
-        operatorId: string;
-      }> = [];
-
-      for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-        const levels = await tx.nivelStock.findMany({
-          where: { productId: stockProductId },
-          orderBy: { warehouseId: 'asc' },
+        const ticket = await tx.ticketVenta.findUnique({
+          where: { id: dto.ticketId },
+          include: { items: true },
         });
 
-        if (levels.length > 0) {
-          await tx.$executeRaw`
-            UPDATE "niveles_stock" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
-            WHERE id::text = ${levels[0].id}
-          `;
-          restoreMovements.push({
-            type: 'devolucion',
-            productId: stockProductId,
-            warehouseId: levels[0].warehouseId,
-            quantity: qty,
-            reference: dto.ticketId,
-            operatorId: operatorId,
-          });
-        }
-      }
+        if (!ticket) throw new NotFoundException(`Ticket ${dto.ticketId} not found`);
+        if (ticket.status === 'devuelto') throw new ConflictException('Ticket already returned');
+        if (ticket.status === 'anulado') throw new ConflictException('Ticket is voided');
 
-      const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
-      await this.movements.recordMany(
-        tx,
-        restoreMovements.map(m => ({
-          ...m,
-          operatorName: operator?.name ?? operator?.username,
-        })),
-      );
+        const allocations = await this.resolveTicketAllocations(tx, ticket);
+        await this.restoreAllocations(tx, allocations, operatorId, dto.ticketId, 'devolucion');
 
-      // Update ticket status
-      const updated = await tx.ticketVenta.update({
-        where: { id: dto.ticketId },
-        data: { status: 'devuelto' },
-        include: { items: true },
+        const updated = await tx.ticketVenta.update({
+          where: { id: dto.ticketId },
+          data: { status: 'devuelto' },
+          include: { items: true },
+        });
+
+        return { ok: true as const, ticket: updated, idempotent: false };
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
       });
-
-      return { ok: true, ticket: updated, idempotent: false };
-    }, {
-      maxWait: 5000,
-      timeout: 10000,
-    });
+    } catch (e) {
+      if (dto.idempotencyKey && isPrismaUniqueConflict(e)) {
+        const existing = await this.prisma.ticketVenta.findFirst({
+          where: { idempotencyKey: dto.idempotencyKey },
+        });
+        if (existing) return { ok: true as const, ticket: existing, idempotent: true };
+      }
+      throw e;
+    }
   }
 
   // ============ Partial return by products (POS devoluciones) ============
 
   async returnItems(dto: ReturnItemsDto) {
     const operatorId = dto.operatorId ?? 'local';
-    if (dto.idempotencyKey) {
-      const existing = await this.prisma.ticketVenta.findUnique({
-        where: { idempotencyKey: dto.idempotencyKey },
-      });
-      if (existing) {
-        return { ok: true, ticket: existing, idempotent: true };
-      }
-    }
-
     const aggregated = aggregateSalesLineItems(dto.items);
     if (!aggregated.length) {
       throw new ConflictException('Return must include at least one item');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('sales-return-items'))`;
-
-      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
-      const returnable = computeReturnableFromTotals(sold, returned);
-      const shortages: Array<{ salesProductId: string; requested: number; available: number }> = [];
-      for (const item of aggregated) {
-        const available = returnable[item.salesProductId] || 0;
-        if (item.quantity > available) {
-          shortages.push({ salesProductId: item.salesProductId, requested: item.quantity, available });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (dto.idempotencyKey) {
+          const existing = await tx.ticketVenta.findUnique({
+            where: { idempotencyKey: dto.idempotencyKey },
+          });
+          if (existing) {
+            return { ok: true as const, ticket: existing, idempotent: true };
+          }
         }
-      }
-      if (shortages.length > 0) {
-        throw new ConflictException({
-          message: 'Return quantity exceeds sold amount',
-          shortages,
+
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('sales-return-items'))`;
+
+        const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
+        const returnable = computeReturnableFromTotals(sold, returned);
+        const shortages: Array<{ salesProductId: string; requested: number; available: number }> = [];
+        for (const item of aggregated) {
+          const available = returnable[item.salesProductId] || 0;
+          if (item.quantity > available) {
+            shortages.push({ salesProductId: item.salesProductId, requested: item.quantity, available });
+          }
+        }
+        if (shortages.length > 0) {
+          throw new ConflictException({
+            message: 'Return quantity exceeds sold amount',
+            shortages,
+          });
+        }
+
+        const salesProductIds = aggregated.map(i => i.salesProductId);
+        const salesProducts = await tx.productoVenta.findMany({
+          where: { id: { in: salesProductIds }, active: true },
         });
-      }
+        if (salesProducts.length !== salesProductIds.length) {
+          throw new NotFoundException('One or more sales products not found or inactive');
+        }
+        const spMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
 
-      const salesProductIds = aggregated.map(i => i.salesProductId);
-      const salesProducts = await tx.productoVenta.findMany({
-        where: { id: { in: salesProductIds }, active: true },
-      });
-      if (salesProducts.length !== salesProductIds.length) {
-        throw new NotFoundException('One or more sales products not found or inactive');
-      }
-      const spMap = await loadSalesProductsForStock(tx, salesProductIds);
-      const spMapForPricing = new Map(salesProducts.map(p => [p.id, p]));
+        const restoreAllocations = await this.allocationsForPartialReturn(tx, aggregated, sold);
 
-      const ticketNumber = await this.nextTicketNumber(tx);
+        const ticketNumber = await this.nextTicketNumber(tx);
+        let total = 0;
+        const ticketItems: TicketItemData[] = [];
+        for (const item of aggregated) {
+          const sp = spMapForPricing.get(item.salesProductId)!;
+          total += Number(sp.price) * item.quantity;
+          ticketItems.push({
+            salesProductId: item.salesProductId,
+            name: sp.name,
+            unitPrice: sp.price,
+            quantity: item.quantity,
+          });
+        }
 
-      let total = 0;
-      const ticketItems: TicketItemData[] = [];
-      for (const item of aggregated) {
-        const sp = spMapForPricing.get(item.salesProductId)!;
-        total += Number(sp.price) * item.quantity;
-        ticketItems.push({
-          salesProductId: item.salesProductId,
-          name: sp.name,
-          unitPrice: sp.price,
-          quantity: item.quantity,
+        const ticket = await tx.ticketVenta.create({
+          data: {
+            number: ticketNumber,
+            status: 'devuelto',
+            total,
+            operatorId,
+            note: dto.note ?? 'Devolución parcial',
+            idempotencyKey: dto.idempotencyKey,
+            stockAllocations: restoreAllocations as unknown as Prisma.InputJsonValue,
+            items: { create: ticketItems },
+          },
+          include: { items: true, operator: { select: { name: true, username: true } } },
         });
-      }
 
-      const ticket = await tx.ticketVenta.create({
-        data: {
-          number: ticketNumber,
-          status: 'devuelto',
-          total,
-          operatorId: operatorId,
-          note: dto.note ?? 'Devolución parcial',
-          idempotencyKey: dto.idempotencyKey,
-          items: { create: ticketItems },
-        },
-        include: { items: true, operator: { select: { name: true, username: true } } },
+        await this.restoreAllocations(tx, restoreAllocations, operatorId, ticket.id, 'devolucion');
+
+        return { ok: true as const, ticket, idempotent: false };
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
-
-      await this.restoreStockForSalesItems(
-        tx,
-        aggregated,
-        spMap,
-        operatorId,
-        ticket.id,
-        'devolucion',
-      );
-
-      return { ok: true, ticket, idempotent: false };
-    }, {
-      maxWait: 5000,
-      timeout: 10000,
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    } catch (e) {
+      if (dto.idempotencyKey && isPrismaUniqueConflict(e)) {
+        const existing = await this.prisma.ticketVenta.findUnique({
+          where: { idempotencyKey: dto.idempotencyKey },
+        });
+        if (existing) return { ok: true as const, ticket: existing, idempotent: true };
+      }
+      throw e;
+    }
   }
 
   // ============ Edit issued ticket items ============
@@ -441,88 +374,35 @@ export class SalesService {
         throw new ConflictException('One or more sales products not found or inactive');
       }
 
-      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
-      const netOldItems = netRestoreQuantitiesAfterPartialReturns(
-        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-        sold,
-        returned,
-      );
+      assertSimpleProductsHaveRecipes(newItems, spMap);
 
-      await this.restoreStockForSalesItems(
-        tx,
-        netOldItems,
-        spMap,
-        operatorId,
-        ticketId,
-        'venta_anulada',
-      );
+      const oldAllocations = await this.resolveTicketAllocations(tx, ticket);
+      await this.restoreAllocations(tx, oldAllocations, operatorId, ticketId, 'venta_anulada');
 
       const requiredByStockProduct = buildRequiredByStockProduct(newItems, spMap);
-
       const stockProductIds = Object.keys(requiredByStockProduct);
+      let newAllocations: StockAllocation[] = [];
       if (stockProductIds.length > 0) {
-        const lockedLevels = await tx.$queryRaw`
-          SELECT sl.*
-          FROM "niveles_stock" sl
-          WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
-          FOR UPDATE
-        ` as Array<{ productId: string; quantity: number; warehouseId: string }>;
-
-        const availableByProduct: Record<string, number> = {};
-        for (const level of lockedLevels) {
-          availableByProduct[level.productId] = round3(
-            (availableByProduct[level.productId] || 0) + Number(level.quantity),
-          );
-        }
-
-        const missing: MissingStockItem[] = [];
-        for (const [stockProductId, requiredQty] of Object.entries(requiredByStockProduct)) {
-          const available = availableByProduct[stockProductId] || 0;
-          if (available < requiredQty) {
-            missing.push({ stockProductId, required: requiredQty, available });
-          }
-        }
+        const lockedLevels = await this.lockStockLevels(tx, stockProductIds);
+        const { allocations, missing } = allocateDeduction(lockedLevels, requiredByStockProduct);
         if (missing.length > 0) {
           throw new ConflictException({
             message: 'Insufficient stock for ticket update',
             missing,
           });
         }
-
-        let remainingByProduct = { ...requiredByStockProduct };
-        const movementEntries: Array<{
-          type: 'venta';
-          productId: string;
-          warehouseId: string;
-          quantity: number;
-          reference: string;
-          operatorId: string;
-        }> = [];
-
-        for (const level of lockedLevels) {
-          const required = remainingByProduct[level.productId] || 0;
-          if (required <= 0) continue;
-          const deduction = round3(Math.min(Number(level.quantity), required));
-          remainingByProduct[level.productId] = round3(remainingByProduct[level.productId] - deduction);
-          await tx.$executeRaw`
-            UPDATE "niveles_stock" SET quantity = quantity - ${deduction}, "updatedAt" = NOW()
-            WHERE "productId"::text = ${level.productId} AND "warehouseId"::text = ${level.warehouseId}
-          `;
-          movementEntries.push({
-            type: 'venta',
-            productId: level.productId,
-            warehouseId: level.warehouseId,
-            quantity: -deduction,
-            reference: ticketId,
-            operatorId: operatorId,
-          });
-        }
-
+        newAllocations = allocations;
+        await this.applyStockDelta(tx, allocations, -1);
         const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
         await this.movements.recordMany(
           tx,
-          movementEntries.map(m => ({
-            ...m,
+          allocations.map(a => ({
+            type: 'venta' as const,
+            productId: a.stockProductId,
+            warehouseId: a.warehouseId,
+            quantity: -a.quantity,
+            reference: ticketId,
+            operatorId,
             operatorName: operator?.name ?? operator?.username,
           })),
         );
@@ -530,9 +410,10 @@ export class SalesService {
 
       await tx.itemTicketVenta.deleteMany({ where: { ticketId } });
 
+      const perItemAlloc = splitAllocationsToItems(newItems, spMap, newAllocations);
       let total = 0;
       const ticketItemRows: TicketItemData[] = [];
-      for (const item of newItems) {
+      newItems.forEach((item, index) => {
         const sp = spMapForPricing.get(item.salesProductId)!;
         total += Number(sp.price) * item.quantity;
         ticketItemRows.push({
@@ -540,16 +421,54 @@ export class SalesService {
           name: sp.name,
           unitPrice: sp.price,
           quantity: item.quantity,
+          stockAllocations: perItemAlloc[index] as unknown as Prisma.InputJsonValue,
         });
-      }
+      });
 
       await tx.itemTicketVenta.createMany({
         data: ticketItemRows.map(i => ({ ...i, ticketId })),
       });
 
+      await tx.ordenCocina.deleteMany({ where: { ticketId } });
+      const kitchenGroups: Record<string, typeof ticketItemRows> = {};
+      for (const item of ticketItemRows) {
+        const sp = spMapForPricing.get(item.salesProductId);
+        if (!sp) continue;
+        if (!kitchenGroups[sp.kitchenId]) kitchenGroups[sp.kitchenId] = [];
+        kitchenGroups[sp.kitchenId].push(item);
+      }
+      const kitchens = await tx.cocina.findMany({
+        where: { id: { in: Object.keys(kitchenGroups) }, active: true },
+      });
+      const kitchenMap = new Map(kitchens.map(k => [k.id, k]));
+      const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
+      const operatorName = operator?.name ?? operator?.username ?? operatorId;
+      for (const [kitchenId, items] of Object.entries(kitchenGroups)) {
+        if (!kitchenMap.get(kitchenId)) continue;
+        await tx.ordenCocina.create({
+          data: {
+            ticketId,
+            ticketNumber: ticket.number,
+            kitchenId,
+            status: 'pending',
+            operatorName,
+            items: {
+              create: items.map(i => ({
+                salesProductId: i.salesProductId,
+                name: i.name,
+                quantity: i.quantity,
+              })),
+            },
+          },
+        });
+      }
+
       return tx.ticketVenta.update({
         where: { id: ticketId },
-        data: { total },
+        data: {
+          total,
+          stockAllocations: newAllocations as unknown as Prisma.InputJsonValue,
+        },
         include: { items: true, operator: { select: { username: true } } },
       });
     }, {
@@ -561,11 +480,145 @@ export class SalesService {
 
   // ============ Stock helpers ============
 
+  private async lockStockLevels(
+    tx: Prisma.TransactionClient,
+    stockProductIds: string[],
+  ): Promise<Array<{ productId: string; warehouseId: string; quantity: number }>> {
+    if (stockProductIds.length === 0) return [];
+    return tx.$queryRaw`
+      SELECT sl."productId", sl."warehouseId", sl.quantity
+      FROM "niveles_stock" sl
+      WHERE sl."productId"::text = ANY(${stockProductIds}::text[])
+      ORDER BY sl."productId", sl."warehouseId"
+      FOR UPDATE
+    ` as unknown as Array<{ productId: string; warehouseId: string; quantity: number }>;
+  }
+
+  /** sign = -1 descuenta, +1 restaura. */
+  private async applyStockDelta(
+    tx: Prisma.TransactionClient,
+    allocations: StockAllocation[],
+    sign: 1 | -1,
+  ): Promise<void> {
+    for (const alloc of allocations) {
+      const delta = round3(sign * alloc.quantity);
+      if (delta === 0) continue;
+      const updated = await tx.$executeRaw`
+        UPDATE "niveles_stock"
+        SET quantity = quantity + ${delta}, "updatedAt" = NOW()
+        WHERE "productId"::text = ${alloc.stockProductId}
+          AND "warehouseId"::text = ${alloc.warehouseId}
+      `;
+      if (updated === 0 && sign > 0) {
+        await tx.nivelStock.create({
+          data: {
+            productId: alloc.stockProductId,
+            warehouseId: alloc.warehouseId,
+            quantity: alloc.quantity,
+          },
+        });
+      }
+    }
+  }
+
+  private async restoreAllocations(
+    tx: Prisma.TransactionClient,
+    allocations: StockAllocation[],
+    operatorId: string,
+    reference: string,
+    movementType: 'devolucion' | 'venta_anulada',
+  ): Promise<void> {
+    const merged = mergeAllocations(allocations);
+    if (merged.length === 0) return;
+    const productIds = [...new Set(merged.map(a => a.stockProductId))];
+    await this.lockStockLevels(tx, productIds);
+    await this.applyStockDelta(tx, merged, 1);
+    const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
+    await this.movements.recordMany(
+      tx,
+      merged.map(a => ({
+        type: movementType,
+        productId: a.stockProductId,
+        warehouseId: a.warehouseId,
+        quantity: a.quantity,
+        reference,
+        operatorId,
+        operatorName: operator?.name ?? operator?.username,
+      })),
+    );
+  }
+
+  private async resolveTicketAllocations(
+    tx: Prisma.TransactionClient,
+    ticket: { id: string; stockAllocations?: unknown; items: Array<{ stockAllocations?: unknown }> },
+  ): Promise<StockAllocation[]> {
+    const fromTicket = parseStockAllocations(ticket.stockAllocations);
+    if (fromTicket.length > 0) return fromTicket;
+
+    const fromItems = mergeAllocations(
+      ticket.items.flatMap(i => parseStockAllocations(i.stockAllocations)),
+    );
+    if (fromItems.length > 0) return fromItems;
+
+    const movements = await tx.movimientoStock.findMany({
+      where: { reference: ticket.id, type: 'venta' },
+    });
+    return invertSaleMovements(
+      movements.map(m => ({
+        productId: m.productId,
+        warehouseId: m.warehouseId,
+        quantity: Number(m.quantity),
+      })),
+    );
+  }
+
+  private async allocationsForPartialReturn(
+    tx: Prisma.TransactionClient,
+    returned: Array<{ salesProductId: string; quantity: number }>,
+    sold: Record<string, number>,
+  ): Promise<StockAllocation[]> {
+    const productIds = returned.map(r => r.salesProductId);
+    const emitidoItems = await tx.itemTicketVenta.findMany({
+      where: {
+        salesProductId: { in: productIds },
+        ticket: { status: 'emitido' },
+      },
+    });
+
+    const allocsByProduct = new Map<string, StockAllocation[]>();
+    for (const item of emitidoItems) {
+      const parsed = parseStockAllocations(item.stockAllocations);
+      const list = allocsByProduct.get(item.salesProductId) ?? [];
+      list.push(...parsed);
+      allocsByProduct.set(item.salesProductId, list);
+    }
+
+    const restored: StockAllocation[] = [];
+    for (const item of returned) {
+      const soldQty = sold[item.salesProductId] || 0;
+      if (soldQty <= 0) continue;
+      const original = mergeAllocations(allocsByProduct.get(item.salesProductId) ?? []);
+      if (original.length > 0) {
+        restored.push(...scaleAllocations(original, item.quantity / soldQty));
+        continue;
+      }
+      // Tickets viejos sin snapshot: receta vigente (mejor esfuerzo).
+      const spMap = await loadSalesProductsForStock(tx, [item.salesProductId]);
+      const required = buildRequiredByStockProduct([item], spMap);
+      const levels = await this.lockStockLevels(tx, Object.keys(required));
+      for (const [stockProductId, qty] of Object.entries(required)) {
+        const level = levels.find(l => l.productId === stockProductId);
+        if (!level) continue;
+        restored.push({ stockProductId, warehouseId: level.warehouseId, quantity: qty });
+      }
+    }
+    return mergeAllocations(restored);
+  }
+
   private async getSoldAndReturnedByProduct(tx: Prisma.TransactionClient): Promise<{
     sold: Record<string, number>;
     returned: Record<string, number>;
   }> {
-    // Agregación SQL: evita cargar toda la historia de tickets en memoria
     const rows = await tx.$queryRaw`
       SELECT
         t.status,
@@ -575,7 +628,7 @@ export class SalesService {
       JOIN "items_ticket_venta" i ON i."ticketId" = t.id
       WHERE t.status IN ('emitido', 'devuelto')
       GROUP BY t.status, i."salesProductId"
-    ` as Array<{ status: string; salesProductId: string; qty: number }>;
+    ` as unknown as Array<{ status: string; salesProductId: string; qty: number }>;
 
     const sold: Record<string, number> = {};
     const returned: Record<string, number> = {};
@@ -588,75 +641,6 @@ export class SalesService {
       }
     }
     return { sold, returned };
-  }
-
-  private async computeReturnableByProduct(
-    tx: Prisma.TransactionClient,
-  ): Promise<Record<string, number>> {
-    const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
-    return computeReturnableFromTotals(sold, returned);
-  }
-
-  private async restoreStockForSalesItems(
-    tx: Prisma.TransactionClient,
-    items: Array<{ salesProductId: string; quantity: number }>,
-    spMap: Awaited<ReturnType<typeof loadSalesProductsForStock>>,
-    operatorId: string,
-    reference: string,
-    movementType: 'devolucion' | 'venta_anulada',
-  ): Promise<void> {
-    const restoreByStockProduct = buildRequiredByStockProduct(items, spMap);
-    const stockProductIds = Object.keys(restoreByStockProduct);
-    if (stockProductIds.length === 0) return;
-
-    // Una sola consulta en lugar de N findMany por producto
-    const levels = await tx.nivelStock.findMany({
-      where: { productId: { in: stockProductIds } },
-      orderBy: [{ productId: 'asc' }, { warehouseId: 'asc' }],
-    });
-    const firstLevelByProduct = new Map<string, (typeof levels)[number]>();
-    for (const level of levels) {
-      if (!firstLevelByProduct.has(level.productId)) {
-        firstLevelByProduct.set(level.productId, level);
-      }
-    }
-
-    const restoreMovements: Array<{
-      type: typeof movementType;
-      productId: string;
-      warehouseId: string;
-      quantity: number;
-      reference: string;
-      operatorId: string;
-    }> = [];
-
-    for (const [stockProductId, qty] of Object.entries(restoreByStockProduct)) {
-      const level = firstLevelByProduct.get(stockProductId);
-      if (!level) continue;
-      await tx.$executeRaw`
-        UPDATE "niveles_stock" SET quantity = quantity + ${qty}, "updatedAt" = NOW()
-        WHERE id::text = ${level.id}
-      `;
-      restoreMovements.push({
-        type: movementType,
-        productId: stockProductId,
-        warehouseId: level.warehouseId,
-        quantity: qty,
-        reference,
-        operatorId,
-      });
-    }
-
-    if (restoreMovements.length > 0) {
-      const operator = await tx.usuario.findUnique({ where: { id: operatorId } });
-      await this.movements.recordMany(
-        tx,
-        restoreMovements.map(m => ({
-          ...m,
-          operatorName: operator?.name ?? operator?.username,
-        })),
-      );
-    }
   }
 
   // ============ Sales Products CRUD ============
@@ -721,7 +705,7 @@ export class SalesService {
           category: data.category,
           kitchenId: data.kitchenId,
           price: data.price,
-          emoji: data.emoji,
+          emoji: data.emoji ?? '🍽️',
           kind: 'promo',
           bundleItems: {
             create: (data.bundle ?? []).map(b => ({
@@ -740,7 +724,7 @@ export class SalesService {
         category: data.category,
         kitchenId: data.kitchenId,
         price: data.price,
-        emoji: data.emoji,
+        emoji: data.emoji ?? '🍽️',
         kind: 'simple',
         recipe: { create: data.recipe ?? [] },
       },
@@ -843,24 +827,8 @@ export class SalesService {
       if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
       if (ticket.status !== 'emitido') throw new ConflictException('Can only void issued tickets');
 
-      const productIds = [...new Set(ticket.items.map(i => i.salesProductId))];
-      const spMap = await loadSalesProductsForStock(tx, productIds);
-
-      const { sold, returned } = await this.getSoldAndReturnedByProduct(tx);
-      const netItems = netRestoreQuantitiesAfterPartialReturns(
-        ticket.items.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
-        sold,
-        returned,
-      );
-
-      await this.restoreStockForSalesItems(
-        tx,
-        netItems,
-        spMap,
-        operatorId,
-        ticketId,
-        'venta_anulada',
-      );
+      const allocations = await this.resolveTicketAllocations(tx, ticket);
+      await this.restoreAllocations(tx, allocations, operatorId, ticketId, 'venta_anulada');
 
       return tx.ticketVenta.update({
         where: { id: ticketId },
@@ -881,13 +849,25 @@ export class SalesService {
   }
 
   async createKitchen(data: { name: string; emoji?: string }) {
-    return this.prisma.cocina.create({ data });
+    return this.prisma.cocina.create({
+      data: {
+        name: data.name,
+        emoji: data.emoji ?? '🍽️',
+      },
+    });
   }
 
   async updateKitchen(id: string, data: { name?: string; emoji?: string; active?: boolean }) {
     const existing = await this.prisma.cocina.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Kitchen ${id} not found`);
-    return this.prisma.cocina.update({ where: { id }, data });
+    return this.prisma.cocina.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.emoji !== undefined ? { emoji: data.emoji } : {}),
+        ...(data.active !== undefined ? { active: data.active } : {}),
+      },
+    });
   }
 
   async deleteKitchen(id: string) {

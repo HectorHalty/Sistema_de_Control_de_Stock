@@ -4,6 +4,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OnlineCatalogService } from './online-catalog.service';
 import { ONLINE_MUTATION_ROLES, ONLINE_READ_ROLES } from '../common/roles';
+import { CreateOnlineCatalogProductDto, UpdateOnlineCatalogProductDto } from './dto';
 
 @Controller('online-catalog')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,21 +28,13 @@ export class OnlineCatalogController {
 
   @Post('products')
   @Roles(...ONLINE_MUTATION_ROLES)
-  create(@Body() body: {
-    name: string; description?: string; price: number; image?: string;
-    images?: string[]; category: string; attributes?: Record<string, any>;
-    stockProductId?: string;
-  }) {
+  create(@Body() body: CreateOnlineCatalogProductDto) {
     return this.catalogService.create(body);
   }
 
   @Put('products/:id')
   @Roles(...ONLINE_MUTATION_ROLES)
-  update(@Param('id') id: string, @Body() body: {
-    name?: string; description?: string; price?: number; image?: string;
-    images?: string[]; category?: string; attributes?: Record<string, any>;
-    active?: boolean; stockProductId?: string;
-  }) {
+  update(@Param('id') id: string, @Body() body: UpdateOnlineCatalogProductDto) {
     return this.catalogService.update(id, body);
   }
 

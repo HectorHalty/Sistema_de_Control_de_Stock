@@ -37,6 +37,8 @@ export interface SalesTicket {
   operatorId: string;
   operatorName: string;
   note?: string;
+  /** Snapshot de descuento por almacén (checkout API o POS local). */
+  stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
 }
 
 export interface SalesTable {

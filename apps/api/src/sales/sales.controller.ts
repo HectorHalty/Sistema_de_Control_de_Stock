@@ -16,7 +16,7 @@ import { CurrentUser, type AuthUser } from '../common/decorators/current-user.de
 
 import { SalesService } from './sales.service';
 
-import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
+import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto, CreateSalesProductDto, UpdateSalesProductDto, CreateKitchenDto, UpdateKitchenDto } from './dto';
 
 import {
 
@@ -72,17 +72,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  createProduct(@Body() body: {
-
-    name: string; category: string; kitchenId: string; price: number;
-
-    emoji?: string; kind?: string;
-
-    recipe?: { stockProductId: string; quantity: number }[];
-
-    bundle?: { componentProductId: string; quantity: number }[];
-
-  }) {
+  createProduct(@Body() body: CreateSalesProductDto) {
 
     return this.salesService.createSalesProduct(body);
 
@@ -94,17 +84,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  updateProduct(@Param('id') id: string, @Body() body: {
-
-    name?: string; category?: string; kitchenId?: string;
-
-    price?: number; emoji?: string; active?: boolean; kind?: string;
-
-    recipe?: { stockProductId: string; quantity: number }[];
-
-    bundle?: { componentProductId: string; quantity: number }[];
-
-  }) {
+  updateProduct(@Param('id') id: string, @Body() body: UpdateSalesProductDto) {
 
     return this.salesService.updateSalesProduct(id, body);
 
@@ -224,7 +204,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  createKitchen(@Body() body: { name: string; emoji?: string }) {
+  createKitchen(@Body() body: CreateKitchenDto) {
 
     return this.salesService.createKitchen(body);
 
@@ -236,7 +216,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  updateKitchen(@Param('id') id: string, @Body() body: { name?: string; emoji?: string; active?: boolean }) {
+  updateKitchen(@Param('id') id: string, @Body() body: UpdateKitchenDto) {
 
     return this.salesService.updateKitchen(id, body);
 

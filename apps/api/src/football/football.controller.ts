@@ -15,6 +15,14 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
+import {
+  UpdateCaptainDto,
+  UpdateInscriptionDto,
+  UpdateMatchScheduleDto,
+  UpdateMatchScoreDto,
+  UpdateReglamentoArticuloDto,
+  UpdateSuspensionDto,
+} from './dto';
 
 @Controller('football')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -130,7 +138,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateInscription(
     @Param('id') id: string,
-    @Body() body: { abbr?: string; color?: string; activo?: boolean; descuentoPuntosWO?: number },
+    @Body() body: UpdateInscriptionDto,
   ) {
     return this.footballService.updateInscription(id, body);
   }
@@ -154,7 +162,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateCaptain(
     @Param('id') id: string,
-    @Body() body: { email?: string; dni?: string; activo?: boolean },
+    @Body() body: UpdateCaptainDto,
   ) {
     return this.footballService.updateCaptain(id, body);
   }
@@ -268,14 +276,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateMatchSchedule(
     @Param('id') id: string,
-    @Body()
-    body: {
-      canchaId?: string | null;
-      horaInicio?: string | null;
-      jornadaId?: string | null;
-      bloqueadoManual?: boolean;
-      venue?: string | null;
-    },
+    @Body() body: UpdateMatchScheduleDto,
   ) {
     return this.footballService.updateMatchSchedule(id, body);
   }
@@ -284,12 +285,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateScore(
     @Param('id') id: string,
-    @Body()
-    body: {
-      homeGoals: number;
-      awayGoals: number;
-      events?: { personaId: string; tipo: string; minuto?: number }[];
-    },
+    @Body() body: UpdateMatchScoreDto,
   ) {
     return this.footballService.updateMatchScore(id, body.homeGoals, body.awayGoals, body.events);
   }
@@ -331,7 +327,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateSuspension(
     @Param('id') id: string,
-    @Body() body: { fechasRestantes?: number; activa?: boolean; motivo?: string },
+    @Body() body: UpdateSuspensionDto,
   ) {
     return this.footballService.updateSuspension(id, body);
   }
@@ -352,7 +348,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   updateReglamentoArticulo(
     @Param('id') id: string,
-    @Body() body: { titulo?: string; contenido?: string; aplicable?: boolean },
+    @Body() body: UpdateReglamentoArticuloDto,
   ) {
     return this.footballService.updateReglamentoArticulo(id, body);
   }

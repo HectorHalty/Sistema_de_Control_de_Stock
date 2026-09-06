@@ -248,8 +248,9 @@ model TicketVenta {
   total          Decimal  @db.Decimal(10, 2)
   operatorId     String
   note           String?
-  idempotencyKey String?  @unique
-  origen         String   @default("pos") // pos | online
+  idempotencyKey  String?  @unique
+  origen          String   @default("pos") // pos | online
+  stockAllocations Json?   // snapshot [{stockProductId, warehouseId, quantity}]
 
   operator      Usuario           @relation("TicketsOperador", fields: [operatorId], references: [id])
   items         ItemTicketVenta[]
@@ -270,8 +271,9 @@ model ItemTicketVenta {
   salesProductId String
   name           String // snapshot al momento de la venta (intencional)
   unitPrice      Decimal  @db.Decimal(10, 2) // snapshot
-  quantity       Int
-  createdAt      DateTime @default(now())
+  quantity         Int
+  stockAllocations Json? // snapshot de descuento de esta línea
+  createdAt        DateTime @default(now())
 
   ticket       TicketVenta   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id])
@@ -944,18 +946,21 @@ model TokenRetiroQR {
 
 model EntradaAuditoria {
   id            String   @id @default(uuid())
-  userId        String
+  userId        String?
+  userName      String?
+  module        String?
   action        String
   element       String
   previousValue String?
   newValue      String?
   createdAt     DateTime @default(now())
 
-  user Usuario @relation(fields: [userId], references: [id])
+  user Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])
   @@index([userId, createdAt])
+  @@index([module, createdAt])
   @@map("entradas_auditoria")
 }
 
@@ -1119,4 +1124,65 @@ model EntradaConsumo {
   @@index([logId])
   @@index([productId])
   @@map("entradas_consumo")
+}
+
+// ==================== CONFIGURACIÓN ADMIN ====================
+
+model Configuracion {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  scope     String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@index([scope])
+  @@map("configuraciones")
+}
+
+model CategoriaVenta {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  emoji     String   @default("🍽️")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categorias_venta")
+}
+
+model Impresora {
+  id         String   @id @default(uuid())
+  name       String
+  type       String
+  ip         String
+  port       Int      @default(9100)
+  paperWidth Int      @default(80)
+  connected  Boolean  @default(true)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("impresoras")
+}
+
+model MesaVenta {
+  id             String   @id @default(uuid())
+  name           String
+  status         String   @default("libre")
+  currentOrderId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("mesas_venta")
+}
+
+model CuentaEquipo {
+  id        String   @id @default(uuid())
+  team      String
+  openedAt  DateTime @default(now())
+  status    String   @default("abierta")
+  items     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("cuentas_equipo")
 }

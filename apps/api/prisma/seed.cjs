@@ -7,8 +7,11 @@ const bcrypt = require('bcrypt');
 const { seedReglamento } = require('./seeds/reglamento.seed.cjs');
 const { seedScheduling } = require('./seeds/scheduling.seed.cjs');
 const { seedTorneoDemo } = require('./seeds/torneo-demo.seed.cjs');
+const { seedInventory } = require('./seeds/inventory.seed.cjs');
 const { seedCantinaPublica } = require('./seeds/cantina.seed.cjs');
 const { seedPublicAccounts } = require('./seeds/public-accounts.seed.cjs');
+const { seedOnlineDemo } = require('./seeds/online-demo.seed.cjs');
+const { seedDemoUsers } = require('./seeds/users-demo.seed.cjs');
 
 const prisma = new PrismaClient();
 
@@ -83,9 +86,12 @@ async function main() {
 
   await seedScheduling(prisma);
   await seedReglamento(prisma);
+  await seedInventory(prisma);
   await seedTorneoDemo(prisma);
   await seedCantinaPublica(prisma);
   await seedPublicAccounts(prisma);
+  await seedOnlineDemo(prisma);
+  await seedDemoUsers(prisma);
 
   console.log('Seed complete.');
   await prisma.$disconnect();
