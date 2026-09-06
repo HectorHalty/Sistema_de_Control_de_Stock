@@ -241,7 +241,9 @@ export default defineConfig({
 
 - [ ] **Step 6: Crear el script de reset de la base de test**
 
-Crear `apps/api/scripts/reset-test-db.mjs`. Setea `DATABASE_URL` en el proceso hijo en lugar de depender de la sintaxis de variables de entorno del shell, que difiere entre PowerShell y bash.
+Crear `apps/api/scripts/reset-test-db.mjs`. Setea las variables en el proceso hijo en lugar de depender de la sintaxis de variables de entorno del shell, que difiere entre PowerShell y bash.
+
+`DIRECT_URL` se sobreescribe junto con `DATABASE_URL` y no es opcional: `schema.prisma:11` declara `directUrl = env("DIRECT_URL")`, así que si solo se cambia `DATABASE_URL`, Prisma resuelve la conexión por `directUrl` y **resetea la base de desarrollo** en lugar de la de test.
 
 ```javascript
 #!/usr/bin/env node
@@ -259,7 +261,7 @@ const result = spawnSync(
   {
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, DATABASE_URL: url },
+    env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
   },
 );
 
@@ -2625,6 +2627,8 @@ declaraba pero la base tenía en RESTRICT."
 **Files:**
 - Modify: `apps/api/prisma/seed.cjs` (solo datos de referencia)
 - Create: `apps/api/prisma/seed-demo.cjs`
+- Create: `apps/api/prisma/seeds/web-taxonomy.seed.cjs`
+- Modify: `apps/api/prisma/seeds/cantina.seed.cjs` (dejar de crear la taxonomía web; buscarla)
 - Delete: `apps/api/prisma/seed.ts`
 - Modify: `apps/api/prisma/seeds/users-demo.seed.cjs:17-19`
 - Modify: `apps/api/prisma/seeds/public-accounts.seed.cjs:18-46`
@@ -2743,6 +2747,82 @@ En `apps/api/prisma/seed.cjs`, borrar los `require` de los seeds de demo (línea
 ```
 
 El bloque de usuario admin (líneas 59-73) ya es correcto: no toca la contraseña si el usuario existe. No modificarlo.
+
+Agregar también la invocación de la taxonomía web del step siguiente, junto a `seedScheduling` y `seedReglamento`:
+
+```javascript
+  await seedWebTaxonomy(prisma);
+```
+
+Con su `require` en la cabecera:
+
+```javascript
+const { seedWebTaxonomy } = require('./seeds/web-taxonomy.seed.cjs');
+```
+
+- [ ] **Step 3b: Mover la taxonomía web al seed de referencia**
+
+`CategoriaWeb` y `FiltroWeb` son datos de referencia, no de demostración: la migración `20260901120000_online_menu_web_sponsors` los insertaba con un `INSERT` que garantizaba su existencia, y la baseline generada de la Task 2 ya no lo hace. Si quedaran dentro de `cantina.seed.cjs`, que pasa a ser demo, la web pública se quedaría sin categorías ni filtros en una instalación de referencia.
+
+Crear `apps/api/prisma/seeds/web-taxonomy.seed.cjs` con las dos listas que hoy viven en `cantina.seed.cjs:11-14` y `:57-62`, con sus valores exactos:
+
+```javascript
+/** Taxonomía de presentación de la web pública. Datos de referencia. */
+
+const WEB_CATEGORIES = [
+  { name: 'Comidas', slug: 'comidas', sortOrder: 0 },
+  { name: 'Bebidas', slug: 'bebidas', sortOrder: 1 },
+];
+
+const WEB_FILTERS = [
+  { slug: 'popular', label: 'Popular', sortOrder: 0 },
+  { slug: 'economico', label: 'Económico', sortOrder: 1 },
+  { slug: 'bebidas', label: 'Bebidas', sortOrder: 2 },
+  { slug: 'sin_tacc', label: 'Sin Tacc', sortOrder: 3 },
+];
+
+async function seedWebTaxonomy(prisma) {
+  for (const cat of WEB_CATEGORIES) {
+    await prisma.categoriaWeb.upsert({
+      where: { slug: cat.slug },
+      update: { name: cat.name, sortOrder: cat.sortOrder, active: true },
+      create: cat,
+    });
+  }
+
+  for (const f of WEB_FILTERS) {
+    await prisma.filtroWeb.upsert({
+      where: { slug: f.slug },
+      update: { label: f.label, sortOrder: f.sortOrder, active: true },
+      create: f,
+    });
+  }
+
+  console.log(
+    `Taxonomía web: ${WEB_CATEGORIES.length} categorías, ${WEB_FILTERS.length} filtros.`,
+  );
+}
+
+module.exports = { seedWebTaxonomy };
+```
+
+En `apps/api/prisma/seeds/cantina.seed.cjs`, borrar las constantes `WEB_CATEGORIES` y `WEB_FILTERS` y los dos bucles que las crean, y reemplazarlos por lecturas de lo que ya sembró el seed de referencia:
+
+```javascript
+  const filterRows = await prisma.filtroWeb.findMany();
+  const filterMap = new Map(filterRows.map((f) => [f.slug, f.id]));
+
+  const webCategoryRows = await prisma.categoriaWeb.findMany();
+  const categoryMap = new Map(webCategoryRows.map((c) => [c.name, c.id]));
+
+  if (categoryMap.size === 0 || filterMap.size === 0) {
+    throw new Error(
+      'Faltan las categorías o los filtros web. Corré primero el seed de referencia: npm run prisma:seed',
+    );
+  }
+```
+
+El `throw` es deliberado: un seed de demo que arranca sin sus datos de referencia tiene que fallar de forma visible, no dejar el menú a medias.
 
 - [ ] **Step 4: Crear el seed de demo**
 
