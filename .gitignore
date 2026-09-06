@@ -9,6 +9,7 @@ release/
 .agents/
 .claude/
 .atl/
+.superpowers/
 skills-lock.json
 .vscode/
 .idea/
