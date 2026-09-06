@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -140,6 +141,7 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   if (isDev) {
     const config = new DocumentBuilder()

@@ -2,6 +2,7 @@ import {
   Injectable, NotFoundException, ConflictException, BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
@@ -25,10 +26,6 @@ import {
   splitAllocationsToItems,
   type StockAllocation,
 } from './sales-stock';
-
-function isPrismaUniqueConflict(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
-}
 
 interface TicketItemData extends Omit<Prisma.ItemTicketVentaUncheckedCreateWithoutTicketInput, 'createdAt'> {
   stockAllocations?: Prisma.InputJsonValue;

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 import { autoScheduleMatches } from './fixture-scheduler';
@@ -224,8 +225,11 @@ export class FootballService {
         },
         include: { equipo: true, torneo: { include: { categoria: true } } },
       });
-    } catch {
-      throw new ConflictException('El equipo ya está inscripto en este torneo');
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException('El equipo ya está inscripto en este torneo');
+      }
+      throw e;
     }
   }
 
@@ -269,8 +273,11 @@ export class FootballService {
           torneo: { include: { categoria: true } },
         },
       });
-    } catch {
-      throw new ConflictException('Email o DNI ya registrado en este torneo');
+    } catch (e) {
+      if (isPrismaUniqueConflict(e)) {
+        throw new ConflictException('Email o DNI ya registrado en este torneo');
+      }
+      throw e;
     }
   }
 
