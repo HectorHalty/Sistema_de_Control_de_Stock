@@ -57,8 +57,6 @@ describe('PrismaExceptionFilter', () => {
     expect(json).toHaveBeenCalledWith({
       statusCode: HttpStatus.CONFLICT,
       message: 'Ya existe un registro con esos datos.',
-      prismaCode: 'P2002',
-      target: ['email'],
     });
   });
 
@@ -70,8 +68,6 @@ describe('PrismaExceptionFilter', () => {
     expect(json).toHaveBeenCalledWith({
       statusCode: HttpStatus.BAD_REQUEST,
       message: 'El registro referenciado no existe.',
-      prismaCode: 'P2003',
-      target: ['equipoId'],
     });
   });
 
@@ -83,9 +79,21 @@ describe('PrismaExceptionFilter', () => {
     expect(json).toHaveBeenCalledWith({
       statusCode: HttpStatus.NOT_FOUND,
       message: 'El registro no existe.',
-      prismaCode: 'P2025',
-      target: undefined,
     });
+  });
+
+  it('registra el código Prisma y el target en el log del servidor, no en la respuesta', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, json } = mockHost();
+    filter.catch(knownError('P2002', { target: ['nombre'] }), host);
+
+    const body = json.mock.calls[0][0] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('prismaCode');
+    expect(body).not.toHaveProperty('target');
+    expect(JSON.stringify(body)).not.toContain('nombre');
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('P2002'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nombre'));
   });
 
   it('mapea un código Prisma no contemplado a 500', () => {

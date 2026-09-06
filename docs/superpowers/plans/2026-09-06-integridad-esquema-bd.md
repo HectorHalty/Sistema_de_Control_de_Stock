@@ -615,6 +615,8 @@ Esperado: PASS, 4 tests.
 
 Crear `apps/api/src/common/prisma-exception.filter.ts`. Es la red de seguridad para lo que ningún servicio atrapó; los servicios que ya lanzan mensajes de dominio específicos siguen ganando porque lanzan `HttpException` antes de llegar acá.
 
+El código Prisma y la constraint violada van al log del servidor, nunca al cuerpo de la respuesta: esta misma API sirve a `web-public`, y `meta.target` expone nombres de columnas.
+
 ```typescript
 import {
   ArgumentsHost,
@@ -658,14 +660,13 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    const target = exception.meta?.target;
-    this.logger.warn(`Prisma ${exception.code} en ${JSON.stringify(target)}`);
+    this.logger.warn(
+      `Prisma ${exception.code} en ${JSON.stringify(exception.meta?.target)}`,
+    );
 
     response.status(mapped.status).json({
       statusCode: mapped.status,
       message: mapped.message,
-      prismaCode: exception.code,
-      target,
     });
   }
 }

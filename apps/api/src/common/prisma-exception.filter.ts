@@ -40,14 +40,13 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    const target = exception.meta?.target;
-    this.logger.warn(`Prisma ${exception.code} en ${JSON.stringify(target)}`);
+    this.logger.warn(
+      `Prisma ${exception.code} en ${JSON.stringify(exception.meta?.target)}`,
+    );
 
     response.status(mapped.status).json({
       statusCode: mapped.status,
       message: mapped.message,
-      prismaCode: exception.code,
-      target,
     });
   }
 }
