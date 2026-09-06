@@ -29,7 +29,7 @@ describe('restricciones de stock', () => {
       prisma.nivelStock.create({
         data: { productId: producto.id, warehouseId: deposito.id, quantity: -1 },
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/niveles_stock_quantity_no_negativa/);
   });
 
   it('acepta un nivel de stock en cero', async () => {
@@ -49,7 +49,7 @@ describe('restricciones de stock', () => {
         producto.id,
         deposito.id,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/invalid input value for enum/i);
   });
 
   it('acepta los seis tipos de movimiento válidos', async () => {
@@ -71,7 +71,7 @@ describe('restricciones de stock', () => {
          VALUES (gen_random_uuid()::text, 'X', 'X-1', $1, 'toneladas', now())`,
         categoria.id,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/invalid input value for enum/i);
   });
 
   it('acepta las cuatro unidades de medida válidas', async () => {
@@ -94,12 +94,14 @@ describe('restricciones de stock', () => {
           quantity: 1,
         },
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: 'P2003' });
   });
 
   it('impide borrar una categoría que tiene productos', async () => {
     const { categoria } = await seedCatalog();
-    await expect(prisma.categoria.delete({ where: { id: categoria.id } })).rejects.toThrow();
+    await expect(
+      prisma.categoria.delete({ where: { id: categoria.id } }),
+    ).rejects.toMatchObject({ code: 'P2003' });
   });
 
   it('rechaza un estado de pedido de compra inventado', async () => {
@@ -108,7 +110,7 @@ describe('restricciones de stock', () => {
         `INSERT INTO "ordenes_compra" ("id", "orderNumber", "date", "provider", "status", "updatedAt")
          VALUES (gen_random_uuid()::text, 'PED-001', '2026-09-06', 'X', 'EnCamino', now())`,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/invalid input value for enum/i);
   });
 
   it('ya no existen las tablas heredadas de consumo', async () => {

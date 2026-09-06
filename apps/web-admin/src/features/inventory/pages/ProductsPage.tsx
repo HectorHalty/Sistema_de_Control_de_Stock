@@ -1,5 +1,5 @@
 ﻿import type { Product, Category } from '@/app/components/store';
-import { getUnitLabel } from '@/app/components/store';
+import { getUnitLabel, isFractionalUnit } from '@/app/components/store';
 import { previewNextProductCode } from '@/features/inventory/product-codes';
 import { useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
@@ -778,14 +778,14 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   value={s.quantity}
                   onChange={e => {
                     const raw = e.target.value;
-                    const parsed = form.unit === 'kg' || form.unit === 'litros' ? parseFloat(raw) : parseInt(raw, 10);
+                    const parsed = isFractionalUnit(form.unit) ? parseFloat(raw) : parseInt(raw, 10);
                     const newStock = [...form.stockByWarehouse];
                     newStock[idx] = { ...newStock[idx], quantity: Number.isNaN(parsed) ? 0 : parsed };
                     setForm(p => ({ ...p, stockByWarehouse: newStock }));
                   }}
                   className="w-24 px-3 py-2 rounded-lg bg-input-background border border-border outline-none text-sm text-right text-foreground"
                   min={0}
-                  step={form.unit === 'kg' || form.unit === 'litros' ? 0.001 : 1}
+                  step={isFractionalUnit(form.unit) ? 0.001 : 1}
                 />
                 <button type="button" onClick={() => removeWarehouseStock(s.warehouseId)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
                   <X size={14} />

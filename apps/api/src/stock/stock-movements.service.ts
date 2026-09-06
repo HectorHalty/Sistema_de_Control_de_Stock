@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, TipoMovimientoStock } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
+/** Valores del enum, para descartar filtros inválidos sin consultar la base. */
+const TIPOS_MOVIMIENTO_VALIDOS = new Set<string>(Object.values(TipoMovimientoStock));
+
 export type StockMovementType =
   | 'venta'
   | 'venta_anulada'
@@ -59,7 +62,7 @@ export class StockMovementsService {
     if (filters?.type) {
       // Un tipo fuera del enum no matchea ninguna fila; se responde vacío en vez
       // de dejar que Prisma rechace el valor.
-      if (!(filters.type in TipoMovimientoStock)) return [];
+      if (!TIPOS_MOVIMIENTO_VALIDOS.has(filters.type)) return [];
       where.type = filters.type as TipoMovimientoStock;
     }
     if (filters?.from || filters?.to) {

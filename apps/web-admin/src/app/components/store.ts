@@ -6,6 +6,7 @@ export { useAppState, type AppState } from '@/app/providers/use-app-state';
 export type {
   Category,
   Product,
+  UnidadMedida,
   Warehouse,
   Order,
   Supplier,
@@ -21,6 +22,7 @@ export type {
 
 export {
   getUnitLabel,
+  isFractionalUnit,
   roundUpToOrderUnit,
 } from '@/features/inventory/types';
 

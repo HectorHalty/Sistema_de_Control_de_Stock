@@ -4,13 +4,16 @@ export interface Category {
   icon: string;
 }
 
+/** Unidad de medida de un producto. Refleja el enum `UnidadMedida` de la API. */
+export type UnidadMedida = 'unidades' | 'kg' | 'litros' | 'cajas';
+
 export interface Product {
   id: string;
   name: string;
   code: string;
   description: string;
   category: string;
-  unit: 'unidades' | 'kg' | 'litros' | 'cajas';
+  unit: UnidadMedida;
   orderUnit?: number;
   image: string;
   stockByWarehouse: { warehouseId: string; quantity: number }[];
@@ -63,7 +66,7 @@ export interface StockMovement {
 export interface StockCountEntry {
   productId: string;
   productName: string;
-  unit: 'unidades' | 'kg';
+  unit: UnidadMedida;
   /** Stock que el sistema esperaba (suma por almacenes) al momento del conteo. */
   expected: number;
   /** Stock contado físicamente (suma por almacenes). */
@@ -101,7 +104,7 @@ export interface ConsumptionLog {
     previousStock: number;
     newStock: number;
     consumed: number;
-    unit: 'unidades' | 'kg';
+    unit: UnidadMedida;
   }[];
 }
 
@@ -116,7 +119,7 @@ export interface EmployeeConsumptionEntry {
   warehouseId: string;
   warehouseName: string;
   quantity: number;
-  unit: 'unidades' | 'kg';
+  unit: UnidadMedida;
   previousStock: number;
   newStock: number;
 }
@@ -134,9 +137,21 @@ export interface AuditEntry {
   module?: AuditModule;
 }
 
-export function getUnitLabel(unit: Product['unit'], short = false): string {
-  if (unit === 'kg') return 'kg';
-  return short ? 'uds' : 'unidades';
+const UNIT_LABELS: Record<UnidadMedida, { long: string; short: string }> = {
+  unidades: { long: 'unidades', short: 'uds' },
+  kg: { long: 'kg', short: 'kg' },
+  litros: { long: 'litros', short: 'L' },
+  cajas: { long: 'cajas', short: 'cajas' },
+};
+
+export function getUnitLabel(unit: UnidadMedida, short = false): string {
+  const label = UNIT_LABELS[unit] ?? UNIT_LABELS.unidades;
+  return short ? label.short : label.long;
+}
+
+/** Peso y volumen admiten decimales; lo que se cuenta de a uno, no. */
+export function isFractionalUnit(unit: UnidadMedida): boolean {
+  return unit === 'kg' || unit === 'litros';
 }
 
 export function roundUpToOrderUnit(quantity: number, orderUnit?: number): number {

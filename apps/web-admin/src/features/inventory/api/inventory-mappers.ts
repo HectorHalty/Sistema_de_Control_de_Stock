@@ -81,7 +81,7 @@ export function mapApiEmployeeConsumptionToLocal(api: ApiEmployeeConsumption): E
     warehouseId: api.warehouseId,
     warehouseName: api.warehouseName,
     quantity: Number(api.quantity),
-    unit: api.unit === 'kg' ? 'kg' : 'unidades',
+    unit: api.unit as EmployeeConsumptionEntry['unit'],
     previousStock: Number(api.previousStock),
     newStock: Number(api.newStock),
     operatorId: api.operatorId ?? undefined,
@@ -102,7 +102,7 @@ export function mapApiCountSessionToLocal(api: ApiStockCountSession): StockCount
     entries: api.entries.map(e => ({
       productId: e.productId,
       productName: e.productName,
-      unit: e.unit === 'kg' ? 'kg' : 'unidades',
+      unit: e.unit as StockCountSession['entries'][number]['unit'],
       expected: Number(e.expected),
       counted: Number(e.counted),
     })),

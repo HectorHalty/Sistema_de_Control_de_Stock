@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
-import { getUnitLabel } from '@/app/components/store';
+import { getUnitLabel, isFractionalUnit, type UnidadMedida } from '@/app/components/store';
 import { useStore } from '@/features/sales/pos/VentasPosContext';
 import {
   formatQuantityInput,
@@ -15,8 +15,8 @@ type RecipeIngredientsEditorProps = {
   onChange: (recipe: RecipeLine[]) => void;
 };
 
-function defaultQty(unit: 'unidades' | 'kg') {
-  return unit === 'kg' ? 0.1 : 1;
+export function defaultQty(unit: UnidadMedida) {
+  return isFractionalUnit(unit) ? 0.1 : 1;
 }
 
 export function RecipeIngredientsEditor({ recipe, onChange }: RecipeIngredientsEditorProps) {

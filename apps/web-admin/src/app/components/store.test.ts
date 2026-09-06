@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roundUpToOrderUnit, getUnitLabel } from './store';
+import { roundUpToOrderUnit, getUnitLabel, isFractionalUnit } from './store';
 
 describe('store utilities', () => {
   describe('roundUpToOrderUnit', () => {
@@ -43,6 +43,34 @@ describe('store utilities', () => {
     it('returns correct labels for kg', () => {
       expect(getUnitLabel('kg')).toBe('kg');
       expect(getUnitLabel('kg', true)).toBe('kg');
+    });
+
+    it('returns correct labels for litros', () => {
+      expect(getUnitLabel('litros')).toBe('litros');
+      expect(getUnitLabel('litros', true)).toBe('L');
+    });
+
+    it('returns correct labels for cajas', () => {
+      expect(getUnitLabel('cajas')).toBe('cajas');
+      expect(getUnitLabel('cajas', true)).toBe('cajas');
+    });
+
+    it('never collapses a unit into another one', () => {
+      const units = ['unidades', 'kg', 'litros', 'cajas'] as const;
+      const short = units.map(u => getUnitLabel(u, true));
+      expect(new Set(short).size).toBe(units.length);
+    });
+  });
+
+  describe('isFractionalUnit', () => {
+    it('treats weight and volume as fractionable', () => {
+      expect(isFractionalUnit('kg')).toBe(true);
+      expect(isFractionalUnit('litros')).toBe(true);
+    });
+
+    it('treats countable units as whole', () => {
+      expect(isFractionalUnit('unidades')).toBe(false);
+      expect(isFractionalUnit('cajas')).toBe(false);
     });
   });
 });

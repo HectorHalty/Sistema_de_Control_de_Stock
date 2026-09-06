@@ -6,6 +6,8 @@ import {
   mapApiCategoryToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
+  mapApiEmployeeConsumptionToLocal,
+  mapApiCountSessionToLocal,
   nextProductCode,
 } from '@/features/inventory/api/inventory-mappers';
 import { formatProductCode, getCategoryCodePrefix } from '@/features/inventory/product-codes';
@@ -70,6 +72,48 @@ describe('mapApiProductToLocal', () => {
     const api = { id: 'a', name: 'Carne', code: 'CAR-1', categoryId: 'c', unit: 'kg' } as unknown as StockProduct;
     expect(mapApiProductToLocal(api).unit).toBe('kg');
   });
+});
+
+describe('unidades en consumos y conteos', () => {
+  function consumption(unit: string) {
+    return {
+      id: 'c1',
+      createdAt: '2026-06-16T12:00:00Z',
+      day: 'lunes',
+      productId: 'p1',
+      productName: 'Aceite',
+      warehouseId: 'w1',
+      warehouseName: 'Depósito',
+      quantity: 2,
+      unit,
+      previousStock: 10,
+      newStock: 8,
+    } as unknown as Parameters<typeof mapApiEmployeeConsumptionToLocal>[0];
+  }
+
+  it.each(['unidades', 'kg', 'litros', 'cajas'])(
+    'el consumo de empleado conserva la unidad %s',
+    unit => {
+      expect(mapApiEmployeeConsumptionToLocal(consumption(unit)).unit).toBe(unit);
+    },
+  );
+
+  function countSession(unit: string) {
+    return {
+      id: 's1',
+      createdAt: '2026-06-16T12:00:00Z',
+      date: '2026-06-16',
+      dateType: 'regular',
+      entries: [{ productId: 'p1', productName: 'Aceite', unit, expected: 10, counted: 9 }],
+    } as unknown as Parameters<typeof mapApiCountSessionToLocal>[0];
+  }
+
+  it.each(['unidades', 'kg', 'litros', 'cajas'])(
+    'la entrada de conteo conserva la unidad %s',
+    unit => {
+      expect(mapApiCountSessionToLocal(countSession(unit)).entries[0].unit).toBe(unit);
+    },
+  );
 });
 
 describe('mapApiWarehouseToLocal / mapApiCategoryToLocal', () => {
