@@ -94,15 +94,32 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     también entre instancias. 2/2 verde.
   - `npm test` (209/209) y `npm run test:db` (53/53) en verde.
 
-- [ ] **Task 5: Investigación de agregación en SQL**
-  - Revisar `reglamento-engine.service.ts` y `suspension-sync.service.ts`:
-    ¿cuántas filas trae cada `findMany` en un torneo real (estimar con datos
-    de seed o de producción si existen)? ¿el cálculo en JS es liviano
-    (conteos, agrupaciones simples) o pesado?
-  - Si el volumen no justifica cambiarlo: cerrar la tarea documentando por
-    qué, sin tocar código.
-  - Si lo justifica: mover el cálculo puntual a `groupBy`/`aggregate` de
-    Prisma, empezando por el más costoso, no por los siete a la vez.
+- [x] **Task 5: Investigación de agregación en SQL — cierra sin cambios de
+  código**
+  - `reglamento-engine.service.ts`: `getStandingsForTorneo` trae inscripciones
+    y partidos de un torneo y llama `computeStandings`, que aplica reglas
+    configurables (`criteriosDesempate`, puntaje por victoria/empate/derrota)
+    para armar la tabla de posiciones. Es lógica de negocio con criterios de
+    desempate parametrizables — llevarla a SQL significaría hardcodear esas
+    reglas en la base, perdiendo la flexibilidad de tenerlas en
+    `reglamento.engine.ts`.
+  - `getYellowCardSuspensions` sí hace un conteo simple
+    (`countYellowCardsByPerson`) que técnicamente podría ser un `groupBy` de
+    Prisma — pero opera sobre los eventos de un solo torneo.
+  - `suspension-sync.service.ts`: recalcula sanciones y acumulación de
+    amarillas por torneo en cada cambio de evento. Es lógica secuencial con
+    estado (orden de partidos, historial de acumulación), no una agregación
+    plana — un `groupBy` no reemplaza este cálculo.
+  - Volumen real: no se pudo medir contra datos de producción (la base de
+    desarrollo estaba vacía al momento de esta tarea). Estimado por dominio:
+    una liga amateur de fútbol 5/11 corre con ~10-16 equipos por torneo,
+    ~90-240 partidos por temporada y unos pocos eventos (goles+tarjetas) por
+    partido — del orden de cientos a ~2000 filas por torneo, no miles. A esa
+    escala, traer las filas a Node y recorrerlas una vez no es un problema de
+    rendimiento real.
+  - **Conclusión:** no amerita tarea de refactor a SQL. Si el volumen crece
+    varios órdenes de magnitud (ligas nacionales, múltiples temporadas
+    simultáneas), revisar de nuevo — hasta entonces, cierra sin diff.
 
 - [ ] **Task 6: Bloqueo optimista — esquema**
   - Agregar campo `version Int @default(0)` a `Producto`, `ProductoVenta`,
