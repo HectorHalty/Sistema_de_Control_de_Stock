@@ -59,21 +59,21 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     hay código nuevo que lockear — ya está cubierto por los tests existentes
     de `sales.service.ts`.
 
-- [ ] **Task 3: Lockout de login en Postgres**
-  - Nueva tabla (o campos en `Usuario`) para intentos fallidos: usuario,
-    conteo, timestamp del último intento. Decisión de la spec: Postgres, no
-    Redis.
-  - Reemplazar el `Map` en memoria de `auth.service.ts:13` por lectura/
-    escritura a esa tabla, dentro de una transacción corta para evitar
-    condiciones de carrera en el propio contador (dos intentos fallidos
-    simultáneos no deben perderse entre sí).
-  - Mantener la ventana de 15 minutos y el máximo de 5 intentos ya existentes
-    (`MAX_LOGIN_ATTEMPTS`, `LOCKOUT_WINDOW_MS`) — no se está pidiendo cambiar
-    la política, sólo dónde vive el contador.
-  - Test: dos "instancias" simuladas (dos `AuthService` con el mismo
-    `PrismaService`) deben compartir el lockout.
-  - Actualizar `docs/RUNBOOK.md` si documenta el comportamiento actual del
-    lockout.
+- [x] **Task 3: Lockout de login en Postgres**
+  - Tabla nueva `IntentoLogin` (`intentos_login`): `username` (PK),
+    `count`, `lastAttempt`. Migración regenerada (`db:baseline`), `db:drift`
+    en 0, migrada contra `lch_stock` y `lch_stock_test`.
+  - `auth.service.ts` ya no usa el `Map` en memoria: lee/escribe
+    `intentoLogin` con `upsert` atómico (`count: { increment: 1 }`), que no
+    pierde intentos simultáneos sin necesitar un `$transaction` explícito
+    (el `ON CONFLICT` de Postgres ya es atómico a nivel de fila).
+  - Ventana de 15 minutos y máximo de 5 intentos sin cambios
+    (`MAX_LOGIN_ATTEMPTS`, `LOCKOUT_WINDOW_MS`).
+  - Test nuevo `test/db/auth-lockout.test.ts`: dos instancias de
+    `AuthService` contra el mismo Prisma comparten el lockout (intentos
+    repartidos entre "A" y "B" bloquean a ambas; login correcto resetea el
+    contador para las dos). 2/2 verde contra Postgres real.
+  - `npm test` (209/209) y `npm run test:db` (51/51) en verde.
 
 - [ ] **Task 4: SSE de cocina vía Postgres `LISTEN/NOTIFY`**
   - Mantener el `Map` local en `sse.service.ts` para las conexiones abiertas

@@ -66,6 +66,15 @@ CREATE TABLE "usuarios" (
 );
 
 -- CreateTable
+CREATE TABLE "intentos_login" (
+    "username" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "lastAttempt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "intentos_login_pkey" PRIMARY KEY ("username")
+);
+
+-- CreateTable
 CREATE TABLE "categorias" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,

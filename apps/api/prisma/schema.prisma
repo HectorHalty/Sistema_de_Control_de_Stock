@@ -149,6 +149,16 @@ model Usuario {
   @@map("usuarios")
 }
 
+/// Contador de intentos fallidos de login, en Postgres para que el lockout
+/// se comparta entre instancias de la API (antes vivía en un Map en memoria).
+model IntentoLogin {
+  username    String   @id
+  count       Int      @default(0)
+  lastAttempt DateTime @default(now())
+
+  @@map("intentos_login")
+}
+
 // ==================== STOCK / INVENTARIO ====================
 
 model Categoria {
