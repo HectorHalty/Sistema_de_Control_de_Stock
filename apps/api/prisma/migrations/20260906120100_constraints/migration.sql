@@ -15,3 +15,6 @@ ALTER TABLE "tickets_venta"
 ALTER TABLE "items_ticket_venta"
   ADD CONSTRAINT "items_ticket_venta_unitPrice_no_negativo" CHECK ("unitPrice" >= 0),
   ADD CONSTRAINT "items_ticket_venta_quantity_positiva" CHECK ("quantity" > 0);
+
+ALTER TABLE "items_combo_venta"
+  ADD CONSTRAINT "items_combo_venta_quantity_positiva" CHECK ("quantity" > 0);

@@ -129,4 +129,22 @@ describe('restricciones de ventas', () => {
       prisma.impresora.create({ data: { name: 'Barra', type: 'termica', ip: '10.0.0.2' } }),
     ).rejects.toThrow();
   });
+
+  it('rechaza una cantidad de componente de combo en cero', async () => {
+    const { cocina, categoria, producto } = await seedMenu();
+    const promo = await prisma.productoVenta.create({
+      data: {
+        name: 'Combo Hamburguesa',
+        categoriaVentaId: categoria.id,
+        kitchenId: cocina.id,
+        price: 9500,
+        kind: 'promo',
+      },
+    });
+    await expect(
+      prisma.itemComboVenta.create({
+        data: { promoProductId: promo.id, componentProductId: producto.id, quantity: 0 },
+      }),
+    ).rejects.toThrow();
+  });
 });

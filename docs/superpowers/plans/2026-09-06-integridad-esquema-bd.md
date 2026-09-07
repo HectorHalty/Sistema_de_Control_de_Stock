@@ -1521,7 +1521,12 @@ ALTER TABLE "tickets_venta"
 ALTER TABLE "items_ticket_venta"
   ADD CONSTRAINT "items_ticket_venta_unitPrice_no_negativo" CHECK ("unitPrice" >= 0),
   ADD CONSTRAINT "items_ticket_venta_quantity_positiva" CHECK ("quantity" > 0);
+
+ALTER TABLE "items_combo_venta"
+  ADD CONSTRAINT "items_combo_venta_quantity_positiva" CHECK ("quantity" > 0);
 ```
+
+`ItemComboVenta.quantity` está en la misma lista de Global Constraints que `ItemTicketVenta.quantity` e `ItemPedidoPublico.quantity` (se queda en `Int`), y es la cantidad de un componente dentro de un combo: sin este `CHECK`, un combo podría registrarse con cantidad cero o negativa de un ingrediente.
 
 - [ ] **Step 7: Sembrar las categorías de venta en el seed de cantina**
 
