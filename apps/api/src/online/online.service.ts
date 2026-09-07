@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EstadoPedidoPublico, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SalesService } from '../sales/sales.service';
 import { normalizeQrToken } from './qr-token.util';
@@ -137,8 +138,8 @@ export class OnlineService {
       dateTo = endOfDay(new Date());
     }
 
-    const where = {
-      status: { in: ['pagado', 'en_cocina', 'listo', 'retirado'] as string[] },
+    const where: Prisma.PedidoPublicoWhereInput = {
+      status: { in: ['pagado', 'en_cocina', 'listo', 'retirado'] as EstadoPedidoPublico[] },
       createdAt: { gte: dateFrom, lte: dateTo },
     };
 
@@ -255,7 +256,7 @@ export class OnlineService {
 
   async listOrders(status?: string, limit = 50) {
     return this.prisma.pedidoPublico.findMany({
-      where: status ? { status } : undefined,
+      where: status ? { status: status as EstadoPedidoPublico } : undefined,
       include: {
         items: true,
         tokenRetiro: { select: { token: true, usadoEn: true } },

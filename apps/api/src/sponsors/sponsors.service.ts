@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PlacementPatrocinador, TipoMedioPatrocinador } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
@@ -9,7 +10,7 @@ export class SponsorsService {
     return this.prisma.patrocinador.findMany({
       where: {
         ...(active !== undefined ? { active } : {}),
-        ...(placement ? { placement } : {}),
+        ...(placement ? { placement: placement as PlacementPatrocinador } : {}),
       },
       orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
@@ -36,10 +37,10 @@ export class SponsorsService {
       data: {
         name: data.name,
         imageUrl: data.imageUrl,
-        placement: data.placement || 'banner',
+        placement: (data.placement as PlacementPatrocinador) || 'banner',
         linkUrl: data.linkUrl,
         bannerLabel: data.bannerLabel,
-        mediaType: data.mediaType || 'image',
+        mediaType: (data.mediaType as TipoMedioPatrocinador) || 'image',
         widthPx: data.widthPx,
         heightPx: data.heightPx,
         sortOrder: data.sortOrder ?? 0,
@@ -64,7 +65,14 @@ export class SponsorsService {
     },
   ) {
     await this.findById(id);
-    return this.prisma.patrocinador.update({ where: { id }, data });
+    return this.prisma.patrocinador.update({
+      where: { id },
+      data: {
+        ...data,
+        placement: data.placement as PlacementPatrocinador | undefined,
+        mediaType: data.mediaType as TipoMedioPatrocinador | undefined,
+      },
+    });
   }
 
   async delete(id: string) {

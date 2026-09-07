@@ -5,7 +5,7 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
+  salesApi, kitchenApi, mediaApi, sponsorsApi, printingApi,
   getApiBaseUrl, getApiErrorMessage, isApiError,
 } from './client';
 import type {
@@ -469,71 +469,6 @@ export function useSponsorsApiAdapter() {
     if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
     try {
       await sponsorsApi.remove(id, '');
-      return { ok: true, apiUnavailable: false } as const;
-    } catch (e) {
-      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;
-    }
-  }, [apiAvailable]);
-
-  return { list, create, update, remove, loading, error, apiAvailable };
-}
-
-// ==================== Online Catalog Adapter ====================
-
-export function useOnlineCatalogApiAdapter() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    isApiReachable().then(setApiAvailable);
-  }, []);
-
-  const list = useCallback(async (active?: boolean, category?: string) => {
-    if (!apiAvailable) return [];
-    try {
-      return await onlineCatalogApi.products.list(active, category);
-    } catch {
-      return [];
-    }
-  }, [apiAvailable]);
-
-  const create = useCallback(async (data: { name: string; description?: string; price: number; image?: string; images?: string[]; category: string; attributes?: Record<string, any>; stockProductId?: string }) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await onlineCatalogApi.products.create(data, '');
-      return { ok: true, apiUnavailable: false, result } as const;
-    } catch (e) {
-      const msg = getApiErrorMessage(e, 'No se pudo crear');
-      setError(msg);
-      return { ok: false, apiUnavailable: false, error: msg } as const;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiAvailable]);
-
-  const update = useCallback(async (id: string, data: { name?: string; description?: string; price?: number; image?: string; images?: string[]; category?: string; attributes?: Record<string, any>; active?: boolean; stockProductId?: string }) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await onlineCatalogApi.products.update(id, data, '');
-      return { ok: true, apiUnavailable: false, result } as const;
-    } catch (e) {
-      const msg = getApiErrorMessage(e, 'No se pudo actualizar');
-      setError(msg);
-      return { ok: false, apiUnavailable: false, error: msg } as const;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiAvailable]);
-
-  const remove = useCallback(async (id: string) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    try {
-      await onlineCatalogApi.products.remove(id, '');
       return { ok: true, apiUnavailable: false } as const;
     } catch (e) {
       return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;

@@ -67,6 +67,26 @@ enum EstadoCuentaEquipo {
   cerrada
 }
 
+enum EstadoPedidoPublico {
+  pendiente_pago
+  pagado
+  en_cocina
+  listo
+  retirado
+  cancelado
+}
+
+enum PlacementPatrocinador {
+  banner
+  sidebar
+  footer
+}
+
+enum TipoMedioPatrocinador {
+  image
+  video
+}
+
 // ==================== AUTH ====================
 
 model Usuario {
@@ -441,46 +461,24 @@ model Medio {
 // ==================== PATROCINADORES ====================
 
 model Patrocinador {
-  id          String   @id @default(uuid())
-  name        String
+  id          String                @id @default(uuid())
+  name        String                @unique
   imageUrl    String
-  placement   String   @default("banner")
-  bannerLabel String?  @map("banner_label")
-  mediaType   String   @default("image") @map("tipo_medio") // image | video
-  widthPx     Int?     @map("ancho_px")
-  heightPx    Int?     @map("alto_px")
-  sortOrder   Int      @default(0) @map("orden")
-  active      Boolean  @default(true)
+  placement   PlacementPatrocinador @default(banner)
+  bannerLabel String?               @map("banner_label")
+  mediaType   TipoMedioPatrocinador @default(image) @map("tipo_medio")
+  widthPx     Int?                  @map("ancho_px")
+  heightPx    Int?                  @map("alto_px")
+  sortOrder   Int                   @default(0) @map("orden")
+  active      Boolean               @default(true)
   linkUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 
   @@index([active])
   @@index([placement])
   @@index([active, placement, sortOrder])
   @@map("patrocinadores")
-}
-
-// ==================== CATÁLOGO ONLINE ====================
-
-model ProductoOnline {
-  id             String   @id @default(uuid())
-  name           String
-  description    String?
-  price          Decimal  @db.Decimal(10, 2)
-  image          String?
-  images         String[] @default([])
-  category       String
-  attributes     Json?
-  active         Boolean  @default(true)
-  stockProductId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([active])
-  @@index([category])
-  @@index([stockProductId])
-  @@map("productos_online")
 }
 
 // ==================== FÚTBOL / TORNEO PÚBLICO ====================
@@ -945,16 +943,16 @@ model ReglamentoRegla {
 // ==================== CANTINA PÚBLICA ====================
 
 model PedidoPublico {
-  id              String   @id @default(uuid())
+  id              String              @id @default(uuid())
   cuentaPublicaId String
-  status          String   @default("pendiente_pago") // pendiente_pago | pagado | en_cocina | listo | retirado | cancelado
-  total           Decimal  @db.Decimal(10, 2)
-  ticketVentaId   String?  @unique
+  status          EstadoPedidoPublico @default(pendiente_pago)
+  total           Decimal             @db.Decimal(10, 2)
+  ticketVentaId   String?             @unique
   nota            String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  cuentaPublica CuentaPublica       @relation(fields: [cuentaPublicaId], references: [id])
+  cuentaPublica CuentaPublica       @relation(fields: [cuentaPublicaId], references: [id], onDelete: Restrict)
   ticketVenta   TicketVenta?        @relation(fields: [ticketVentaId], references: [id], onDelete: SetNull)
   items         ItemPedidoPublico[]
   tokenRetiro   TokenRetiroQR?

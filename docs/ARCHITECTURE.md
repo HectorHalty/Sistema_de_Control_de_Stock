@@ -6,7 +6,7 @@ Monorepo npm (`sistema-gestion-lch`) para **La Chacra Fútbol**.
 
 ```
 apps/
-├── api/              NestJS — auth, stock, sales, kitchen, online-catalog, football, media
+├── api/              NestJS — auth, stock, sales, kitchen, football, media
 ├── web-admin/        Panel interno (React + Vite)
 └── web-public/       Sitio público (React + Vite)
 ```

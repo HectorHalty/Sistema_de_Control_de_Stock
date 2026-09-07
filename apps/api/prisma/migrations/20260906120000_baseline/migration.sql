@@ -25,6 +25,15 @@ CREATE TYPE "EstadoMesa" AS ENUM ('libre', 'ocupada');
 -- CreateEnum
 CREATE TYPE "EstadoCuentaEquipo" AS ENUM ('abierta', 'cerrada');
 
+-- CreateEnum
+CREATE TYPE "EstadoPedidoPublico" AS ENUM ('pendiente_pago', 'pagado', 'en_cocina', 'listo', 'retirado', 'cancelado');
+
+-- CreateEnum
+CREATE TYPE "PlacementPatrocinador" AS ENUM ('banner', 'sidebar', 'footer');
+
+-- CreateEnum
+CREATE TYPE "TipoMedioPatrocinador" AS ENUM ('image', 'video');
+
 -- CreateTable
 CREATE TABLE "usuarios" (
     "id" TEXT NOT NULL,
@@ -297,9 +306,9 @@ CREATE TABLE "patrocinadores" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "imageUrl" TEXT NOT NULL,
-    "placement" TEXT NOT NULL DEFAULT 'banner',
+    "placement" "PlacementPatrocinador" NOT NULL DEFAULT 'banner',
     "banner_label" TEXT,
-    "tipo_medio" TEXT NOT NULL DEFAULT 'image',
+    "tipo_medio" "TipoMedioPatrocinador" NOT NULL DEFAULT 'image',
     "ancho_px" INTEGER,
     "alto_px" INTEGER,
     "orden" INTEGER NOT NULL DEFAULT 0,
@@ -309,24 +318,6 @@ CREATE TABLE "patrocinadores" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "patrocinadores_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "productos_online" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "price" DECIMAL(10,2) NOT NULL,
-    "image" TEXT,
-    "images" TEXT[] DEFAULT ARRAY[]::TEXT[],
-    "category" TEXT NOT NULL,
-    "attributes" JSONB,
-    "active" BOOLEAN NOT NULL DEFAULT true,
-    "stockProductId" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "productos_online_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -676,7 +667,7 @@ CREATE TABLE "reglamento_reglas" (
 CREATE TABLE "pedidos_publicos" (
     "id" TEXT NOT NULL,
     "cuentaPublicaId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pendiente_pago',
+    "status" "EstadoPedidoPublico" NOT NULL DEFAULT 'pendiente_pago',
     "total" DECIMAL(10,2) NOT NULL,
     "ticketVentaId" TEXT,
     "nota" TEXT,
@@ -1036,6 +1027,9 @@ CREATE INDEX "medios_type_idx" ON "medios"("type");
 CREATE INDEX "medios_matchDate_idx" ON "medios"("matchDate");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "patrocinadores_name_key" ON "patrocinadores"("name");
+
+-- CreateIndex
 CREATE INDEX "patrocinadores_active_idx" ON "patrocinadores"("active");
 
 -- CreateIndex
@@ -1043,15 +1037,6 @@ CREATE INDEX "patrocinadores_placement_idx" ON "patrocinadores"("placement");
 
 -- CreateIndex
 CREATE INDEX "patrocinadores_active_placement_orden_idx" ON "patrocinadores"("active", "placement", "orden");
-
--- CreateIndex
-CREATE INDEX "productos_online_active_idx" ON "productos_online"("active");
-
--- CreateIndex
-CREATE INDEX "productos_online_category_idx" ON "productos_online"("category");
-
--- CreateIndex
-CREATE INDEX "productos_online_stockProductId_idx" ON "productos_online"("stockProductId");
 
 -- CreateIndex
 CREATE INDEX "temporadas_activa_idx" ON "temporadas"("activa");

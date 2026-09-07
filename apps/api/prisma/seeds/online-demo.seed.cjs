@@ -189,25 +189,6 @@ async function seedOnlineDemo(prisma) {
     }
   }
 
-  // Legacy ProductoOnline stubs (si el panel aún lo lista)
-  const stockCarne = await prisma.producto.findUnique({ where: { code: 'STK-CARNE-001' } });
-  const existingOnline = await prisma.productoOnline.findFirst({
-    where: { name: 'Pack merchandising LCH' },
-  });
-  if (!existingOnline) {
-    await prisma.productoOnline.create({
-      data: {
-        name: 'Pack merchandising LCH',
-        description: 'Remera + gorra — catálogo online demo',
-        price: 25000,
-        category: 'Merch',
-        active: true,
-        stockProductId: stockCarne?.id,
-        image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400',
-      },
-    });
-  }
-
   console.log(
     `Online demo: ${filters.length} filtros web, ${mediaItems.length} medios, pedidos de prueba.`,
   );

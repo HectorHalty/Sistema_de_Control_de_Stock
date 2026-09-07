@@ -812,28 +812,6 @@ export const onlineApi = {
 };
 
 /**
- * Online Catalog endpoints
- */
-export const onlineCatalogApi = {
-  products: {
-    list: (active?: boolean, category?: string) => {
-      const params = new URLSearchParams();
-      if (active !== undefined) params.set('active', String(active));
-      if (category) params.set('category', category);
-      const q = params.toString();
-      return apiFetch<OnlineProduct[]>(`/online-catalog/products${q ? `?${q}` : ''}`);
-    },
-    get: (id: string) => apiFetch<OnlineProduct>(`/online-catalog/products/${id}`),
-    create: (data: CreateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>('/online-catalog/products', { method: 'POST', token, body: data }),
-    update: (id: string, data: UpdateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>(`/online-catalog/products/${id}`, { method: 'PUT', token, body: data }),
-    remove: (id: string, token: string) =>
-      apiFetch<void>(`/online-catalog/products/${id}`, { method: 'DELETE', token }),
-  },
-};
-
-/**
  * Admin settings endpoints (config, printers, sales categories, tables).
  */
 export const settingsApi = {
@@ -1225,19 +1203,6 @@ export interface Sponsor {
   linkUrl?: string | null;
 }
 
-export interface OnlineProduct {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  image?: string;
-  images: string[];
-  category: string;
-  attributes?: Record<string, any>;
-  active: boolean;
-  stockProductId?: string;
-}
-
 export interface FootballTeam {
   id: string;
   name: string;
@@ -1593,16 +1558,4 @@ export interface UpdateSponsorPayload {
   widthPx?: number;
   heightPx?: number;
   sortOrder?: number;
-}
-
-export interface CreateOnlineProductPayload {
-  name: string; description?: string; price: number; image?: string;
-  images?: string[]; category: string; attributes?: Record<string, any>;
-  stockProductId?: string;
-}
-
-export interface UpdateOnlineProductPayload {
-  name?: string; description?: string; price?: number; image?: string;
-  images?: string[]; category?: string; attributes?: Record<string, any>;
-  active?: boolean; stockProductId?: string;
 }

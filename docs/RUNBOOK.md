@@ -34,7 +34,6 @@ Guía de instalación y desarrollo del sistema de gestión para **La Chacra Fút
 │  ├── media       - Real presigned S3 uploads    │
 │  ├── sponsors    - Sponsor CRUD                 │
 │  ├── football    - Teams, matches, standings    │
-│  ├── online-catalog - Online product catalog    │
 │  └── sse         - Server-Sent Events stream    │
 └────────────────┬────────────────────────────────┘
                  │
@@ -252,12 +251,6 @@ npm run electron:public   # builds apps/web-public/release/
 - `POST /football/matches` - Create match
 - `PUT /football/matches/:id/score` - Set match score
 - `GET /football/standings` - Get standings (computed)
-
-### Online Catalog
-- `GET /online-catalog/products` - List products
-- `POST /online-catalog/products` - Create product
-- `PUT /online-catalog/products/:id` - Update product
-- `DELETE /online-catalog/products/:id` - Delete product
 
 ## Transactional Guarantees
 
