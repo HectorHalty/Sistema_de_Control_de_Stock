@@ -3080,8 +3080,29 @@ describe('reconciliación de datos derivados', () => {
     expect(result.status).toBe(1);
     expect(result.stdout + result.stderr).toContain('5000');
   });
+
+  it('reporta deriva cuando el total del pedido público no coincide con sus líneas', async () => {
+    const cuenta = await prisma.cuentaPublica.create({
+      data: { email: 'reconcile@lch.test', passwordHash: 'hash' },
+    });
+    const pedido = await prisma.pedidoPublico.create({
+      data: { cuentaPublicaId: cuenta.id, total: 1 },
+    });
+    await prisma.itemPedidoPublico.create({
+      data: { pedidoId: pedido.id, name: 'Agua', unitPrice: 1500, quantity: 2 },
+    });
+
+    const result = runReconcile();
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toContain(pedido.id);
+  });
 });
 ```
+
+**Nota (sumada en el review de la Task 5):** `db:reconcile` cubre el mismo riesgo de deriva
+también para `pedidos_publicos`, no solo para `tickets_venta` — ambos dominios reciben el mismo
+par de `CHECK` (`unitPrice >= 0`, `quantity > 0`) sobre sus líneas, así que ambos necesitan la
+misma reconciliación de su total contra el detalle. Ver la nota equivalente en el spec.
 
 - [ ] **Step 2: Correr el test para verificar que falla**
 
@@ -3157,14 +3178,40 @@ async function checkTicketTotals() {
   return rows.length;
 }
 
+/** Total guardado vs suma de las líneas del pedido público. Mismo riesgo que el ticket del POS. */
+async function checkPedidoTotals() {
+  const rows = await prisma.$queryRaw`
+    SELECT
+      p."id"       AS id,
+      p."total"    AS total,
+      COALESCE(i.suma, 0) AS suma_lineas
+    FROM "pedidos_publicos" p
+    LEFT JOIN (
+      SELECT "pedidoId", SUM("unitPrice" * "quantity") AS suma
+      FROM "items_pedido_publico"
+      GROUP BY "pedidoId"
+    ) i ON i."pedidoId" = p."id"
+    WHERE p."total" <> COALESCE(i.suma, 0)
+    ORDER BY p."id"
+  `;
+
+  for (const r of rows) {
+    console.error(
+      `DERIVA pedido ${r.id}: total=${r.total} suma_lineas=${r.suma_lineas}`,
+    );
+  }
+  return rows.length;
+}
+
 async function main() {
   const stockDrift = await checkStockLevels();
   const ticketDrift = await checkTicketTotals();
+  const pedidoDrift = await checkPedidoTotals();
   await prisma.$disconnect();
 
-  const total = stockDrift + ticketDrift;
+  const total = stockDrift + ticketDrift + pedidoDrift;
   if (total === 0) {
-    console.log('Sin deriva: niveles de stock y totales de ticket coinciden con su origen.');
+    console.log('Sin deriva: niveles de stock y totales de ticket y pedido coinciden con su origen.');
     process.exit(0);
   }
 
@@ -3198,7 +3245,7 @@ Desde `apps/api`:
 npm run test:db
 ```
 
-Esperado: PASS, incluidos los 4 tests de reconciliación.
+Esperado: PASS, incluidos los 5 tests de reconciliación.
 
 - [ ] **Step 6: Correr la reconciliación sobre la base de desarrollo**
 

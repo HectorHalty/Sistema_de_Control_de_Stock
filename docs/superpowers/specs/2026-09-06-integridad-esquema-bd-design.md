@@ -128,6 +128,7 @@ canónico.
 - `niveles_stock.quantity >= 0`
 - `tickets_venta.total >= 0`
 - `items_ticket_venta.unitPrice >= 0` y `quantity > 0`
+- `items_combo_venta.quantity > 0`
 - `productos_venta.price >= 0`
 - `pedidos_publicos.total >= 0`
 - `items_pedido_publico.unitPrice >= 0` y `quantity > 0`
@@ -251,6 +252,10 @@ no corrige, y termina con código de salida distinto de cero si encuentra deriva
    `movimientos_stock.quantity` del mismo par.
 2. Por cada ticket, compara `tickets_venta.total` contra la suma de
    `items_ticket_venta.unitPrice * quantity`.
+3. Por cada pedido público, compara `pedidos_publicos.total` contra la suma de
+   `items_pedido_publico.unitPrice * quantity`. Es el mismo riesgo de deriva que el ticket del
+   POS: ambos dominios reciben el mismo par de `CHECK` (`unitPrice >= 0`, `quantity > 0`) sobre
+   sus líneas, así que ambos necesitan la misma reconciliación de su total contra el detalle.
 
 Que solo reporte es intencional: corregir automáticamente escondería el bug del backend que
 produjo la deriva, que es justamente lo que el proyecto B tiene que arreglar.
