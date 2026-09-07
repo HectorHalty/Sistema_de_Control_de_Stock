@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EstadoPartido, TipoEventoPartido } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
@@ -512,7 +513,7 @@ ${partidoBlock}
   // Matches
   async findAllMatches(filters?: { status?: string; torneoId?: string; jornadaId?: string }) {
     const where: Record<string, unknown> = {};
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.status = filters.status as EstadoPartido;
     if (filters?.torneoId) where.torneoId = filters.torneoId;
     if (filters?.jornadaId) where.jornadaId = filters.jornadaId;
 
@@ -1062,7 +1063,7 @@ ${partidoBlock}
     id: string,
     homeGoals: number,
     awayGoals: number,
-    events?: { personaId: string; tipo: string; minuto?: number }[],
+    events?: { personaId: string; tipo: TipoEventoPartido; minuto?: number }[],
   ) {
     const match = await this.prisma.partidoFutbol.findUnique({ where: { id } });
     if (!match) throw new NotFoundException(`Partido ${id} no encontrado`);
@@ -1107,7 +1108,7 @@ ${partidoBlock}
 
   async addMatchEvent(
     partidoId: string,
-    data: { personaId: string; tipo: string; minuto?: number; articuloRef?: string },
+    data: { personaId: string; tipo: TipoEventoPartido; minuto?: number; articuloRef?: string },
   ) {
     const event = await this.prisma.eventoPartido.create({
       data: { partidoId, ...data },

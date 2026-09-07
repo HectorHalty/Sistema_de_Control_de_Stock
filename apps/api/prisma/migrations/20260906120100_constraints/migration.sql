@@ -26,3 +26,14 @@ ALTER TABLE "pedidos_publicos"
 ALTER TABLE "items_pedido_publico"
   ADD CONSTRAINT "items_pedido_publico_unitPrice_no_negativo" CHECK ("unitPrice" >= 0),
   ADD CONSTRAINT "items_pedido_publico_quantity_positiva" CHECK ("quantity" > 0);
+
+-- Fútbol
+ALTER TABLE "partidos_futbol"
+  ADD CONSTRAINT "partidos_futbol_homeGoals_no_negativos"
+    CHECK ("homeGoals" IS NULL OR "homeGoals" >= 0),
+  ADD CONSTRAINT "partidos_futbol_awayGoals_no_negativos"
+    CHECK ("awayGoals" IS NULL OR "awayGoals" >= 0);
+
+ALTER TABLE "cuentas_publicas"
+  ADD CONSTRAINT "cuentas_publicas_con_metodo_de_auth"
+    CHECK ("googleId" IS NOT NULL OR "password_hash" IS NOT NULL);

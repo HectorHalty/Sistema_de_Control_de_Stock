@@ -10,6 +10,7 @@ import {
   UseGuards,
   Header,
 } from '@nestjs/common';
+import { TipoEventoPartido } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -300,7 +301,7 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   addMatchEvent(
     @Param('id') id: string,
-    @Body() body: { personaId: string; tipo: string; minuto?: number; articuloRef?: string },
+    @Body() body: { personaId: string; tipo: TipoEventoPartido; minuto?: number; articuloRef?: string },
   ) {
     return this.footballService.addMatchEvent(id, body);
   }

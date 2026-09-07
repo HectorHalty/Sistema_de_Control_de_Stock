@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TipoEventoPartido } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 
@@ -209,7 +210,7 @@ export class PublicService {
   }
 
   async listTarjetas(torneoId: string) {
-    const cardTypes = ['amarilla', 'roja', 'doble_amarilla', 'azul', 'expulsion_directa'];
+    const cardTypes: TipoEventoPartido[] = ['amarilla', 'roja', 'doble_amarilla', 'azul', 'expulsion_directa'];
     const labelByType: Record<string, string> = {
       amarilla: 'Amarilla',
       roja: 'Roja',

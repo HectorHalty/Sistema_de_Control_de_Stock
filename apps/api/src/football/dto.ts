@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { TipoEventoPartido } from '@prisma/client';
 
 export class UpdateInscriptionDto {
   @IsOptional()
@@ -59,8 +60,8 @@ export class MatchEventDto {
   @IsUUID()
   personaId: string;
 
-  @IsString()
-  tipo: string;
+  @IsEnum(TipoEventoPartido)
+  tipo: TipoEventoPartido;
 
   @IsOptional()
   @IsInt()

@@ -34,6 +34,21 @@ CREATE TYPE "PlacementPatrocinador" AS ENUM ('banner', 'sidebar', 'footer');
 -- CreateEnum
 CREATE TYPE "TipoMedioPatrocinador" AS ENUM ('image', 'video');
 
+-- CreateEnum
+CREATE TYPE "EstadoPartido" AS ENUM ('pendiente', 'jugado', 'suspendido', 'wo');
+
+-- CreateEnum
+CREATE TYPE "TipoEventoPartido" AS ENUM ('gol', 'asistencia', 'amarilla', 'roja', 'azul', 'doble_amarilla', 'expulsion_directa');
+
+-- CreateEnum
+CREATE TYPE "GeneroCategoria" AS ENUM ('hombres', 'mujeres');
+
+-- CreateEnum
+CREATE TYPE "RolPlantel" AS ENUM ('jugador', 'capitan', 'subcapitan');
+
+-- CreateEnum
+CREATE TYPE "RolCuentaPublica" AS ENUM ('usuario', 'seguidor', 'jugador', 'capitan');
+
 -- CreateTable
 CREATE TABLE "usuarios" (
     "id" TEXT NOT NULL,
@@ -353,7 +368,7 @@ CREATE TABLE "categorias_config" (
     "id" TEXT NOT NULL,
     "codigo" TEXT NOT NULL,
     "nombre" TEXT NOT NULL,
-    "genero" TEXT NOT NULL,
+    "genero" "GeneroCategoria" NOT NULL,
     "maxPlantel" INTEGER NOT NULL,
     "maxIncorporaciones" INTEGER NOT NULL DEFAULT 3,
     "minJugadoresInicio" INTEGER NOT NULL,
@@ -449,7 +464,7 @@ CREATE TABLE "cuentas_publicas" (
     "password_hash" TEXT,
     "nombre" TEXT,
     "avatarUrl" TEXT,
-    "rol" TEXT NOT NULL DEFAULT 'usuario',
+    "rol" "RolCuentaPublica" NOT NULL DEFAULT 'usuario',
     "personaId" TEXT,
     "equipoSeguidoId" TEXT,
     "dniConfirmado" TEXT,
@@ -484,7 +499,7 @@ CREATE TABLE "inscripciones_jugador" (
     "torneoId" TEXT NOT NULL,
     "equipoInscripcionId" TEXT NOT NULL,
     "numeroCamiseta" INTEGER,
-    "rolPlantel" TEXT NOT NULL DEFAULT 'jugador',
+    "rolPlantel" "RolPlantel" NOT NULL DEFAULT 'jugador',
     "activa" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -562,7 +577,7 @@ CREATE TABLE "partidos_futbol" (
     "homeTeamId" TEXT NOT NULL,
     "awayTeamId" TEXT NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pendiente',
+    "status" "EstadoPartido" NOT NULL DEFAULT 'pendiente',
     "homeGoals" INTEGER,
     "awayGoals" INTEGER,
     "venue" TEXT,
@@ -587,7 +602,7 @@ CREATE TABLE "eventos_partido" (
     "id" TEXT NOT NULL,
     "partidoId" TEXT NOT NULL,
     "personaId" TEXT NOT NULL,
-    "tipo" TEXT NOT NULL,
+    "tipo" "TipoEventoPartido" NOT NULL,
     "minuto" INTEGER,
     "articuloRef" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -925,6 +940,9 @@ CREATE UNIQUE INDEX "filtros_web_slug_key" ON "filtros_web"("slug");
 CREATE INDEX "filtros_web_active_orden_idx" ON "filtros_web"("active", "orden");
 
 -- CreateIndex
+CREATE INDEX "productos_venta_filtros_filtro_web_id_idx" ON "productos_venta_filtros"("filtro_web_id");
+
+-- CreateIndex
 CREATE INDEX "productos_venta_kitchenId_idx" ON "productos_venta"("kitchenId");
 
 -- CreateIndex
@@ -1048,10 +1066,16 @@ CREATE UNIQUE INDEX "temporadas_anio_key" ON "temporadas"("anio");
 CREATE INDEX "campeonatos_activo_idx" ON "campeonatos"("activo");
 
 -- CreateIndex
+CREATE INDEX "campeonatos_temporadaId_idx" ON "campeonatos"("temporadaId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "campeonatos_temporadaId_nombre_key" ON "campeonatos"("temporadaId", "nombre");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "categorias_config_codigo_key" ON "categorias_config"("codigo");
+
+-- CreateIndex
+CREATE INDEX "categorias_config_grupoCanchasId_idx" ON "categorias_config"("grupoCanchasId");
 
 -- CreateIndex
 CREATE INDEX "torneos_activo_publicado_idx" ON "torneos"("activo", "publicado");
@@ -1069,13 +1093,16 @@ CREATE UNIQUE INDEX "equipos_futbol_name_key" ON "equipos_futbol"("name");
 CREATE INDEX "equipos_inscripcion_torneoId_activo_idx" ON "equipos_inscripcion"("torneoId", "activo");
 
 -- CreateIndex
+CREATE INDEX "equipos_inscripcion_equipoId_idx" ON "equipos_inscripcion"("equipoId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "equipos_inscripcion_torneoId_equipoId_key" ON "equipos_inscripcion"("torneoId", "equipoId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "personas_dni_key" ON "personas"("dni");
 
 -- CreateIndex
-CREATE INDEX "personas_email_idx" ON "personas"("email");
+CREATE UNIQUE INDEX "personas_email_key" ON "personas"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "cuentas_publicas_googleId_key" ON "cuentas_publicas"("googleId");
@@ -1118,6 +1145,9 @@ CREATE INDEX "inscripciones_jugador_torneoId_activa_idx" ON "inscripciones_jugad
 
 -- CreateIndex
 CREATE UNIQUE INDEX "inscripciones_jugador_personaId_torneoId_key" ON "inscripciones_jugador"("personaId", "torneoId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "inscripciones_jugador_equipoInscripcionId_numeroCamiseta_key" ON "inscripciones_jugador"("equipoInscripcionId", "numeroCamiseta");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "grupos_canchas_codigo_key" ON "grupos_canchas"("codigo");
@@ -1165,6 +1195,12 @@ CREATE INDEX "partidos_futbol_torneoId_jornadaId_idx" ON "partidos_futbol"("torn
 CREATE INDEX "partidos_futbol_canchaId_date_horaInicio_idx" ON "partidos_futbol"("canchaId", "date", "horaInicio");
 
 -- CreateIndex
+CREATE INDEX "partidos_futbol_homeTeamId_idx" ON "partidos_futbol"("homeTeamId");
+
+-- CreateIndex
+CREATE INDEX "partidos_futbol_awayTeamId_idx" ON "partidos_futbol"("awayTeamId");
+
+-- CreateIndex
 CREATE INDEX "eventos_partido_partidoId_idx" ON "eventos_partido"("partidoId");
 
 -- CreateIndex
@@ -1180,16 +1216,25 @@ CREATE INDEX "suspensiones_personaId_activa_idx" ON "suspensiones"("personaId", 
 CREATE INDEX "suspensiones_torneoId_activa_idx" ON "suspensiones"("torneoId", "activa");
 
 -- CreateIndex
+CREATE INDEX "suspensiones_origenPartidoId_idx" ON "suspensiones"("origenPartidoId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "reglamento_apartados_numero_key" ON "reglamento_apartados"("numero");
 
 -- CreateIndex
 CREATE INDEX "reglamento_articulos_aplicable_idx" ON "reglamento_articulos"("aplicable");
 
 -- CreateIndex
+CREATE INDEX "reglamento_articulos_apartadoId_idx" ON "reglamento_articulos"("apartadoId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "reglamento_articulos_apartadoId_numero_key" ON "reglamento_articulos"("apartadoId", "numero");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "reglamento_anexos_numero_key" ON "reglamento_anexos"("numero");
+
+-- CreateIndex
+CREATE INDEX "reglamento_reglas_anexoId_idx" ON "reglamento_reglas"("anexoId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "reglamento_reglas_anexoId_clave_key" ON "reglamento_reglas"("anexoId", "clave");
@@ -1496,6 +1541,9 @@ ALTER TABLE "suspensiones" ADD CONSTRAINT "suspensiones_personaId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "suspensiones" ADD CONSTRAINT "suspensiones_torneoId_fkey" FOREIGN KEY ("torneoId") REFERENCES "torneos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "suspensiones" ADD CONSTRAINT "suspensiones_origenPartidoId_fkey" FOREIGN KEY ("origenPartidoId") REFERENCES "partidos_futbol"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "reglamento_articulos" ADD CONSTRAINT "reglamento_articulos_apartadoId_fkey" FOREIGN KEY ("apartadoId") REFERENCES "reglamento_apartados"("id") ON DELETE CASCADE ON UPDATE CASCADE;

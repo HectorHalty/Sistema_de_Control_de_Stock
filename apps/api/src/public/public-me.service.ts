@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { RolPlantel } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { PublicAuthService } from './public-auth.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
@@ -334,14 +335,14 @@ export class PublicCaptainService {
         equipoInscripcionId: cap.equipoInscripcionId,
         activa: true,
         numeroCamiseta: dto.numeroCamiseta,
-        rolPlantel: dto.rolPlantel ?? 'jugador',
+        rolPlantel: (dto.rolPlantel as RolPlantel) ?? 'jugador',
       },
       create: {
         personaId: persona.id,
         torneoId: cap.torneoId,
         equipoInscripcionId: cap.equipoInscripcionId,
         numeroCamiseta: dto.numeroCamiseta,
-        rolPlantel: dto.rolPlantel ?? 'jugador',
+        rolPlantel: (dto.rolPlantel as RolPlantel) ?? 'jugador',
         activa: true,
       },
     });
@@ -381,7 +382,7 @@ export class PublicCaptainService {
         where: { id: inscripcion.id },
         data: {
           ...(dto.numeroCamiseta !== undefined ? { numeroCamiseta: dto.numeroCamiseta } : {}),
-          ...(dto.rolPlantel ? { rolPlantel: dto.rolPlantel } : {}),
+          ...(dto.rolPlantel ? { rolPlantel: dto.rolPlantel as RolPlantel } : {}),
         },
       });
     }
