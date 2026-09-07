@@ -139,7 +139,17 @@ export const ASSIGNABLE_ROLES: PlatformRole[] = [
   'Operador_Cocina',
 ];
 
-export function normalizeRole(role: UserRole | string): PlatformRole {
+/**
+ * Reduce los 7 roles de UserRole (espejo del enum RolUsuario del backend) a
+ * los 6 PlatformRole que gobiernan el acceso a módulos. Admin colapsa a
+ * SuperAdmin: es una simplificación deliberada del modelo de permisos del
+ * front, no un alias heredado.
+ *
+ * El switch es exhaustivo a propósito: agregar un rol al backend sin
+ * agregarlo acá rompe la compilación en `_exhaustive: never`, en vez de
+ * caer en un default silencioso que mal-autoriza a un usuario nuevo.
+ */
+export function normalizeRole(role: UserRole): PlatformRole {
   switch (role) {
     case 'SuperAdmin':
     case 'Operador_Stock':
@@ -150,17 +160,11 @@ export function normalizeRole(role: UserRole | string): PlatformRole {
       return role;
     case 'Admin':
       return 'SuperAdmin';
-    case 'Gerente_Operaciones':
-      return 'Gerente_Ventas';
-    case 'Encargado_Stock':
-    case 'Viewer':
+    default: {
+      const _exhaustive: never = role;
+      console.error(`normalizeRole: rol desconocido "${_exhaustive}", usando Operador_Stock`);
       return 'Operador_Stock';
-    case 'Encargado_Futbol':
-      return 'Operador_Futbol';
-    case 'Operador':
-      return 'Vendedor';
-    default:
-      return 'Operador_Stock';
+    }
   }
 }
 

@@ -27,13 +27,8 @@ describe('platformAccess', () => {
       expect(normalizeRole('Operador_Cocina')).toBe('Operador_Cocina');
     });
 
-    it('maps legacy roles to platform roles', () => {
+    it('colapsa Admin a SuperAdmin (simplificación del modelo de permisos del front, no un alias heredado)', () => {
       expect(normalizeRole('Admin')).toBe('SuperAdmin');
-      expect(normalizeRole('Operador')).toBe('Vendedor');
-      expect(normalizeRole('Viewer')).toBe('Operador_Stock');
-      expect(normalizeRole('Gerente_Operaciones')).toBe('Gerente_Ventas');
-      expect(normalizeRole('Encargado_Stock')).toBe('Operador_Stock');
-      expect(normalizeRole('Encargado_Futbol')).toBe('Operador_Futbol');
     });
   });
 

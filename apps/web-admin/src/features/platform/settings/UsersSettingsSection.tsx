@@ -5,17 +5,17 @@ import { usersApi, getApiErrorMessage, type ApiUser } from '@/app/api/client';
 import { ASSIGNABLE_ROLES, getRoleLabel } from '@/features/platform/config/modules';
 import type { UserRole } from '@/features/platform/types';
 
-function roleBadgeClass(role: UserRole | string) {
+function roleBadgeClass(role: UserRole) {
   if (role === 'Admin' || role === 'SuperAdmin') {
     return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
   }
-  if (role === 'Gerente_Ventas' || role === 'Gerente_Operaciones') {
+  if (role === 'Gerente_Ventas') {
     return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
   }
-  if (role === 'Vendedor' || role === 'Operador') {
+  if (role === 'Vendedor') {
     return 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300';
   }
-  if (role === 'Operador_Futbol' || role === 'Encargado_Futbol') {
+  if (role === 'Operador_Futbol') {
     return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
   }
   if (role === 'Operador_Cocina') {
@@ -138,7 +138,7 @@ export function UsersSettingsSection({ canManageUsers }: UsersSettingsSectionPro
                 <p className="text-sm" style={{ fontWeight: 600 }}>{user.name}</p>
                 <p className="text-xs text-muted-foreground">{user.username}</p>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${roleBadgeClass(user.role)}`} style={{ fontWeight: 500 }}>
+              <span className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 ${roleBadgeClass(user.role as UserRole)}`} style={{ fontWeight: 500 }}>
                 {getRoleLabel(user.role as UserRole)}
               </span>
             </div>
@@ -187,7 +187,7 @@ export function UsersSettingsSection({ canManageUsers }: UsersSettingsSectionPro
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2.5 py-1 rounded-full ${roleBadgeClass(user.role)}`} style={{ fontWeight: 500 }}>
+                    <span className={`text-xs px-2.5 py-1 rounded-full ${roleBadgeClass(user.role as UserRole)}`} style={{ fontWeight: 500 }}>
                       {getRoleLabel(user.role as UserRole)}
                     </span>
                   </td>
