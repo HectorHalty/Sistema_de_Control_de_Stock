@@ -1,5 +1,5 @@
-import { IsIn, IsNotEmpty, IsString, MinLength } from 'class-validator';
-import { ASSIGNABLE_ROLES } from '../common/roles';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { RolUsuario } from '@prisma/client';
 
 export class CreateUserDto {
   @IsString()
@@ -14,9 +14,9 @@ export class CreateUserDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsString()
-  @IsIn([...ASSIGNABLE_ROLES])
-  role!: string;
+  @IsOptional()
+  @IsEnum(RolUsuario)
+  role?: RolUsuario;
 }
 
 export class UpdateUserDto {
@@ -24,9 +24,9 @@ export class UpdateUserDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsString()
-  @IsIn([...ASSIGNABLE_ROLES])
-  role!: string;
+  @IsOptional()
+  @IsEnum(RolUsuario)
+  role?: RolUsuario;
 }
 
 export class ChangePasswordDto {

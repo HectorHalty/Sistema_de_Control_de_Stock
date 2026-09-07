@@ -49,12 +49,15 @@ CREATE TYPE "RolPlantel" AS ENUM ('jugador', 'capitan', 'subcapitan');
 -- CreateEnum
 CREATE TYPE "RolCuentaPublica" AS ENUM ('usuario', 'seguidor', 'jugador', 'capitan');
 
+-- CreateEnum
+CREATE TYPE "RolUsuario" AS ENUM ('SuperAdmin', 'Admin', 'Operador_Stock', 'Vendedor', 'Gerente_Ventas', 'Operador_Futbol', 'Operador_Cocina');
+
 -- CreateTable
 CREATE TABLE "usuarios" (
     "id" TEXT NOT NULL,
     "username" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'Operador',
+    "role" "RolUsuario" NOT NULL DEFAULT 'Vendedor',
     "password" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

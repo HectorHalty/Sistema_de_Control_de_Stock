@@ -2,7 +2,8 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../common/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { isKnownRole, assertAssignableRole, MIN_PASSWORD_LENGTH } from '../common/roles';
+import { RolUsuario } from '@prisma/client';
+import { isKnownRole, assertAssignableRole, MIN_PASSWORD_LENGTH, ROLES } from '../common/roles';
 
 const SALT_ROUNDS = 10;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -73,7 +74,7 @@ export class AuthService {
    * Create a new user with hashed password.
    * Used by admin endpoints or seed scripts — NOT auto-provisioned on login.
    */
-  async createUser(username: string, password: string, name: string, role: string = 'Vendedor') {
+  async createUser(username: string, password: string, name: string, role: RolUsuario = ROLES.VENDEDOR) {
     const existing = await this.prisma.usuario.findUnique({ where: { username: username.toLowerCase() } });
     if (existing) {
       throw new BadRequestException(`User ${username} already exists`);

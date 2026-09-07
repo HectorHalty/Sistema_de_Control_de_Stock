@@ -148,7 +148,7 @@ async function seedPublicAccounts(prisma) {
       data: {
         username: 'online',
         name: 'Pedidos Online',
-        role: 'Operador',
+        role: 'Vendedor',
         password: hash,
       },
     });

@@ -32,7 +32,6 @@ import {
 
 import {
   hasAnyRole,
-  normalizeApiRole,
   STOCK_MUTATION_ROLES,
   SALES_CATALOG_ROLES,
   FOOTBALL_MUTATION_ROLES,
@@ -113,18 +112,15 @@ describe('Seguridad — validación DTO del módulo stock', () => {
 describe('Seguridad — matriz RBAC inventario', () => {
   it('Operador_Stock puede mutar inventario', () => {
     expect(hasAnyRole('Operador_Stock', STOCK_MUTATION_ROLES)).toBe(true);
-    expect(hasAnyRole('Encargado_Stock', STOCK_MUTATION_ROLES)).toBe(true);
     expect(hasAnyRole('SuperAdmin', STOCK_MUTATION_ROLES)).toBe(true);
   });
 
   it('Vendedor no puede mutar catálogo de inventario', () => {
     expect(hasAnyRole('Vendedor', STOCK_MUTATION_ROLES)).toBe(false);
-    expect(hasAnyRole('Operador', STOCK_MUTATION_ROLES)).toBe(false);
   });
 
   it('Gerente_Ventas puede mutar catálogo de ventas', () => {
     expect(hasAnyRole('Gerente_Ventas', SALES_CATALOG_ROLES)).toBe(true);
-    expect(hasAnyRole('Gerente_Operaciones', SALES_CATALOG_ROLES)).toBe(true);
   });
 
   it('Operador_Futbol y Operador_Cocina tienen permisos de panel', () => {
@@ -132,9 +128,10 @@ describe('Seguridad — matriz RBAC inventario', () => {
     expect(hasAnyRole('Operador_Cocina', ONLINE_MUTATION_ROLES)).toBe(true);
   });
 
-  it('normaliza roles legacy en la API', () => {
-    expect(normalizeApiRole('Operador')).toBe('Vendedor');
-    expect(normalizeApiRole('Encargado_Stock')).toBe('Operador_Stock');
+  it('los roles heredados ya no son reconocidos por el RBAC (sin capa de alias)', () => {
+    expect(hasAnyRole('Encargado_Stock', STOCK_MUTATION_ROLES)).toBe(false);
+    expect(hasAnyRole('Gerente_Operaciones', SALES_CATALOG_ROLES)).toBe(false);
+    expect(hasAnyRole('Operador', STOCK_MUTATION_ROLES)).toBe(false);
   });
 });
 

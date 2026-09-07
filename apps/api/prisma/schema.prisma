@@ -122,13 +122,23 @@ enum RolCuentaPublica {
   capitan
 }
 
+enum RolUsuario {
+  SuperAdmin
+  Admin
+  Operador_Stock
+  Vendedor
+  Gerente_Ventas
+  Operador_Futbol
+  Operador_Cocina
+}
+
 // ==================== AUTH ====================
 
 model Usuario {
-  id        String   @id @default(uuid())
-  username  String   @unique
+  id        String     @id @default(uuid())
+  username  String     @unique
   name      String
-  role      String   @default("Operador")
+  role      RolUsuario @default(Vendedor)
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
