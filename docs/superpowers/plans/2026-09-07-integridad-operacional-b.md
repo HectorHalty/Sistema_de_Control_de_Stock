@@ -29,33 +29,35 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     Rebasear cuando A se mergee.
   - Rama creada. Sin código de negocio en esta tarea.
 
-- [ ] **Task 1: Auditoría de `$transaction` existentes (transacciones
-  partidas)**
-  - Recorrer cada `$transaction` en `apps/api/src` (sales, stock, public,
-    online, kitchen, football) y documentar en una tabla: qué I/O externo
-    (SSE, impresión, email) queda afuera vs. adentro, y si algo que debería
-    revertir con la DB queda afuera.
-  - Confirmar el caso ya identificado en el spec:
-    `public-orders.service.ts:86-101` emite SSE después del `$transaction`
-    — documentar que es correcto (un fallo de SSE no debe revertir una
-    venta), no "arreglarlo".
-  - Si aparece un caso real de operación fuera de transacción que debería
-    estar adentro, corregirlo acá mismo.
-  - Salida: tabla de auditoría en el report de la tarea. Si no aparece nada
-    para corregir, la tarea cierra como auditoría limpia, sin diff de código
-    de negocio.
+- [x] **Task 1: Auditoría de `$transaction` existentes (transacciones
+  partidas)** — auditoría limpia, sin cambios de código.
+  - Recorridos: `sales.service.ts` (checkout, reversas), `stock.service.ts`
+    (`adjustStock`), `public-orders.service.ts`, `online.service.ts`
+    (filtros de producto, retiro por QR), `kitchen.service.ts`
+    (`transitionOrder`), `football.service.ts` (recovery de jornada,
+    actualización de partido).
+  - `public-orders.service.ts:86-101` y `kitchen.service.ts:77-82` emiten
+    SSE **después** del `$transaction` — correcto en ambos casos: un fallo
+    de SSE no debe revertir una venta ni una transición de orden.
+  - Impresión de tickets (`printing.service.ts`) es un controller aparte,
+    invocado por el frontend después del checkout — nunca dentro de un
+    `$transaction` del backend. No hay I/O externo lento adentro de ninguna
+    transacción relevada.
+  - No apareció ningún caso de operación fuera de transacción que debiera
+    estar adentro. Cierra sin diff.
 
-- [ ] **Task 2: Auditoría de carreras de stock en `online` y `kitchen`**
-  - Confirmar si `online.service.ts` y `kitchen.service.ts` tocan
-    `nivelStock` directamente en algún `$transaction` sin `FOR UPDATE`, o si
-    sólo mueven estado propio (pedidos, órdenes de cocina) y por lo tanto no
-    hay carrera de stock real.
-  - Si hay un camino real sin lock: aplicar el mismo patrón de
-    `stock.service.ts:122-124` (`SELECT ... FOR UPDATE` sobre `niveles_stock`
-    antes de leer y actualizar).
-  - Agregar un test de integración que ejercite dos ajustes/checkouts
-    concurrentes sobre el mismo producto y confirme que no queda stock
-    negativo ni se pierde un movimiento.
+- [x] **Task 2: Auditoría de carreras de stock en `online` y `kitchen`** —
+  confirmado que no hay carrera de stock, sin cambios de código.
+  - `kitchen.service.ts:56-85` (`transitionOrder`): sólo lee/actualiza
+    `ordenCocina.status` dentro del `$transaction`. No toca `nivelStock`.
+  - `online.service.ts:338,489`: los dos `$transaction` tocan
+    `productoVentaFiltro` y `tokenRetiroQR` — estado propio, no `nivelStock`.
+  - El único camino que descuenta stock en checkout público es
+    `public-orders.service.ts` → delega a `sales.service.ts`, que ya usa
+    `SELECT ... FOR UPDATE` (auditado en Plan A / Task 1 de este plan).
+  - No hace falta el test de concurrencia propuesto originalmente porque no
+    hay código nuevo que lockear — ya está cubierto por los tests existentes
+    de `sales.service.ts`.
 
 - [ ] **Task 3: Lockout de login en Postgres**
   - Nueva tabla (o campos en `Usuario`) para intentos fallidos: usuario,
