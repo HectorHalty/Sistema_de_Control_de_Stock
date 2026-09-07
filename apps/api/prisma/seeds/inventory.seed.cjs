@@ -72,6 +72,23 @@ async function seedInventory(prisma) {
         update: { quantity: qty },
         create: { productId: product.id, warehouseId, quantity: qty },
       });
+
+      const reference = `SEED-INGRESO-DEMO:${item.code}:${key}`;
+      const existingMovement = await prisma.movimientoStock.findFirst({
+        where: { reference, productId: product.id, warehouseId },
+      });
+      if (!existingMovement) {
+        await prisma.movimientoStock.create({
+          data: {
+            type: 'entrada',
+            productId: product.id,
+            warehouseId,
+            quantity: qty,
+            reference,
+            operatorName: 'Seed',
+          },
+        });
+      }
     }
   }
 
@@ -88,28 +105,6 @@ async function seedInventory(prisma) {
         where: { supplierId_productId: { supplierId: row.id, productId } },
         update: {},
         create: { supplierId: row.id, productId },
-      });
-    }
-  }
-
-  const admin = await prisma.usuario.findUnique({ where: { username: 'admin' } });
-  const carneId = productIds.get('STK-CARNE-001');
-  const principalId = depByName.get(DEP_KEYS.principal);
-  if (carneId && principalId) {
-    const existing = await prisma.movimientoStock.findFirst({
-      where: { reference: 'SEED-INGRESO-DEMO', productId: carneId },
-    });
-    if (!existing) {
-      await prisma.movimientoStock.create({
-        data: {
-          type: 'entrada',
-          productId: carneId,
-          warehouseId: principalId,
-          quantity: 50,
-          reference: 'SEED-INGRESO-DEMO',
-          operatorId: admin?.id,
-          operatorName: admin?.name ?? 'Seed',
-        },
       });
     }
   }
