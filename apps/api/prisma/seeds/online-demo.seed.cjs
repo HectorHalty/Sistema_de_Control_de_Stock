@@ -87,12 +87,15 @@ async function seedOnlineDemo(prisma) {
         emoji: p.emoji,
       }));
       const total = items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
-      const ticketNumber = (await prisma.contadorTicket.findUnique({ where: { id: 'default' } }))
-        ?.valor ?? 1000;
+      const contador = await prisma.contadorTicket.update({
+        where: { id: 'default' },
+        data: { valor: { increment: 1 } },
+      });
+      const ticketNumber = contador.valor;
 
       const ticket = await prisma.ticketVenta.create({
         data: {
-          number: Number(ticketNumber) + 50,
+          number: ticketNumber,
           total,
           operatorId: operator.id,
           status: 'emitido',

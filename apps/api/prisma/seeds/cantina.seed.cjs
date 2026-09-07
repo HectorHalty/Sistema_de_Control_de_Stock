@@ -8,11 +8,6 @@ const MENU_ITEMS = [
   { name: 'Agua mineral', category: 'Bebidas', emoji: '💧', price: 2000, kitchen: 'Barra', filters: ['bebidas', 'economico'] },
 ];
 
-const WEB_CATEGORIES = [
-  { name: 'Comidas', slug: 'comidas', sortOrder: 0 },
-  { name: 'Bebidas', slug: 'bebidas', sortOrder: 1 },
-];
-
 const SALES_CATEGORIES = [
   { name: 'Comidas', emoji: '🍔', sortOrder: 0 },
   { name: 'Bebidas', emoji: '🥤', sortOrder: 1 },
@@ -59,13 +54,6 @@ const SPONSORS = [
   },
 ];
 
-const WEB_FILTERS = [
-  { slug: 'popular', label: 'Popular', sortOrder: 0 },
-  { slug: 'economico', label: 'Económico', sortOrder: 1 },
-  { slug: 'bebidas', label: 'Bebidas', sortOrder: 2 },
-  { slug: 'sin_tacc', label: 'Sin Tacc', sortOrder: 3 },
-];
-
 /** Mapeo menú → códigos de stock para recetas (si existen). */
 const RECIPES = {
   'Hamburguesa clásica': [
@@ -85,22 +73,16 @@ const RECIPES = {
 };
 
 async function seedCantinaPublica(prisma) {
-  for (const f of WEB_FILTERS) {
-    await prisma.filtroWeb.upsert({
-      where: { slug: f.slug },
-      update: { label: f.label, sortOrder: f.sortOrder, active: true },
-      create: f,
-    });
-  }
+  const filterRows = await prisma.filtroWeb.findMany();
+  const filterMap = new Map(filterRows.map((f) => [f.slug, f.id]));
 
-  const categoryMap = new Map();
-  for (const cat of WEB_CATEGORIES) {
-    const row = await prisma.categoriaWeb.upsert({
-      where: { slug: cat.slug },
-      update: { name: cat.name, sortOrder: cat.sortOrder, active: true },
-      create: cat,
-    });
-    categoryMap.set(cat.name, row.id);
+  const webCategoryRows = await prisma.categoriaWeb.findMany();
+  const categoryMap = new Map(webCategoryRows.map((c) => [c.name, c.id]));
+
+  if (categoryMap.size === 0 || filterMap.size === 0) {
+    throw new Error(
+      'Faltan las categorías o los filtros web. Corré primero el seed de referencia: npm run prisma:seed',
+    );
   }
 
   const salesCategoryMap = new Map();
@@ -112,9 +94,6 @@ async function seedCantinaPublica(prisma) {
     });
     salesCategoryMap.set(cat.name, row.id);
   }
-
-  const filterRows = await prisma.filtroWeb.findMany();
-  const filterMap = new Map(filterRows.map((f) => [f.slug, f.id]));
 
   for (const item of MENU_ITEMS) {
     const kitchen = await prisma.cocina.findUnique({ where: { name: item.kitchen } });
@@ -195,7 +174,7 @@ async function seedCantinaPublica(prisma) {
   }
 
   console.log(
-    `Cantina pública: ${MENU_ITEMS.length} ítems, ${WEB_CATEGORIES.length} categorías, ${WEB_FILTERS.length} filtros, recetas vinculadas.`,
+    `Cantina pública: ${MENU_ITEMS.length} ítems, ${categoryMap.size} categorías, ${filterMap.size} filtros, recetas vinculadas.`,
   );
 }
 

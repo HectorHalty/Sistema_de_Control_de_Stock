@@ -79,6 +79,18 @@ npx prisma migrate dev
 npm run prisma:seed
 ```
 
+There are two seed scripts:
+
+- `npm run prisma:seed` — reference data (stock categories, warehouses,
+  kitchens, admin user, ticket/order counters, football scheduling
+  config, reglamento, sales categories, web taxonomy). Idempotent: safe
+  to run multiple times, never resets an existing user's password. This
+  is the one Prisma runs automatically after `prisma migrate reset`.
+- `npm run prisma:seed:demo` — optional demo data (inventory items,
+  demo tournament, cantina menu with sponsors, public accounts, sample
+  online orders, demo staff users). Requires the reference seed to have
+  run first; it will throw if the web taxonomy is missing.
+
 ### 3. Run the backend
 
 ```bash

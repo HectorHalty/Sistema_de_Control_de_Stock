@@ -6,12 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { seedReglamento } = require('./seeds/reglamento.seed.cjs');
 const { seedScheduling } = require('./seeds/scheduling.seed.cjs');
-const { seedTorneoDemo } = require('./seeds/torneo-demo.seed.cjs');
-const { seedInventory } = require('./seeds/inventory.seed.cjs');
-const { seedCantinaPublica } = require('./seeds/cantina.seed.cjs');
-const { seedPublicAccounts } = require('./seeds/public-accounts.seed.cjs');
-const { seedOnlineDemo } = require('./seeds/online-demo.seed.cjs');
-const { seedDemoUsers } = require('./seeds/users-demo.seed.cjs');
+const { seedWebTaxonomy } = require('./seeds/web-taxonomy.seed.cjs');
 
 const prisma = new PrismaClient();
 
@@ -84,14 +79,22 @@ async function main() {
     create: { id: 'default', valor: 0 },
   });
 
+  await Promise.all([
+    prisma.categoriaVenta.upsert({
+      where: { name: 'Comidas' },
+      update: {},
+      create: { name: 'Comidas', emoji: '🍔', sortOrder: 0 },
+    }),
+    prisma.categoriaVenta.upsert({
+      where: { name: 'Bebidas' },
+      update: {},
+      create: { name: 'Bebidas', emoji: '🥤', sortOrder: 1 },
+    }),
+  ]);
+
   await seedScheduling(prisma);
   await seedReglamento(prisma);
-  await seedInventory(prisma);
-  await seedTorneoDemo(prisma);
-  await seedCantinaPublica(prisma);
-  await seedPublicAccounts(prisma);
-  await seedOnlineDemo(prisma);
-  await seedDemoUsers(prisma);
+  await seedWebTaxonomy(prisma);
 
   console.log('Seed complete.');
   await prisma.$disconnect();

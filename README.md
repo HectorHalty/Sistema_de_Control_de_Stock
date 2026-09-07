@@ -39,6 +39,7 @@ npm run dev:infra
 # 2. API
 cd apps/api && cp .env.example .env && npm install
 npx prisma migrate dev && npm run prisma:seed
+npm run prisma:seed:demo   # opcional: datos de demostración (torneo, cantina, cuentas de prueba)
 npm run dev:api
 
 # 3. Frontends (terminales separadas)

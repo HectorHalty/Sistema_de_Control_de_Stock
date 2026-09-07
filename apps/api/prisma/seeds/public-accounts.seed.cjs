@@ -43,7 +43,6 @@ async function upsertPublicAccount(prisma, { email, password, nombre, dni, rol }
     cuenta = await prisma.cuentaPublica.update({
       where: { id: cuenta.id },
       data: {
-        passwordHash,
         nombre,
         dniConfirmado: dni,
         personaId: persona.id,
@@ -61,7 +60,6 @@ async function upsertPublicAccount(prisma, { email, password, nombre, dni, rol }
         where: { id: legacy.id },
         data: {
           email,
-          passwordHash,
           nombre,
           dniConfirmado: dni,
           personaId: persona.id,

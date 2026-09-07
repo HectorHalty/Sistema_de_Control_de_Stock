@@ -11,23 +11,22 @@ const DEMO_USERS = [
 
 async function seedDemoUsers(prisma) {
   for (const u of DEMO_USERS) {
-    const hash = await bcrypt.hash(u.password, 10);
     const existing = await prisma.usuario.findUnique({ where: { username: u.username } });
     if (existing) {
       await prisma.usuario.update({
         where: { id: existing.id },
-        data: { name: u.name, role: u.role, password: hash },
+        data: { name: u.name, role: u.role },
       });
-    } else {
-      await prisma.usuario.create({
-        data: {
-          username: u.username,
-          name: u.name,
-          role: u.role,
-          password: hash,
-        },
-      });
+      continue;
     }
+    await prisma.usuario.create({
+      data: {
+        username: u.username,
+        name: u.name,
+        role: u.role,
+        password: await bcrypt.hash(u.password, 10),
+      },
+    });
   }
   console.log(
     `Usuarios demo: ${DEMO_USERS.map((u) => `${u.username}/${u.password}`).join(', ')}`,
