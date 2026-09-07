@@ -44,9 +44,12 @@ describe('PrismaExceptionFilter', () => {
     expect(err.code).toBe('P2002');
   });
 
-  it('@Catch registra PrismaClientKnownRequestError para que Nest despache el filtro', () => {
+  it('@Catch registra PrismaClientKnownRequestError y PrismaClientValidationError para que Nest despache el filtro', () => {
     const caught = Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, PrismaExceptionFilter);
-    expect(caught).toEqual([Prisma.PrismaClientKnownRequestError]);
+    expect(caught).toEqual([
+      Prisma.PrismaClientKnownRequestError,
+      Prisma.PrismaClientValidationError,
+    ]);
   });
 
   it('mapea P2002 a 409 Conflict', () => {
@@ -105,5 +108,35 @@ describe('PrismaExceptionFilter', () => {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Error interno de base de datos.',
     });
+  });
+
+  it('mapea PrismaClientValidationError (enum inválido en un cast sin chequear) a 400', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, status, json } = mockHost();
+    const err = new Prisma.PrismaClientValidationError(
+      "Invalid value for argument `status`. Expected EstadoPedidoPublico.\n  status: 'bogus'",
+      { clientVersion: '5.22.0' },
+    );
+    filter.catch(err, host);
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.BAD_REQUEST,
+      message: 'Parámetro o dato inválido.',
+    });
+  });
+
+  it('no filtra el mensaje interno de PrismaClientValidationError al cliente', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, json } = mockHost();
+    const err = new Prisma.PrismaClientValidationError(
+      "Invalid value for argument `status`. Expected EstadoPedidoPublico.\n  status: 'bogus'",
+      { clientVersion: '5.22.0' },
+    );
+    filter.catch(err, host);
+
+    const body = json.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(body)).not.toContain('EstadoPedidoPublico');
+    expect(JSON.stringify(body)).not.toContain('bogus');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bogus'));
   });
 });

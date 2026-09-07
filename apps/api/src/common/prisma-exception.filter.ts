@@ -23,12 +23,30 @@ const STATUS_BY_CODE: Record<string, { status: number; message: string }> = {
   },
 };
 
-@Catch(Prisma.PrismaClientKnownRequestError)
+@Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientValidationError)
 export class PrismaExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(PrismaExceptionFilter.name);
 
-  catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
+  catch(
+    exception: Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientValidationError,
+    host: ArgumentsHost,
+  ) {
     const response = host.switchToHttp().getResponse<Response>();
+
+    if (exception instanceof Prisma.PrismaClientValidationError) {
+      // Se dispara, entre otros casos, cuando un valor de query param se
+      // castea a un enum de Prisma (`status as EstadoTicket`) sin validarlo
+      // antes: el cliente rechaza el valor al armar la consulta. El mensaje
+      // completo puede incluir el nombre de campos y modelos internos, así
+      // que solo va al log del servidor, nunca al cuerpo de la respuesta.
+      this.logger.warn(`Prisma validation: ${exception.message.split('\n').pop()?.trim()}`);
+      response.status(HttpStatus.BAD_REQUEST).json({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Parámetro o dato inválido.',
+      });
+      return;
+    }
+
     const mapped = STATUS_BY_CODE[exception.code];
 
     if (!mapped) {
