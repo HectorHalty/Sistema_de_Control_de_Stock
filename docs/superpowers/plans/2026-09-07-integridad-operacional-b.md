@@ -121,11 +121,11 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     varios órdenes de magnitud (ligas nacionales, múltiples temporadas
     simultáneas), revisar de nuevo — hasta entonces, cierra sin diff.
 
-- [ ] **Task 6: Bloqueo optimista — esquema**
-  - Agregar campo `version Int @default(0)` a `Producto`, `ProductoVenta`,
-    `OrdenCompra`, `Configuracion` (confirmar la lista al arrancar, ver spec).
-  - Migración aditiva, mismo patrón que Plan A: no se edita a mano el archivo
-    de migración generado, `db:drift` en 0 al terminar.
+- [x] **Task 6: Bloqueo optimista — esquema**
+  - Campo `version Int @default(0)` agregado a `Producto`, `ProductoVenta`,
+    `OrdenCompra`, `Configuracion`. Migración regenerada (`db:baseline`),
+    `db:drift` en 0.
+  - `npm run test:db` 53/53 en verde contra el esquema nuevo.
 
 - [ ] **Task 7: Bloqueo optimista — backend**
   - En cada `update` de las 4 entidades desde el admin: incluir `version` en

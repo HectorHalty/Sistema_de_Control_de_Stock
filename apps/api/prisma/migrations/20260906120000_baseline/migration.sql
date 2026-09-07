@@ -107,6 +107,7 @@ CREATE TABLE "productos" (
     "unit" "UnidadMedida" NOT NULL DEFAULT 'unidades',
     "orderUnit" INTEGER,
     "image" TEXT,
+    "version" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -195,6 +196,7 @@ CREATE TABLE "productos_venta" (
     "categoria_web_id" TEXT,
     "orden_web" INTEGER NOT NULL DEFAULT 0,
     "popular_web" BOOLEAN NOT NULL DEFAULT false,
+    "version" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -817,6 +819,7 @@ CREATE TABLE "ordenes_compra" (
     "supplierId" TEXT,
     "status" "EstadoOrdenCompra" NOT NULL DEFAULT 'Pendiente',
     "receivedAt" TIMESTAMP(3),
+    "version" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -840,6 +843,7 @@ CREATE TABLE "configuraciones" (
     "key" TEXT NOT NULL,
     "scope" TEXT NOT NULL,
     "value" JSONB NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 0,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "configuraciones_pkey" PRIMARY KEY ("id")

@@ -197,6 +197,9 @@ model Producto {
   unit        UnidadMedida @default(unidades)
   orderUnit   Int?
   image       String?
+  /// Bloqueo optimista: se incrementa en cada update, comparado en el
+  /// `where` para detectar edición concurrente desde el admin.
+  version     Int          @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -317,6 +320,8 @@ model ProductoVenta {
   webCategoryId    String?           @map("categoria_web_id")
   webSortOrder     Int               @default(0) @map("orden_web")
   popularWeb       Boolean           @default(false) @map("popular_web")
+  /// Bloqueo optimista: ver Producto.version.
+  version          Int               @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -1182,6 +1187,8 @@ model OrdenCompra {
   supplierId  String?
   status      EstadoOrdenCompra @default(Pendiente)
   receivedAt  DateTime?
+  /// Bloqueo optimista: ver Producto.version.
+  version     Int               @default(0)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -1219,6 +1226,8 @@ model Configuracion {
   key       String   @unique
   scope     String
   value     Json
+  /// Bloqueo optimista: ver Producto.version.
+  version   Int      @default(0)
   updatedAt DateTime @updatedAt
 
   @@index([scope])
