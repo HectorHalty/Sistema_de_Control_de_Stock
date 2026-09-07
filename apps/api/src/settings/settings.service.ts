@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, EstadoMesa, EstadoCuentaEquipo } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import {
   CreateAuditDto,
@@ -93,13 +93,24 @@ export class SettingsService {
 
   createTable(dto: CreateTableDto) {
     return this.prisma.mesaVenta.create({
-      data: { name: dto.name, status: dto.status ?? 'libre', currentOrderId: dto.currentOrderId ?? null },
+      data: {
+        name: dto.name,
+        status: (dto.status as EstadoMesa) ?? 'libre',
+        currentOrderId: dto.currentOrderId ?? null,
+      },
     });
   }
 
   async updateTable(id: string, dto: UpdateTableDto) {
     await this.require(this.prisma.mesaVenta.findUnique({ where: { id } }), 'Mesa');
-    return this.prisma.mesaVenta.update({ where: { id }, data: dto });
+    return this.prisma.mesaVenta.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.status !== undefined ? { status: dto.status as EstadoMesa } : {}),
+        ...(dto.currentOrderId !== undefined ? { currentOrderId: dto.currentOrderId } : {}),
+      },
+    });
   }
 
   async deleteTable(id: string) {
@@ -115,7 +126,7 @@ export class SettingsService {
     return this.prisma.cuentaEquipo.create({
       data: {
         team: dto.team,
-        status: dto.status ?? 'abierta',
+        status: (dto.status as EstadoCuentaEquipo) ?? 'abierta',
         items: (dto.items ?? []) as Prisma.InputJsonValue,
       },
     });
@@ -127,7 +138,7 @@ export class SettingsService {
       where: { id },
       data: {
         ...(dto.team !== undefined ? { team: dto.team } : {}),
-        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.status !== undefined ? { status: dto.status as EstadoCuentaEquipo } : {}),
         ...(dto.items !== undefined ? { items: dto.items as Prisma.InputJsonValue } : {}),
       },
     });

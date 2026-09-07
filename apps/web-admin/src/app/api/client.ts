@@ -1006,7 +1006,8 @@ export interface ApiPurchaseOrder {
 export interface SalesProduct {
   id: string;
   name: string;
-  category: string;
+  categoriaVentaId: string;
+  categoriaVenta?: { name: string } | null;
   kitchenId: string;
   price: number;
   emoji?: string;
@@ -1131,7 +1132,8 @@ export interface OnlinePublicOrder {
 export interface WebMenuProduct {
   id: string;
   name: string;
-  category: string;
+  categoriaVentaId: string;
+  categoriaVenta?: { name: string } | null;
   kitchenId: string;
   price: number | string;
   emoji?: string | null;
@@ -1167,7 +1169,7 @@ export interface WebFilter {
 
 export interface CreateWebMenuProductPayload {
   name: string;
-  category: string;
+  categoriaVentaId: string;
   kitchenId: string;
   price: number;
   emoji?: string;
@@ -1181,7 +1183,7 @@ export interface CreateWebMenuProductPayload {
 
 export interface UpdateWebMenuProductPayload {
   name?: string;
-  category?: string;
+  categoriaVentaId?: string;
   kitchenId?: string;
   visibleWeb?: boolean;
   descripcionWeb?: string | null;
@@ -1438,14 +1440,14 @@ export interface UpdateProductPayload {
 }
 
 export interface CreateSalesProductPayload {
-  name: string; category: string; kitchenId: string; price: number;
+  name: string; categoriaVentaId: string; kitchenId: string; price: number;
   emoji?: string; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
   bundle?: { componentProductId: string; quantity: number }[];
 }
 
 export interface UpdateSalesProductPayload {
-  name?: string; category?: string; kitchenId?: string;
+  name?: string; categoriaVentaId?: string; kitchenId?: string;
   price?: number; emoji?: string; active?: boolean; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
   bundle?: { componentProductId: string; quantity: number }[];

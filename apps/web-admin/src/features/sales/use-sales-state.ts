@@ -56,7 +56,7 @@ function toApiSalesProductBody(input: SalesProduct) {
   if (kind === 'promo') {
     return {
       name: input.name,
-      category: input.category,
+      categoriaVentaId: input.categoriaVentaId,
       kitchenId: input.kitchenId,
       price: input.price,
       emoji: input.emoji || DEFAULT_SALES_EMOJI,
@@ -69,7 +69,7 @@ function toApiSalesProductBody(input: SalesProduct) {
   }
   return {
     name: input.name,
-    category: input.category,
+    categoriaVentaId: input.categoriaVentaId,
     kitchenId: input.kitchenId,
     price: input.price,
     emoji: input.emoji || DEFAULT_SALES_EMOJI,
@@ -78,6 +78,22 @@ function toApiSalesProductBody(input: SalesProduct) {
       .filter(r => r.stockProductId && !isLocalOnlyId(r.stockProductId))
       .map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
   };
+}
+
+/**
+ * Resuelve el id real de una categoría de venta a partir de su nombre
+ * (la UI todavía elige categorías por nombre vía SalesCategorySelect).
+ * Si la lista remota no está disponible, cae al id ya conocido del producto.
+ */
+async function resolveCategoriaVentaId(categoryName: string, fallbackId?: string): Promise<string> {
+  try {
+    const rows = await settingsApi.salesCategories.list();
+    const found = rows.find(r => r.name.toLowerCase() === categoryName.trim().toLowerCase());
+    if (found) return found.id;
+  } catch {
+    // sin conexión: seguimos con el id ya conocido (si lo hay)
+  }
+  return fallbackId ?? '';
 }
 
 export function useSalesState() {
@@ -275,11 +291,13 @@ export function useSalesState() {
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
+      const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
       const product: SalesProduct = {
         kind: 'simple',
         bundle: [],
         recipe: [],
         ...input,
+        categoriaVentaId,
         id: input.id || `p${Date.now()}`,
       };
       try {
@@ -298,12 +316,14 @@ export function useSalesState() {
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
       try {
-        const body = { ...toApiSalesProductBody(input), active: input.active };
-        if (isLocalOnlyId(input.id)) {
-          const created = await salesApi.products.create(toApiSalesProductBody(input), '');
+        const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
+        const resolved: SalesProduct = { ...input, categoriaVentaId };
+        const body = { ...toApiSalesProductBody(resolved), active: resolved.active };
+        if (isLocalOnlyId(resolved.id)) {
+          const created = await salesApi.products.create(toApiSalesProductBody(resolved), '');
           upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(created));
         } else {
-          const updated = await salesApi.products.update(input.id, body, '');
+          const updated = await salesApi.products.update(resolved.id, body, '');
           upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(updated));
         }
         markApiSynced();

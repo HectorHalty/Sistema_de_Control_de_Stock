@@ -20,6 +20,7 @@ export const SALES_PRODUCT_API_INCLUDE = {
       componentProduct: { select: { id: true, name: true, emoji: true } },
     },
   },
+  categoriaVenta: { select: { name: true } },
 } as const;
 
 export function round3(n: number): number {

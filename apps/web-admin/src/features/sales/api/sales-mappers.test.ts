@@ -7,7 +7,8 @@ describe('mapApiSalesProductToLocal', () => {
     const api = {
       id: 'sp-1',
       name: 'Hamburguesa',
-      category: 'Comidas',
+      categoriaVentaId: 'cat-1',
+      categoriaVenta: { name: 'Comidas' },
       kitchenId: 'k-1',
       price: '3500.00',
       emoji: undefined,
@@ -24,6 +25,7 @@ describe('mapApiSalesProductToLocal', () => {
       id: 'sp-1',
       name: 'Hamburguesa',
       category: 'Comidas',
+      categoriaVentaId: 'cat-1',
       kitchenId: 'k-1',
       price: 3500,
       emoji: '🍽️',
@@ -39,7 +41,7 @@ describe('mapApiSalesProductToLocal', () => {
 
   it('tolera receta ausente', () => {
     const api = {
-      id: 'sp-2', name: 'Agua', category: 'Bebidas', kitchenId: 'k-2', price: 1000, active: true,
+      id: 'sp-2', name: 'Agua', categoriaVentaId: 'cat-2', categoriaVenta: { name: 'Bebidas' }, kitchenId: 'k-2', price: 1000, active: true,
     } as unknown as ApiSalesProduct;
     expect(mapApiSalesProductToLocal(api).recipe).toEqual([]);
   });

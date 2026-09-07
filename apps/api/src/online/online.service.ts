@@ -6,6 +6,7 @@ import { normalizeQrToken } from './qr-token.util';
 const WEB_MENU_INCLUDE = {
   kitchen: { select: { id: true, name: true, emoji: true } },
   webCategory: { select: { id: true, name: true, slug: true } },
+  categoriaVenta: { select: { name: true } },
   filtrosWeb: { include: { filtro: { select: { id: true, slug: true, label: true } } } },
 } as const;
 
@@ -273,13 +274,13 @@ export class OnlineService {
         ...(visibleOnly ? { visibleWeb: true } : {}),
       },
       include: WEB_MENU_INCLUDE,
-      orderBy: [{ webSortOrder: 'asc' }, { category: 'asc' }, { name: 'asc' }],
+      orderBy: [{ webSortOrder: 'asc' }, { categoriaVentaId: 'asc' }, { name: 'asc' }],
     });
   }
 
   async createWebMenuProduct(data: {
     name: string;
-    category: string;
+    categoriaVentaId: string;
     kitchenId: string;
     price: number;
     emoji?: string;
@@ -293,7 +294,7 @@ export class OnlineService {
   }) {
     const product = await this.sales.createSalesProduct({
       name: data.name,
-      category: data.category,
+      categoriaVentaId: data.categoriaVentaId,
       kitchenId: data.kitchenId,
       price: data.price,
       emoji: data.emoji,
@@ -314,7 +315,7 @@ export class OnlineService {
     id: string,
     data: {
       name?: string;
-      category?: string;
+      categoriaVentaId?: string;
       kitchenId?: string;
       visibleWeb?: boolean;
       descripcionWeb?: string | null;
@@ -347,7 +348,7 @@ export class OnlineService {
         where: { id },
         data: {
           name: rest.name,
-          category: rest.category,
+          categoriaVentaId: rest.categoriaVentaId,
           kitchenId: rest.kitchenId,
           visibleWeb: rest.visibleWeb,
           descripcionWeb: rest.descripcionWeb,

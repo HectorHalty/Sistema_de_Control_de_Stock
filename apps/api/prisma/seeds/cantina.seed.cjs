@@ -13,6 +13,11 @@ const WEB_CATEGORIES = [
   { name: 'Bebidas', slug: 'bebidas', sortOrder: 1 },
 ];
 
+const SALES_CATEGORIES = [
+  { name: 'Comidas', emoji: '🍔', sortOrder: 0 },
+  { name: 'Bebidas', emoji: '🥤', sortOrder: 1 },
+];
+
 const SPONSORS = [
   {
     name: 'Sponsor Demo LCH',
@@ -98,6 +103,16 @@ async function seedCantinaPublica(prisma) {
     categoryMap.set(cat.name, row.id);
   }
 
+  const salesCategoryMap = new Map();
+  for (const cat of SALES_CATEGORIES) {
+    const row = await prisma.categoriaVenta.upsert({
+      where: { name: cat.name },
+      update: { emoji: cat.emoji, sortOrder: cat.sortOrder },
+      create: cat,
+    });
+    salesCategoryMap.set(cat.name, row.id);
+  }
+
   const filterRows = await prisma.filtroWeb.findMany();
   const filterMap = new Map(filterRows.map((f) => [f.slug, f.id]));
 
@@ -115,7 +130,7 @@ async function seedCantinaPublica(prisma) {
     const product = await prisma.productoVenta.upsert({
       where: { name_kitchenId: { name: item.name, kitchenId: kitchen.id } },
       update: {
-        category: item.category,
+        categoriaVentaId: salesCategoryMap.get(item.category),
         price: item.price,
         emoji: item.emoji,
         active: true,
@@ -126,7 +141,7 @@ async function seedCantinaPublica(prisma) {
       },
       create: {
         name: item.name,
-        category: item.category,
+        categoriaVentaId: salesCategoryMap.get(item.category),
         kitchenId: kitchen.id,
         price: item.price,
         emoji: item.emoji,

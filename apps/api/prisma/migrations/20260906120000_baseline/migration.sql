@@ -7,6 +7,24 @@ CREATE TYPE "TipoMovimientoStock" AS ENUM ('venta', 'devolucion', 'venta_anulada
 -- CreateEnum
 CREATE TYPE "EstadoOrdenCompra" AS ENUM ('Pendiente', 'Recibido');
 
+-- CreateEnum
+CREATE TYPE "EstadoTicket" AS ENUM ('emitido', 'anulado', 'devuelto');
+
+-- CreateEnum
+CREATE TYPE "OrigenTicket" AS ENUM ('pos', 'online');
+
+-- CreateEnum
+CREATE TYPE "TipoProductoVenta" AS ENUM ('simple', 'promo');
+
+-- CreateEnum
+CREATE TYPE "EstadoOrdenCocina" AS ENUM ('pending', 'preparing', 'ready', 'delivered');
+
+-- CreateEnum
+CREATE TYPE "EstadoMesa" AS ENUM ('libre', 'ocupada');
+
+-- CreateEnum
+CREATE TYPE "EstadoCuentaEquipo" AS ENUM ('abierta', 'cerrada');
+
 -- CreateTable
 CREATE TABLE "usuarios" (
     "id" TEXT NOT NULL,
@@ -129,11 +147,11 @@ CREATE TABLE "productos_venta_filtros" (
 CREATE TABLE "productos_venta" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "category" TEXT NOT NULL DEFAULT 'Comidas',
+    "categoria_venta_id" TEXT NOT NULL,
     "kitchenId" TEXT NOT NULL,
     "price" DECIMAL(10,2) NOT NULL,
     "emoji" TEXT,
-    "kind" TEXT NOT NULL DEFAULT 'simple',
+    "kind" "TipoProductoVenta" NOT NULL DEFAULT 'simple',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "visibleWeb" BOOLEAN NOT NULL DEFAULT false,
     "descripcionWeb" TEXT,
@@ -174,12 +192,12 @@ CREATE TABLE "tickets_venta" (
     "id" TEXT NOT NULL,
     "number" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "status" TEXT NOT NULL DEFAULT 'emitido',
+    "status" "EstadoTicket" NOT NULL DEFAULT 'emitido',
     "total" DECIMAL(10,2) NOT NULL,
     "operatorId" TEXT NOT NULL,
     "note" TEXT,
     "idempotencyKey" TEXT,
-    "origen" TEXT NOT NULL DEFAULT 'pos',
+    "origen" "OrigenTicket" NOT NULL DEFAULT 'pos',
     "stockAllocations" JSONB,
 
     CONSTRAINT "tickets_venta_pkey" PRIMARY KEY ("id")
@@ -233,7 +251,7 @@ CREATE TABLE "ordenes_cocina" (
     "ticketId" TEXT NOT NULL,
     "ticketNumber" INTEGER NOT NULL,
     "kitchenId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pending',
+    "status" "EstadoOrdenCocina" NOT NULL DEFAULT 'pending',
     "operatorName" TEXT NOT NULL,
     "tableId" TEXT,
     "tableName" TEXT,
@@ -841,7 +859,7 @@ CREATE TABLE "impresoras" (
 CREATE TABLE "mesas_venta" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'libre',
+    "status" "EstadoMesa" NOT NULL DEFAULT 'libre',
     "currentOrderId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -854,7 +872,7 @@ CREATE TABLE "cuentas_equipo" (
     "id" TEXT NOT NULL,
     "team" TEXT NOT NULL,
     "openedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "status" TEXT NOT NULL DEFAULT 'abierta',
+    "status" "EstadoCuentaEquipo" NOT NULL DEFAULT 'abierta',
     "items" JSONB NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -929,6 +947,9 @@ CREATE INDEX "productos_venta_visibleWeb_active_idx" ON "productos_venta"("visib
 
 -- CreateIndex
 CREATE INDEX "productos_venta_categoria_web_id_idx" ON "productos_venta"("categoria_web_id");
+
+-- CreateIndex
+CREATE INDEX "productos_venta_categoria_venta_id_idx" ON "productos_venta"("categoria_venta_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "productos_venta_name_kitchenId_key" ON "productos_venta"("name", "kitchenId");
@@ -1317,6 +1338,15 @@ CREATE INDEX "configuraciones_scope_idx" ON "configuraciones"("scope");
 -- CreateIndex
 CREATE UNIQUE INDEX "categorias_venta_name_key" ON "categorias_venta"("name");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "impresoras_name_key" ON "impresoras"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "mesas_venta_name_key" ON "mesas_venta"("name");
+
+-- CreateIndex
+CREATE INDEX "mesas_venta_currentOrderId_idx" ON "mesas_venta"("currentOrderId");
+
 -- AddForeignKey
 ALTER TABLE "productos" ADD CONSTRAINT "productos_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "categorias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -1340,6 +1370,9 @@ ALTER TABLE "productos_venta_filtros" ADD CONSTRAINT "productos_venta_filtros_fi
 
 -- AddForeignKey
 ALTER TABLE "productos_venta" ADD CONSTRAINT "productos_venta_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "cocinas"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "productos_venta" ADD CONSTRAINT "productos_venta_categoria_venta_id_fkey" FOREIGN KEY ("categoria_venta_id") REFERENCES "categorias_venta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "productos_venta" ADD CONSTRAINT "productos_venta_categoria_web_id_fkey" FOREIGN KEY ("categoria_web_id") REFERENCES "categorias_web"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1529,4 +1562,7 @@ ALTER TABLE "items_orden_compra" ADD CONSTRAINT "items_orden_compra_purchaseOrde
 
 -- AddForeignKey
 ALTER TABLE "items_orden_compra" ADD CONSTRAINT "items_orden_compra_productId_fkey" FOREIGN KEY ("productId") REFERENCES "productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mesas_venta" ADD CONSTRAINT "mesas_venta_currentOrderId_fkey" FOREIGN KEY ("currentOrderId") REFERENCES "tickets_venta"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

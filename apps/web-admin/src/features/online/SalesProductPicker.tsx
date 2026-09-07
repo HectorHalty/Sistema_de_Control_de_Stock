@@ -23,7 +23,7 @@ export function SalesProductPicker({ products, alreadyOnWebIds, value, onSelect 
     return list.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
+        (p.categoriaVenta?.name ?? '').toLowerCase().includes(q) ||
         p.emoji?.includes(q),
     );
   }, [products, query]);
@@ -53,7 +53,7 @@ export function SalesProductPicker({ products, alreadyOnWebIds, value, onSelect 
 
       {selected && !open && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Precio ventas: ${Number(selected.price).toLocaleString('es-AR')} · {selected.category}
+          Precio ventas: ${Number(selected.price).toLocaleString('es-AR')} · {selected.categoriaVenta?.name}
         </p>
       )}
 
@@ -81,7 +81,7 @@ export function SalesProductPicker({ products, alreadyOnWebIds, value, onSelect 
                       <span className="truncate">
                         {p.emoji ? `${p.emoji} ` : ''}
                         {p.name}
-                        <span className="ml-1 text-xs text-muted-foreground">({p.category})</span>
+                        <span className="ml-1 text-xs text-muted-foreground">({p.categoriaVenta?.name})</span>
                       </span>
                       <span className="shrink-0 text-xs font-medium">
                         {onWeb ? 'En menú web' : `$${Number(p.price).toLocaleString('es-AR')}`}

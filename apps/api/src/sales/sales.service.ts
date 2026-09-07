@@ -1,7 +1,7 @@
 import {
   Injectable, NotFoundException, ConflictException, BadRequestException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, EstadoTicket } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
@@ -687,7 +687,7 @@ export class SalesService {
   }
 
   async createSalesProduct(data: {
-    name: string; category: string; kitchenId: string; price: number;
+    name: string; categoriaVentaId: string; kitchenId: string; price: number;
     emoji?: string; kind?: string;
     recipe?: { stockProductId: string; quantity: number }[];
     bundle?: { componentProductId: string; quantity: number }[];
@@ -699,7 +699,7 @@ export class SalesService {
       return this.prisma.productoVenta.create({
         data: {
           name: data.name,
-          category: data.category,
+          categoriaVentaId: data.categoriaVentaId,
           kitchenId: data.kitchenId,
           price: data.price,
           emoji: data.emoji ?? '🍽️',
@@ -718,7 +718,7 @@ export class SalesService {
     return this.prisma.productoVenta.create({
       data: {
         name: data.name,
-        category: data.category,
+        categoriaVentaId: data.categoriaVentaId,
         kitchenId: data.kitchenId,
         price: data.price,
         emoji: data.emoji ?? '🍽️',
@@ -730,7 +730,7 @@ export class SalesService {
   }
 
   async updateSalesProduct(id: string, data: {
-    name?: string; category?: string; kitchenId?: string;
+    name?: string; categoriaVentaId?: string; kitchenId?: string;
     price?: number; emoji?: string; active?: boolean; kind?: string;
     recipe?: { stockProductId: string; quantity: number }[];
     bundle?: { componentProductId: string; quantity: number }[];
@@ -790,7 +790,7 @@ export class SalesService {
   async findAllTickets(status?: string, operatorId?: string) {
     return this.prisma.ticketVenta.findMany({
       where: {
-        ...(status ? { status } : {}),
+        ...(status ? { status: status as EstadoTicket } : {}),
         ...(operatorId ? { operatorId } : {}),
       },
       include: { items: true, operator: { select: { username: true } } },
@@ -884,14 +884,6 @@ export class SalesService {
       );
     }
     return this.prisma.cocina.delete({ where: { id } });
-  }
-
-  // ============ Tables ============
-
-  async findAllTables() {
-    return this.prisma.$queryRaw`
-      SELECT id, name, 'libre' as status FROM "depositos" LIMIT 6
-    `;
   }
 
   /** Incrementa el contador bajo lock de fila (seguro ante checkout concurrente). */

@@ -26,7 +26,8 @@ export function mapApiSalesProductToLocal(api: ApiSalesProduct): SalesProduct {
   return normalizeSalesProduct({
     id: api.id,
     name: api.name,
-    category: api.category,
+    category: api.categoriaVenta?.name ?? '',
+    categoriaVentaId: api.categoriaVentaId,
     kitchenId: api.kitchenId,
     price: Number(api.price),
     emoji: api.emoji || '🍽️',

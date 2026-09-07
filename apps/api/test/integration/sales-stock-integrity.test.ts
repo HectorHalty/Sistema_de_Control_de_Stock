@@ -31,10 +31,10 @@ function seedMenu(state: StockTestState) {
   const spPromo = randomUUID();
   const spEmpty = randomUUID();
   state.salesProducts.push(
-    { id: spCoca, name: 'Coca', category: 'Bebidas', kitchenId: 'k-1', price: 500, kind: 'simple', active: true },
-    { id: spAgua, name: 'Agua', category: 'Bebidas', kitchenId: 'k-1', price: 400, kind: 'simple', active: true },
-    { id: spPromo, name: 'Combo', category: 'Promos', kitchenId: 'k-1', price: 800, kind: 'promo', active: true },
-    { id: spEmpty, name: 'Sin receta', category: 'Otros', kitchenId: 'k-1', price: 100, kind: 'simple', active: true },
+    { id: spCoca, name: 'Coca', categoriaVentaId: 'cat-bebidas', kitchenId: 'k-1', price: 500, kind: 'simple', active: true },
+    { id: spAgua, name: 'Agua', categoriaVentaId: 'cat-bebidas', kitchenId: 'k-1', price: 400, kind: 'simple', active: true },
+    { id: spPromo, name: 'Combo', categoriaVentaId: 'cat-promos', kitchenId: 'k-1', price: 800, kind: 'promo', active: true },
+    { id: spEmpty, name: 'Sin receta', categoriaVentaId: 'cat-otros', kitchenId: 'k-1', price: 100, kind: 'simple', active: true },
   );
   state.recipes.push(
     { id: randomUUID(), salesProductId: spCoca, stockProductId: seeded.p1, quantity: 1 },
@@ -272,7 +272,7 @@ describe('Sales ↔ stock — integridad transaccional', () => {
   it('persiste el emoji del producto de venta al crear, editar y volver a listar', async () => {
     const created = await sales.createSalesProduct({
       name: 'Burger',
-      category: 'Comidas',
+      categoriaVentaId: 'cat-comidas',
       kitchenId: 'k-1',
       price: 100,
       emoji: '🍔',

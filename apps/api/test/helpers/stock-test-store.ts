@@ -49,7 +49,7 @@ export interface StockTestState {
   salesProducts: {
     id: string;
     name: string;
-    category: string;
+    categoriaVentaId: string;
     kitchenId: string;
     price: number;
     kind: string;
@@ -606,7 +606,7 @@ export function createPrismaMock(state: StockTestState) {
         const row = {
           id,
           name: data.name as string,
-          category: data.category as string,
+          categoriaVentaId: data.categoriaVentaId as string,
           kitchenId: data.kitchenId as string,
           price: Number(data.price),
           kind: (data.kind as string) || 'simple',
@@ -638,7 +638,7 @@ export function createPrismaMock(state: StockTestState) {
         const p = state.salesProducts.find(s => s.id === where.id);
         if (!p) throw new Error('not found');
         if (data.name !== undefined) p.name = data.name as string;
-        if (data.category !== undefined) p.category = data.category as string;
+        if (data.categoriaVentaId !== undefined) p.categoriaVentaId = data.categoriaVentaId as string;
         if (data.kitchenId !== undefined) p.kitchenId = data.kitchenId as string;
         if (data.price !== undefined) p.price = Number(data.price);
         if (data.kind !== undefined) p.kind = data.kind as string;

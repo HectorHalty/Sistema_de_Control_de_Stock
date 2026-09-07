@@ -24,8 +24,8 @@ export class CreateWebMenuProductDto {
   @IsString()
   name: string;
 
-  @IsString()
-  category: string;
+  @IsUUID()
+  categoriaVentaId: string;
 
   @IsUUID()
   kitchenId: string;
@@ -76,8 +76,8 @@ export class UpdateWebMenuProductDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
-  category?: string;
+  @IsUUID()
+  categoriaVentaId?: string;
 
   @IsOptional()
   @IsUUID()

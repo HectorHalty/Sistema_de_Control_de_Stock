@@ -17,7 +17,10 @@ export interface SalesProductBundleItem {
 export interface SalesProduct {
   id: string;
   name: string;
+  /** Nombre de la categoría de venta, para mostrar/agrupar en la UI. */
   category: string;
+  /** FK real contra CategoriaVenta — lo que efectivamente viaja al backend. */
+  categoriaVentaId: string;
   kitchenId: string;
   price: number;
   emoji: string;

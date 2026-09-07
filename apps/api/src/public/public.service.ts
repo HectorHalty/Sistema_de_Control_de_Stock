@@ -367,6 +367,7 @@ export class PublicService {
         include: {
           kitchen: true,
           webCategory: { select: { id: true, name: true, slug: true } },
+          categoriaVenta: { select: { name: true } },
           filtrosWeb: { include: { filtro: { select: { slug: true, label: true } } } },
         },
         orderBy: [{ webSortOrder: 'asc' }, { name: 'asc' }],
@@ -387,8 +388,8 @@ export class PublicService {
       items: items.map((item) => ({
         id: item.id,
         name: item.name,
-        category: item.webCategory?.name ?? item.category,
-        categorySlug: item.webCategory?.slug ?? slugifyCategory(item.category),
+        category: item.webCategory?.name ?? item.categoriaVenta.name,
+        categorySlug: item.webCategory?.slug ?? slugifyCategory(item.categoriaVenta.name),
         price: Number(item.price),
         emoji: item.emoji,
         description: item.descripcionWeb,

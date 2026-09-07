@@ -97,8 +97,8 @@ export class CreateSalesProductDto {
   @IsString()
   name: string;
 
-  @IsString()
-  category: string;
+  @IsUUID()
+  categoriaVentaId: string;
 
   @IsUUID()
   kitchenId: string;
@@ -157,8 +157,8 @@ export class UpdateSalesProductDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
-  category?: string;
+  @IsUUID()
+  categoriaVentaId?: string;
 
   @IsOptional()
   @IsUUID()

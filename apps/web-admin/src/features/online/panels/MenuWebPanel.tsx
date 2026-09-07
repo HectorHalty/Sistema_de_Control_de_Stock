@@ -20,7 +20,7 @@ type Tab = 'productos' | 'categorias' | 'filtros';
 const emptyProduct = {
   salesProductId: null as string | null,
   name: '',
-  category: 'Comidas',
+  categoriaVentaId: '',
   kitchenId: '',
   price: '',
   emoji: '🍽️',
@@ -86,7 +86,7 @@ export function MenuWebPanel() {
     setDraft({
       salesProductId: product.id,
       name: product.name,
-      category: product.category,
+      categoriaVentaId: product.categoriaVentaId,
       kitchenId: product.kitchenId,
       price: String(product.price),
       emoji: product.emoji || '🍽️',
@@ -127,7 +127,7 @@ export function MenuWebPanel() {
         draft.salesProductId,
         {
           name: draft.name.trim() || undefined,
-          category: draft.category.trim() || undefined,
+          categoriaVentaId: draft.categoriaVentaId || undefined,
           kitchenId: draft.kitchenId || undefined,
           price: Number(draft.price) || 0,
           emoji: draft.emoji || '🍽️',
@@ -462,7 +462,7 @@ export function MenuWebPanel() {
                         <div>
                           <p className="font-medium">{row.emoji} {row.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {row.webCategory?.name ?? row.category} · {row.kitchen?.name} · $
+                            {row.webCategory?.name ?? row.categoriaVenta?.name} · {row.kitchen?.name} · $
                             {Number(row.price).toLocaleString('es-AR')}
                           </p>
                         </div>

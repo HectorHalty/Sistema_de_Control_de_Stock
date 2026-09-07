@@ -1,6 +1,7 @@
 import {
   Injectable, NotFoundException, ConflictException,
 } from '@nestjs/common';
+import { EstadoOrdenCocina } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SseService } from '../sse/sse.service';
 import { KitchenOrderStatus } from './dto';
@@ -24,7 +25,7 @@ export class KitchenService {
     return this.prisma.ordenCocina.findMany({
       where: {
         ...(kitchenId ? { kitchenId } : {}),
-        ...(status ? { status } : {}),
+        ...(status ? { status: status as EstadoOrdenCocina } : {}),
         ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
       },
       include: {

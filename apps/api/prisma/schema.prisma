@@ -34,6 +34,39 @@ enum EstadoOrdenCompra {
   Recibido
 }
 
+enum EstadoTicket {
+  emitido
+  anulado
+  devuelto
+}
+
+enum OrigenTicket {
+  pos
+  online
+}
+
+enum TipoProductoVenta {
+  simple
+  promo
+}
+
+enum EstadoOrdenCocina {
+  pending
+  preparing
+  ready
+  delivered
+}
+
+enum EstadoMesa {
+  libre
+  ocupada
+}
+
+enum EstadoCuentaEquipo {
+  abierta
+  cerrada
+}
+
 // ==================== AUTH ====================
 
 model Usuario {
@@ -194,13 +227,13 @@ model ProductoVentaFiltro {
 }
 
 model ProductoVenta {
-  id             String   @id @default(uuid())
-  name           String
-  category       String   @default("Comidas")
+  id               String   @id @default(uuid())
+  name             String
+  categoriaVentaId String   @map("categoria_venta_id")
   kitchenId      String
   price          Decimal  @db.Decimal(10, 2)
   emoji          String?
-  kind           String   @default("simple") // simple | promo
+  kind           TipoProductoVenta @default(simple)
   active         Boolean  @default(true)
   visibleWeb     Boolean  @default(false)
   descripcionWeb String?
@@ -215,7 +248,8 @@ model ProductoVenta {
   bundleItems   ItemComboVenta[]  @relation("PromoProduct")
   usedInBundles ItemComboVenta[]  @relation("BundleComponent")
   ticketItems   ItemTicketVenta[]
-  kitchen       Cocina            @relation(fields: [kitchenId], references: [id])
+  kitchen        Cocina         @relation(fields: [kitchenId], references: [id], onDelete: Restrict)
+  categoriaVenta CategoriaVenta @relation(fields: [categoriaVentaId], references: [id], onDelete: Restrict)
   kitchenItems  ItemOrdenCocina[]
   webCategory   CategoriaWeb?     @relation(fields: [webCategoryId], references: [id], onDelete: SetNull)
   filtrosWeb    ProductoVentaFiltro[]
@@ -228,6 +262,7 @@ model ProductoVenta {
   @@index([active, name])
   @@index([visibleWeb, active])
   @@index([webCategoryId])
+  @@index([categoriaVentaId])
   @@map("productos_venta")
 }
 
@@ -267,18 +302,19 @@ model TicketVenta {
   id             String   @id @default(uuid())
   number         Int      @unique
   createdAt      DateTime @default(now())
-  status         String   @default("emitido") // emitido, anulado, devuelto
+  status         EstadoTicket @default(emitido)
   total          Decimal  @db.Decimal(10, 2)
   operatorId     String
   note           String?
   idempotencyKey  String?  @unique
-  origen          String   @default("pos") // pos | online
+  origen          OrigenTicket @default(pos)
   stockAllocations Json?   // snapshot [{stockProductId, warehouseId, quantity}]
 
-  operator      Usuario           @relation("TicketsOperador", fields: [operatorId], references: [id])
+  operator      Usuario           @relation("TicketsOperador", fields: [operatorId], references: [id], onDelete: Restrict)
   items         ItemTicketVenta[]
   kitchenOrders OrdenCocina[]
   pedidoPublico PedidoPublico?
+  mesas         MesaVenta[]
 
   @@index([operatorId])
   @@index([status])
@@ -299,7 +335,7 @@ model ItemTicketVenta {
   createdAt        DateTime @default(now())
 
   ticket       TicketVenta   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id])
+  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id], onDelete: Restrict)
 
   @@index([ticketId])
   @@index([salesProductId])
@@ -344,7 +380,7 @@ model OrdenCocina {
   ticketId        String
   ticketNumber    Int // snapshot del número de ticket (consulta KDS rápida)
   kitchenId       String
-  status          String   @default("pending") // pending, preparing, ready, delivered
+  status          EstadoOrdenCocina @default(pending)
   operatorName    String
   tableId         String?
   tableName       String?
@@ -352,8 +388,8 @@ model OrdenCocina {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  ticket        TicketVenta       @relation(fields: [ticketId], references: [id])
-  kitchen       Cocina            @relation(fields: [kitchenId], references: [id])
+  ticket        TicketVenta       @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  kitchen       Cocina            @relation(fields: [kitchenId], references: [id], onDelete: Restrict)
   pedidoPublico PedidoPublico?    @relation(fields: [pedidoPublicoId], references: [id], onDelete: SetNull)
   items         ItemOrdenCocina[]
 
@@ -375,7 +411,7 @@ model ItemOrdenCocina {
   createdAt      DateTime @default(now())
 
   kitchenOrder OrdenCocina   @relation(fields: [kitchenOrderId], references: [id], onDelete: Cascade)
-  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id])
+  salesProduct ProductoVenta @relation(fields: [salesProductId], references: [id], onDelete: Restrict)
 
   @@index([kitchenOrderId])
   @@index([salesProductId])
@@ -1133,12 +1169,14 @@ model CategoriaVenta {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  productos ProductoVenta[]
+
   @@map("categorias_venta")
 }
 
 model Impresora {
   id         String   @id @default(uuid())
-  name       String
+  name       String   @unique
   type       String
   ip         String
   port       Int      @default(9100)
@@ -1152,13 +1190,16 @@ model Impresora {
 }
 
 model MesaVenta {
-  id             String   @id @default(uuid())
-  name           String
-  status         String   @default("libre")
+  id             String     @id @default(uuid())
+  name           String     @unique
+  status         EstadoMesa @default(libre)
   currentOrderId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
+  currentOrder TicketVenta? @relation(fields: [currentOrderId], references: [id], onDelete: SetNull)
+
+  @@index([currentOrderId])
   @@map("mesas_venta")
 }
 
@@ -1166,7 +1207,7 @@ model CuentaEquipo {
   id        String   @id @default(uuid())
   team      String
   openedAt  DateTime @default(now())
-  status    String   @default("abierta")
+  status    EstadoCuentaEquipo @default(abierta)
   items     Json
   updatedAt DateTime @updatedAt
 
