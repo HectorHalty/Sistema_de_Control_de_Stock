@@ -91,6 +91,17 @@ There are two seed scripts:
   online orders, demo staff users). Requires the reference seed to have
   run first; it will throw if the web taxonomy is missing.
 
+### Database commands (`apps/api`)
+
+| Comando | Qué hace |
+|---|---|
+| `npm run db:baseline` | Regenera la migración baseline desde `schema.prisma` |
+| `npm run db:drift` | Falla si el schema y las migraciones no coinciden |
+| `npm run db:reconcile` | Reporta deriva entre datos derivados y su origen |
+| `npm run test:db` | Tests de restricciones contra PostgreSQL real |
+| `npm run prisma:seed` | Datos de referencia (idempotente) |
+| `npm run prisma:seed:demo` | Datos de demostración (opcional) |
+
 ### 3. Run the backend
 
 ```bash
@@ -316,7 +327,6 @@ Available adapters:
 - `useKitchenApiAdapter(kitchenId?)` - orders list, transitions, SSE
 - `useMediaApiAdapter()` - presign, confirm, list, delete
 - `useSponsorsApiAdapter()` - CRUD
-- `useOnlineCatalogApiAdapter()` - CRUD
 
 ## Testing
 
