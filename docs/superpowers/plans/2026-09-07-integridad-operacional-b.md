@@ -75,19 +75,24 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     contador para las dos). 2/2 verde contra Postgres real.
   - `npm test` (209/209) y `npm run test:db` (51/51) en verde.
 
-- [ ] **Task 4: SSE de cocina vía Postgres `LISTEN/NOTIFY`**
-  - Mantener el `Map` local en `sse.service.ts` para las conexiones abiertas
-    de *esa* instancia (sigue haciendo falta: cada instancia mantiene sus
-    propios sockets HTTP).
-  - Agregar un listener a un canal de Postgres (`pg_notify` /
-    `LISTEN kitchen_events`) para que `broadcastKitchenEvent` también
-    redistribuya a las demás instancias, no sólo a `this.clients`.
-  - Verificar el costo de una conexión dedicada de Postgres para `LISTEN`
-    (Prisma no soporta `LISTEN/NOTIFY` nativamente — se necesita un cliente
-    `pg` aparte o `prisma.$queryRaw` con una conexión persistente).
-  - Test de integración: dos instancias del servicio SSE contra la misma DB,
-    confirmar que un evento emitido en una llega a un cliente conectado en
-    la otra.
+- [x] **Task 4: SSE de cocina vía Postgres `LISTEN/NOTIFY`**
+  - `sse.service.ts` mantiene el `Map` local para las conexiones abiertas de
+    *esa* instancia (sigue haciendo falta), pero `broadcastKitchenEvent` ya
+    no escribe directo a `this.clients`: publica con `pg_notify` en el canal
+    `kitchen_events`, y cada instancia (incluida la que lo emitió) lo recibe
+    por `LISTEN` y entrega a sus propios clientes — un solo camino de
+    entrega, sin duplicar.
+  - Dependencia nueva: `pg` (Prisma no expone `LISTEN/NOTIFY`). Conexión
+    dedicada abierta en `onModuleInit`, cerrada en `onModuleDestroy`.
+  - Degradación explícita: si `DATABASE_URL` falta o la conexión de `LISTEN`
+    falla al arrancar, cae a entrega sólo local (mismo comportamiento que
+    antes de esta tarea) en vez de romper el arranque de la API — mismo
+    criterio que ya usa `PrismaService.onModuleInit`.
+  - Test nuevo `test/db/sse-cross-instance.test.ts`: dos `SseService` reales
+    contra Postgres — un evento emitido en la instancia A llega a un cliente
+    conectado en la instancia B, y el filtro por `kitchenId` se respeta
+    también entre instancias. 2/2 verde.
+  - `npm test` (209/209) y `npm run test:db` (53/53) en verde.
 
 - [ ] **Task 5: Investigación de agregación en SQL**
   - Revisar `reglamento-engine.service.ts` y `suspension-sync.service.ts`:
