@@ -40,27 +40,41 @@ export function useFutbolOverview() {
 }
 
 export function futbolFieldClass(extra = '') {
-  return `w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary ${extra}`.trim();
+  return `w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-[#3d7a3d] focus:ring-2 focus:ring-[#3d7a3d]/20 ${extra}`.trim();
 }
 
 export function futbolButtonClass(variant: 'primary' | 'ghost' = 'primary', extra = '') {
   const base =
     variant === 'ghost'
-      ? 'rounded-xl border border-border px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-50'
-      : 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50';
+      ? 'inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+      : 'inline-flex items-center gap-2 rounded-lg bg-[#3d7a3d] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2f5f2f] disabled:opacity-50';
   return `${base} ${extra}`.trim();
+}
+
+export function futbolCardClass(extra = '') {
+  return `rounded-xl border border-border bg-card shadow-sm ${extra}`.trim();
 }
 
 export function FutbolPanelShell({
   title,
+  subtitle,
+  actions,
   children,
 }: {
   title: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-4 pb-20 lg:pb-4">
-      <h2 className="text-lg font-bold text-foreground">{title}</h2>
+    <div className="space-y-6 pb-20 lg:pb-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-foreground">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
+      </div>
       {children}
     </div>
   );
@@ -68,7 +82,7 @@ export function FutbolPanelShell({
 
 export function FutbolError({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
       {message}
     </div>
   );
@@ -76,7 +90,7 @@ export function FutbolError({ message }: { message: string }) {
 
 export function FutbolSuccess({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+    <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
       {message}
     </div>
   );
