@@ -8,7 +8,6 @@ import {
   CreateSupplierDto,
   CreatePurchaseOrderDto,
   ReceivePurchaseOrderDto,
-  CreateEmployeeConsumptionDto,
   AdjustStockDto,
 } from '../../src/stock/dto';
 import {
@@ -76,16 +75,6 @@ describe('Seguridad — validación DTO del módulo stock', () => {
         quantityReceived: 10,
         allocations: [{ warehouseId: '550e8400-e29b-41d4-a716-446655440001', quantity: -1 }],
       }],
-    });
-    const errors = await validate(dto);
-    expect(errors.length).toBeGreaterThan(0);
-  });
-
-  it('rechaza consumo empleado con cantidad cero', async () => {
-    const dto = plainToInstance(CreateEmployeeConsumptionDto, {
-      productId: '550e8400-e29b-41d4-a716-446655440000',
-      warehouseId: '550e8400-e29b-41d4-a716-446655440001',
-      quantity: 0,
     });
     const errors = await validate(dto);
     expect(errors.length).toBeGreaterThan(0);
@@ -311,45 +300,10 @@ describe('Seguridad — recepción de pedidos (anti-abuso)', () => {
   });
 });
 
-// ============================================================
-// Fase 3.1 — Consumo empleado + movimientos
-// ============================================================
-
-describe('Fase 3.1 — consumo empleado y movimientos server-side', () => {
-  it('descuenta stock y registra movimiento negativo de consumo', async () => {
-    const state = createEmptyStockState();
-    const { p1, whId } = seedBasicCatalog(state);
-    const { service } = createStockService(state);
-
-    await service.createEmployeeConsumption({
-      productId: p1,
-      warehouseId: whId,
-      quantity: 3,
-      operatorName: 'Operador',
-    });
-
-    const level = state.stockLevels.find(s => s.productId === p1 && s.warehouseId === whId)!;
-    expect(level.quantity).toBe(7);
-
-    expect(state.stockMovements).toHaveLength(1);
-    expect(state.stockMovements[0].type).toBe('consumo');
-    expect(state.stockMovements[0].quantity).toBe(-3);
-  });
-
-  it('bloquea consumo que dejaría stock negativo', async () => {
-    const state = createEmptyStockState();
-    const { p1, whId } = seedBasicCatalog(state);
-    const { service } = createStockService(state);
-
-    await expect(
-      service.createEmployeeConsumption({
-        productId: p1,
-        warehouseId: whId,
-        quantity: 999,
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
-});
+// Fase 3.1 (consumo empleado) se retiró: el consumo interno ahora vive en
+// SalesService.registerConsumption (mismo circuito que un checkout, ver
+// docs/superpowers/plans/2026-09-08-consumo-como-venta.md) — sus tests están
+// en test/integration/sales-consumption.test.ts, no acá.
 
 // ============================================================
 // Fase 2.1 — Ajuste manual con movimiento

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { EstadoOrdenCompra, Prisma, UnidadMedida } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { CreateProductDto, UpdateProductDto, AdjustStockDto,
-  CreateEmployeeConsumptionDto, CreateStockCountSessionDto,
+  CreateStockCountSessionDto,
   CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
   CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
@@ -203,86 +203,6 @@ export class StockService {
     limit?: number;
   }) {
     return this.movements.findAll(filters);
-  }
-
-  // ============ Employee consumption ============
-
-  async createEmployeeConsumption(dto: CreateEmployeeConsumptionDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const product = await tx.producto.findUnique({ where: { id: dto.productId } });
-      if (!product) throw new NotFoundException(`Product ${dto.productId} not found`);
-
-      const warehouse = await tx.deposito.findUnique({ where: { id: dto.warehouseId } });
-      if (!warehouse) throw new NotFoundException(`Warehouse ${dto.warehouseId} not found`);
-
-      let stockLevel = await tx.nivelStock.findUnique({
-        where: { productId_warehouseId: { productId: dto.productId, warehouseId: dto.warehouseId } },
-      });
-      if (!stockLevel) {
-        stockLevel = await tx.nivelStock.create({
-          data: { productId: dto.productId, warehouseId: dto.warehouseId, quantity: 0 },
-        });
-      }
-
-      await tx.$queryRaw`
-        SELECT id FROM "niveles_stock" WHERE id::text = ${stockLevel.id} FOR UPDATE
-      `;
-      const locked = await tx.nivelStock.findUnique({ where: { id: stockLevel.id } });
-      if (!locked) throw new NotFoundException(`Stock level ${stockLevel.id} not found`);
-
-      const previousStock = Number(locked.quantity);
-      const qty = Math.round(dto.quantity * 1000) / 1000;
-      const newStock = Math.round((previousStock - qty) * 1000) / 1000;
-      if (newStock < 0) {
-        throw new ConflictException(
-          `Insufficient stock: available ${previousStock}, requested ${qty}`,
-        );
-      }
-
-      await tx.nivelStock.update({
-        where: { id: locked.id },
-        data: { quantity: newStock },
-      });
-
-      const day = new Date().toISOString().slice(0, 10);
-      const entry = await tx.consumoEmpleado.create({
-        data: {
-          day,
-          productId: dto.productId,
-          productName: product.name,
-          productCode: product.code,
-          warehouseId: dto.warehouseId,
-          warehouseName: warehouse.name,
-          quantity: qty,
-          unit: product.unit,
-          previousStock,
-          newStock,
-          operatorId: dto.operatorId,
-          operatorName: dto.operatorName,
-          operatorRole: dto.operatorRole,
-          note: dto.note,
-        },
-      });
-
-      await this.movements.recordMany(tx, [{
-        type: 'consumo',
-        productId: dto.productId,
-        warehouseId: dto.warehouseId,
-        quantity: -qty,
-        reference: entry.id,
-        operatorId: dto.operatorId,
-        operatorName: dto.operatorName,
-      }]);
-
-      return entry;
-    });
-  }
-
-  findAllEmployeeConsumptions(limit = 200) {
-    return this.prisma.consumoEmpleado.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
   }
 
   // ============ Stock count sessions ============

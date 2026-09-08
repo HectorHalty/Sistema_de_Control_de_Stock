@@ -50,7 +50,6 @@ export const USER_MANAGEMENT_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN] as const;
 export const STOCK_READ_ROLES = [...ADMIN_ROLES, ROLES.OPERADOR_STOCK] as const;
 export const STOCK_MUTATION_ROLES = [...STOCK_READ_ROLES] as const;
 export const STOCK_COUNT_ROLES = [...STOCK_MUTATION_ROLES] as const;
-export const STOCK_CONSUMPTION_ROLES = [...STOCK_MUTATION_ROLES] as const;
 
 /** Lectura del módulo de ventas físicas. */
 export const SALES_READ_ROLES = [
@@ -59,6 +58,17 @@ export const SALES_READ_ROLES = [
   ROLES.VENDEDOR,
 ] as const;
 export const SALES_OPERATION_ROLES = [...SALES_READ_ROLES] as const;
+
+/**
+ * Registrar un consumo interno (empleado/operador) — mismo circuito que una
+ * venta (receta, descuento de stock) pero sin cobrar. Roles de venta +
+ * roles que hoy pueden mutar stock, porque el consumo vive en Ventas pero
+ * sigue siendo, en el fondo, una salida de stock.
+ */
+export const SALES_CONSUMPTION_ROLES = [
+  ...SALES_OPERATION_ROLES,
+  ROLES.OPERADOR_STOCK,
+] as const;
 
 /** Configuración del catálogo de ventas. */
 export const SALES_CATALOG_ROLES = [...ADMIN_ROLES, ROLES.GERENTE_VENTAS] as const;

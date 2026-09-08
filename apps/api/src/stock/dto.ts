@@ -108,37 +108,6 @@ export class AdjustStockDto {
   operatorName?: string;
 }
 
-export class CreateEmployeeConsumptionDto {
-  @IsUUID()
-  productId: string;
-
-  @IsUUID()
-  warehouseId: string;
-
-  @IsNumber()
-  @Min(0.001)
-  quantity: number;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  note?: string;
-
-  @IsOptional()
-  @IsUUID()
-  operatorId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  operatorName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  operatorRole?: string;
-}
-
 export class StockCountEntryDto {
   @IsUUID()
   productId: string;

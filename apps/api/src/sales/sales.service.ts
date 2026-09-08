@@ -50,6 +50,28 @@ export class SalesService {
   // to prevent race conditions on stock deduction.
 
   async checkout(dto: CheckoutDto) {
+    return this.performCheckout(dto, { origen: 'pos', zeroPrice: false, movementType: 'venta' });
+  }
+
+  /**
+   * Consumo interno (empleado/operador) — docs/superpowers/plans/
+   * 2026-09-08-consumo-como-venta.md. Mismo circuito que una venta (receta,
+   * descuento de stock, bloqueo por FOR UPDATE, validación de stock
+   * insuficiente) pero: precio de cada línea forzado a 0, `origen: 'consumo'`
+   * en el ticket, y el movimiento de stock queda tipado `consumo` en vez de
+   * `venta` — así los reportes de stock lo siguen mostrando en la misma
+   * categoría que mostraban el viejo flujo de `ConsumoEmpleado` (retirado en
+   * este mismo cambio), y los reportes de ventas pueden excluirlo de
+   * ingresos filtrando por `origen`.
+   */
+  async registerConsumption(dto: CheckoutDto) {
+    return this.performCheckout(dto, { origen: 'consumo', zeroPrice: true, movementType: 'consumo' });
+  }
+
+  private async performCheckout(
+    dto: CheckoutDto,
+    opts: { origen: 'pos' | 'consumo'; zeroPrice: boolean; movementType: 'venta' | 'consumo' },
+  ) {
     const operatorId = dto.operatorId ?? 'local';
     const ticketInclude = { items: true, operator: { select: { name: true, username: true } } } as const;
 
@@ -99,11 +121,12 @@ export class SalesService {
         const ticketItems: TicketItemData[] = [];
         dto.items.forEach((item, index) => {
           const sp = salesProductMapForPricing.get(item.salesProductId)!;
-          total += Number(sp.price) * item.quantity;
+          const unitPrice = opts.zeroPrice ? 0 : Number(sp.price);
+          total += unitPrice * item.quantity;
           ticketItems.push({
             salesProductId: item.salesProductId,
             name: sp.name,
-            unitPrice: sp.price,
+            unitPrice,
             quantity: item.quantity,
             stockAllocations: perItemAlloc[index] as unknown as Prisma.InputJsonValue,
           });
@@ -115,6 +138,7 @@ export class SalesService {
             status: 'emitido',
             total,
             operatorId,
+            origen: opts.origen,
             note: dto.note,
             idempotencyKey: dto.idempotencyKey,
             stockAllocations: allocations as unknown as Prisma.InputJsonValue,
@@ -127,7 +151,7 @@ export class SalesService {
         await this.movements.recordMany(
           tx,
           allocations.map(a => ({
-            type: 'venta' as const,
+            type: opts.movementType,
             productId: a.stockProductId,
             warehouseId: a.warehouseId,
             quantity: -a.quantity,

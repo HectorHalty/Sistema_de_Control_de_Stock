@@ -39,7 +39,6 @@ export interface StockTestState {
     operatorName: string | null;
     createdAt: Date;
   }[];
-  employeeConsumptions: unknown[];
   stockCountSessions: unknown[];
   categories: { id: string; name: string; icon?: string | null }[];
   orderCounters: { id: string; valor: number }[];
@@ -90,7 +89,6 @@ export function createEmptyStockState(): StockTestState {
     warehouses: [],
     stockLevels: [],
     stockMovements: [],
-    employeeConsumptions: [],
     stockCountSessions: [],
     categories: [],
     orderCounters: [{ id: 'default', valor: 0 }],
@@ -348,14 +346,6 @@ export function createPrismaMock(state: StockTestState) {
           quantityReceived: null as number | null,
         };
         state.purchaseOrderItems.push(row);
-        return row;
-      },
-    },
-    employeeConsumption: {
-      findMany: async () => state.employeeConsumptions,
-      create: async ({ data }: { data: unknown }) => {
-        const row = { id: randomUUID(), ...(data as object) };
-        state.employeeConsumptions.push(row);
         return row;
       },
     },
@@ -723,6 +713,7 @@ export function createPrismaMock(state: StockTestState) {
           status: data.status as string,
           total: Number(data.total),
           operatorId: data.operatorId as string,
+          origen: (data.origen as string) ?? 'pos',
           note: (data.note as string | null) ?? null,
           idempotencyKey: (data.idempotencyKey as string | null) ?? null,
           stockAllocations: data.stockAllocations ?? null,
@@ -942,7 +933,6 @@ export function createPrismaMock(state: StockTestState) {
     movimientoStock: client.stockMovement,
     producto: client.product,
     deposito: client.warehouse,
-    consumoEmpleado: client.employeeConsumption,
     sesionConteo: client.stockCountSession,
     categoria: client.category,
     contadorPedido: client.contadorPedido,

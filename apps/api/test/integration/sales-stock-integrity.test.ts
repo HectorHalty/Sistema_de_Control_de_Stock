@@ -220,14 +220,24 @@ describe('Sales ↔ stock — integridad transaccional', () => {
     expect(state.tickets).toHaveLength(1);
   });
 
-  it('consumo no deja el nivel en negativo', async () => {
+  it('consumo interno (registerConsumption): descuenta por receta, total $0, origen consumo', async () => {
+    const result = await sales.registerConsumption({
+      items: [{ salesProductId: ids.spCoca, quantity: 2 }],
+      operatorId: 'op-1',
+    });
+    expect(result.ticket.total).toBe(0);
+    expect(result.ticket.origen).toBe('consumo');
+    expect(result.ticket.items[0].unitPrice).toBe(0);
+    expect(totalQty(state, ids.p1)).toBe(11);
+    const movement = state.stockMovements.find(m => m.reference === result.ticket.id);
+    expect(movement?.type).toBe('consumo');
+  });
+
+  it('consumo no deja el nivel en negativo (mismo bloqueo que un checkout)', async () => {
     await expect(
-      stock.createEmployeeConsumption({
-        productId: ids.p1,
-        warehouseId: ids.whId,
-        quantity: 99,
+      sales.registerConsumption({
+        items: [{ salesProductId: ids.spCoca, quantity: 99 }],
         operatorId: 'op-1',
-        operatorName: 'Admin',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(qty(state, ids.p1, ids.whId)).toBe(10);

@@ -7,14 +7,13 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StockService } from './stock.service';
 import {
-  CreateProductDto, UpdateProductDto, AdjustStockDto, CreateEmployeeConsumptionDto,
+  CreateProductDto, UpdateProductDto, AdjustStockDto,
   CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
   CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
 } from './dto';
 import {
   STOCK_COUNT_ROLES,
-  STOCK_CONSUMPTION_ROLES,
   STOCK_MUTATION_ROLES,
   STOCK_READ_ROLES,
 } from '../common/roles';
@@ -134,20 +133,6 @@ export class StockController {
       to,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
-  }
-
-  @Get('employee-consumptions')
-  @Roles(...STOCK_READ_ROLES)
-  findAllEmployeeConsumptions(@Query('limit') limit?: string) {
-    return this.stockService.findAllEmployeeConsumptions(
-      limit ? parseInt(limit, 10) : undefined,
-    );
-  }
-
-  @Post('employee-consumptions')
-  @Roles(...STOCK_CONSUMPTION_ROLES)
-  createEmployeeConsumption(@Body() dto: CreateEmployeeConsumptionDto) {
-    return this.stockService.createEmployeeConsumption(dto);
   }
 
   @Get('count-sessions')

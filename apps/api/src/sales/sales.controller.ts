@@ -26,6 +26,8 @@ import {
 
   SALES_CATALOG_ROLES,
 
+  SALES_CONSUMPTION_ROLES,
+
   SALES_OPERATION_ROLES,
 
   SALES_READ_ROLES,
@@ -99,6 +101,20 @@ export class SalesController {
   checkout(@Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
 
     return this.salesService.checkout({ ...dto, operatorId: user.id });
+
+  }
+
+
+
+  /** Consumo interno: mismo circuito que checkout, precio $0, sin imprimir. */
+
+  @Post('consumption')
+
+  @Roles(...SALES_CONSUMPTION_ROLES)
+
+  registerConsumption(@Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
+
+    return this.salesService.registerConsumption({ ...dto, operatorId: user.id });
 
   }
 

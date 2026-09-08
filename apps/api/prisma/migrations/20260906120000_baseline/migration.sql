@@ -11,7 +11,7 @@ CREATE TYPE "EstadoOrdenCompra" AS ENUM ('Pendiente', 'Recibido');
 CREATE TYPE "EstadoTicket" AS ENUM ('emitido', 'anulado', 'devuelto');
 
 -- CreateEnum
-CREATE TYPE "OrigenTicket" AS ENUM ('pos', 'online');
+CREATE TYPE "OrigenTicket" AS ENUM ('pos', 'online', 'consumo');
 
 -- CreateEnum
 CREATE TYPE "TipoProductoVenta" AS ENUM ('simple', 'promo');
@@ -763,28 +763,6 @@ CREATE TABLE "movimientos_stock" (
 );
 
 -- CreateTable
-CREATE TABLE "consumos_empleado" (
-    "id" TEXT NOT NULL,
-    "day" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "productId" TEXT NOT NULL,
-    "productName" TEXT NOT NULL,
-    "productCode" TEXT,
-    "warehouseId" TEXT NOT NULL,
-    "warehouseName" TEXT NOT NULL,
-    "quantity" DECIMAL(12,3) NOT NULL,
-    "unit" "UnidadMedida" NOT NULL DEFAULT 'unidades',
-    "previousStock" DECIMAL(12,3) NOT NULL,
-    "newStock" DECIMAL(12,3) NOT NULL,
-    "operatorId" TEXT,
-    "operatorName" TEXT,
-    "operatorRole" TEXT,
-    "note" TEXT,
-
-    CONSTRAINT "consumos_empleado_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "sesiones_conteo" (
     "id" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1319,21 +1297,6 @@ CREATE INDEX "movimientos_stock_type_createdAt_idx" ON "movimientos_stock"("type
 CREATE INDEX "movimientos_stock_reference_idx" ON "movimientos_stock"("reference");
 
 -- CreateIndex
-CREATE INDEX "consumos_empleado_productId_idx" ON "consumos_empleado"("productId");
-
--- CreateIndex
-CREATE INDEX "consumos_empleado_warehouseId_idx" ON "consumos_empleado"("warehouseId");
-
--- CreateIndex
-CREATE INDEX "consumos_empleado_day_idx" ON "consumos_empleado"("day");
-
--- CreateIndex
-CREATE INDEX "consumos_empleado_createdAt_idx" ON "consumos_empleado"("createdAt");
-
--- CreateIndex
-CREATE INDEX "consumos_empleado_day_productId_idx" ON "consumos_empleado"("day", "productId");
-
--- CreateIndex
 CREATE INDEX "sesiones_conteo_date_idx" ON "sesiones_conteo"("date");
 
 -- CreateIndex
@@ -1590,12 +1553,6 @@ ALTER TABLE "movimientos_stock" ADD CONSTRAINT "movimientos_stock_productId_fkey
 
 -- AddForeignKey
 ALTER TABLE "movimientos_stock" ADD CONSTRAINT "movimientos_stock_warehouseId_fkey" FOREIGN KEY ("warehouseId") REFERENCES "depositos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "consumos_empleado" ADD CONSTRAINT "consumos_empleado_productId_fkey" FOREIGN KEY ("productId") REFERENCES "productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "consumos_empleado" ADD CONSTRAINT "consumos_empleado_warehouseId_fkey" FOREIGN KEY ("warehouseId") REFERENCES "depositos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "entradas_conteo" ADD CONSTRAINT "entradas_conteo_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sesiones_conteo"("id") ON DELETE CASCADE ON UPDATE CASCADE;

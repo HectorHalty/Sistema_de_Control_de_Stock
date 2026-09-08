@@ -43,6 +43,10 @@ enum EstadoTicket {
 enum OrigenTicket {
   pos
   online
+  /// Consumo interno (empleado/operador): mismo circuito de checkout y
+  /// receta que una venta, pero total $0, sin impresión y excluido de los
+  /// reportes de ingresos. Ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
+  consumo
 }
 
 enum TipoProductoVenta {
@@ -183,7 +187,6 @@ model Deposito {
 
   stockLevels NivelStock[]
   movimientos MovimientoStock[]
-  consumos    ConsumoEmpleado[]
 
   @@map("depositos")
 }
@@ -209,7 +212,6 @@ model Producto {
   supplierProducts   ProveedorProducto[]
   purchaseOrderItems ItemOrdenCompra[]
   movimientos        MovimientoStock[]
-  consumos           ConsumoEmpleado[]
   conteoEntradas     EntradaConteo[]
 
   @@index([categoryId])
@@ -1114,35 +1116,6 @@ model MovimientoStock {
   @@index([type, createdAt])
   @@index([reference])
   @@map("movimientos_stock")
-}
-
-model ConsumoEmpleado {
-  id            String       @id @default(uuid())
-  day           String
-  createdAt     DateTime     @default(now())
-  productId     String
-  productName   String // snapshot
-  productCode   String?
-  warehouseId   String
-  warehouseName String // snapshot
-  quantity      Decimal      @db.Decimal(12, 3)
-  unit          UnidadMedida @default(unidades)
-  previousStock Decimal      @db.Decimal(12, 3)
-  newStock      Decimal      @db.Decimal(12, 3)
-  operatorId    String?
-  operatorName  String?
-  operatorRole  String?
-  note          String?
-
-  product   Producto @relation(fields: [productId], references: [id], onDelete: Restrict)
-  warehouse Deposito @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-
-  @@index([productId])
-  @@index([warehouseId])
-  @@index([day])
-  @@index([createdAt])
-  @@index([day, productId])
-  @@map("consumos_empleado")
 }
 
 model SesionConteo {
