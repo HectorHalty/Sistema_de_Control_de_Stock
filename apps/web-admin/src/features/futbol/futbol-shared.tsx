@@ -90,7 +90,7 @@ export function FutbolError({ message }: { message: string }) {
 
 export function FutbolSuccess({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+    <div className="rounded-lg border border-[#3d7a3d]/30 bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#3d7a3d]">
       {message}
     </div>
   );
