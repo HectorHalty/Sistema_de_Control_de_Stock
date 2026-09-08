@@ -132,11 +132,16 @@ export class SalesController {
 
   @Roles(...SALES_READ_ROLES)
 
-  findAllTickets(@Query('status') status: string | undefined, @CurrentUser() user: AuthUser) {
+  findAllTickets(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: AuthUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
 
     const operatorId = isVendedorRole(user.role) ? user.id : undefined;
 
-    return this.salesService.findAllTickets(status, operatorId);
+    return this.salesService.findAllTickets(status, operatorId, cursor, limit ? Number(limit) : undefined);
 
   }
 

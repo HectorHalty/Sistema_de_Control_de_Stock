@@ -20,11 +20,15 @@ export class KitchenController {
     @Query('kitchenId') kitchenId?: string,
     @Query('status') status?: string,
     @Query('onlineOnly') onlineOnly?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.kitchenService.findAllOrders(
       kitchenId,
       status,
       onlineOnly === 'true',
+      cursor,
+      limit ? Number(limit) : undefined,
     );
   }
 

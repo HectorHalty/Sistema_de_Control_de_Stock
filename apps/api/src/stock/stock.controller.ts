@@ -26,8 +26,12 @@ export class StockController {
 
   @Get('products')
   @Roles(...STOCK_READ_ROLES)
-  findAll(@Query('categoryId') categoryId?: string) {
-    return this.stockService.findAllProducts(categoryId);
+  findAll(
+    @Query('categoryId') categoryId?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockService.findAllProducts(categoryId, cursor, limit ? Number(limit) : undefined);
   }
 
   @Get('products/:id')
@@ -162,8 +166,8 @@ export class StockController {
 
   @Get('suppliers')
   @Roles(...STOCK_READ_ROLES)
-  findAllSuppliers() {
-    return this.stockService.findAllSuppliers();
+  findAllSuppliers(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+    return this.stockService.findAllSuppliers(cursor, limit ? Number(limit) : undefined);
   }
 
   @Post('suppliers')
@@ -186,8 +190,12 @@ export class StockController {
 
   @Get('purchase-orders')
   @Roles(...STOCK_READ_ROLES)
-  findAllPurchaseOrders(@Query('status') status?: string) {
-    return this.stockService.findAllPurchaseOrders(status);
+  findAllPurchaseOrders(
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockService.findAllPurchaseOrders(status, cursor, limit ? Number(limit) : undefined);
   }
 
   @Get('purchase-orders/:id')

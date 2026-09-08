@@ -1,10 +1,23 @@
 import {
   Injectable, NotFoundException, ConflictException,
 } from '@nestjs/common';
-import { EstadoOrdenCocina } from '@prisma/client';
+import { EstadoOrdenCocina, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SseService } from '../sse/sse.service';
+import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
 import { KitchenOrderStatus } from './dto';
+
+/** Tipo de retorno explícito para findAllOrders — ver comentario en Task 9. */
+type KitchenOrderWithDetails = Prisma.OrdenCocinaGetPayload<{
+  include: {
+    kitchen: true;
+    items: true;
+    ticket: { select: { number: true; status: true; origen: true; total: true; createdAt: true } };
+    pedidoPublico: {
+      select: { id: true; status: true; tokenRetiro: { select: { token: true; usadoEn: true } } };
+    };
+  };
+}>;
 
 // Valid state transitions
 const VALID_TRANSITIONS: Record<KitchenOrderStatus, KitchenOrderStatus[]> = {
@@ -21,27 +34,52 @@ export class KitchenService {
     private sseService: SseService,
   ) {}
 
-  async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean) {
-    return this.prisma.ordenCocina.findMany({
-      where: {
-        ...(kitchenId ? { kitchenId } : {}),
-        ...(status ? { status: status as EstadoOrdenCocina } : {}),
-        ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
-      },
-      include: {
-        kitchen: true,
-        items: true,
-        ticket: { select: { number: true, status: true, origen: true, total: true, createdAt: true } },
-        pedidoPublico: {
-          select: {
-            id: true,
-            status: true,
-            tokenRetiro: { select: { token: true, usadoEn: true } },
-          },
+  /**
+   * Sin `cursor`/`limit`: array completo (compatibilidad — el tablero de
+   * cocina en vivo filtra por `status`, que es naturalmente chico). Con
+   * alguno de los dos, pagina de verdad: sin filtro de `status` esta lista
+   * es historial completo y crece sin límite. Ver Task 9 de
+   * docs/superpowers/plans/2026-09-07-integridad-operacional-b.md.
+   */
+  async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean): Promise<KitchenOrderWithDetails[]>;
+  async findAllOrders(
+    kitchenId: string | undefined,
+    status: string | undefined,
+    onlineOnly: boolean | undefined,
+    cursor: string | undefined,
+    limit: number | undefined,
+  ): Promise<CursorPage<KitchenOrderWithDetails>>;
+  async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean, cursor?: string, limit?: number) {
+    const where = {
+      ...(kitchenId ? { kitchenId } : {}),
+      ...(status ? { status: status as EstadoOrdenCocina } : {}),
+      ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
+    };
+    const include = {
+      kitchen: true,
+      items: true,
+      ticket: { select: { number: true, status: true, origen: true, total: true, createdAt: true } },
+      pedidoPublico: {
+        select: {
+          id: true,
+          status: true,
+          tokenRetiro: { select: { token: true, usadoEn: true } },
         },
       },
-      orderBy: { createdAt: 'asc' },
+    } as const;
+
+    if (cursor === undefined && limit === undefined) {
+      return this.prisma.ordenCocina.findMany({ where, include, orderBy: { createdAt: 'asc' } });
+    }
+    const take = normalizeLimit(limit);
+    const rows = await this.prisma.ordenCocina.findMany({
+      where,
+      include,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: take + 1,
     });
+    return toCursorPage(rows, take);
   }
 
   async findOrderById(id: string) {

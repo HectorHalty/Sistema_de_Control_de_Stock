@@ -172,19 +172,37 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
   - `npm test` de `web-admin` 171/171 en verde, `npm run build` compila sin
     errores nuevos.
 
-- [ ] **Task 9: Paginación por cursor — backend**
-  - Convertir a paginación por cursor (`id` + `createdAt` como desempate) los
-    listados sin límite real identificados en la spec:
-    `findAllProducts`, `findAllSuppliers`, `findAllPurchaseOrders`
-    (`stock.service.ts`), listados de `kitchen.service.ts`, y
-    `findAllTickets` (`sales.service.ts:791`, hoy `take: 100` fijo sin
-    forma de pedir más).
-  - Firma nueva: recibir `cursor?: string` y `limit?: number` (con default y
-    tope máximo para no permitir `limit=999999`), devolver
-    `{ items, nextCursor }`.
-  - No tocar los catálogos chicos que hoy no tienen límite
-    (`settings.service.ts`: mesas, impresoras, configuración) salvo que
-    Task 9 revele que ya no son chicos.
+- [x] **Task 9: Paginación por cursor — backend**
+  - Helper compartido `common/pagination.ts` (`normalizeLimit`,
+    `toCursorPage`): pide `take: limit + 1`, si vino de más hay próxima
+    página y el cursor es el `id` de la última fila devuelta.
+  - Convertidos: `findAllProducts`, `findAllSuppliers`,
+    `findAllPurchaseOrders` (`stock.service.ts`), `findAllOrders`
+    (`kitchen.service.ts` — el listado sin filtro de `status`, historial sin
+    límite; `getActiveOrdersForKitchen` queda igual, ya está acotado por
+    `status != delivered`), `findAllTickets` (`sales.service.ts` — hoy
+    `take: 100` fijo sin `skip`/`cursor`).
+  - **Compatibilidad hacia atrás por diseño:** sin `cursor` ni `limit` en la
+    query, cada endpoint devuelve el array completo de siempre (mismo
+    contrato que antes). Con cualquiera de los dos, devuelve
+    `{ items, nextCursor }`. Los controllers exponen `?cursor=&limit=` como
+    query params opcionales.
+  - `orderBy` de cada listado ahora incluye `id` como desempate (ej.
+    `[{name:'asc'},{id:'asc'}]`) — Prisma necesita esto para que el cursor dé
+    un orden estable entre páginas.
+  - Overloads explícitos en cada servicio (tipos `ProductWithLevels`,
+    `SupplierWithProducts`, `PurchaseOrderWithItems`, `TicketWithItems`,
+    `KitchenOrderWithDetails` vía `Prisma.*GetPayload`) para que TS siga
+    infiriendo `T[]` en los callers que no piden paginación, en vez de la
+    unión `T[] | CursorPage<T>` en todos lados.
+  - No se tocaron los catálogos chicos de `settings.service.ts` (mesas,
+    impresoras, configuración) — siguen sin límite, no mostraron evidencia
+    de crecer.
+  - Test nuevo `test/db/pagination.test.ts` contra Postgres real: sin
+    cursor/limit devuelve el array completo; con `limit` da la primera
+    página + `nextCursor`; recorrer con `nextCursor` trae todas las filas
+    sin repetir ni saltear; la última página no trae `nextCursor`. 4/4 verde.
+  - `npm test` 209/209, `npm run test:db` 61/61.
 
 - [ ] **Task 10: Paginación por cursor — frontend admin**
   - Adaptar las pantallas que consumen los endpoints de la Task 9 para pedir

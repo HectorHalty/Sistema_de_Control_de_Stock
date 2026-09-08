@@ -10,9 +10,19 @@ import { CreateProductDto, UpdateProductDto, AdjustStockDto,
 import { StockMovementsService } from './stock-movements.service';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
+import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
 
 /** Valores del enum, para descartar filtros inválidos sin consultar la base. */
 const ESTADOS_ORDEN_VALIDOS = new Set<string>(Object.values(EstadoOrdenCompra));
+
+// Tipos de retorno explícitos para los listados paginables (Task 9): sin
+// overloads, TS infiere el tipo unión `T[] | CursorPage<T>` para TODOS los
+// callers, incluidos los que no piden paginación.
+type ProductWithLevels = Prisma.ProductoGetPayload<{
+  include: { category: true; stockLevels: { include: { warehouse: true } } };
+}>;
+type SupplierWithProducts = Prisma.ProveedorGetPayload<{ include: { products: true } }>;
+type PurchaseOrderWithItems = Prisma.OrdenCompraGetPayload<{ include: { items: true } }>;
 
 @Injectable()
 export class StockService {
@@ -22,15 +32,31 @@ export class StockService {
   ) {}
 
   // Products
-  async findAllProducts(categoryId?: string) {
-    return this.prisma.producto.findMany({
-      where: categoryId ? { categoryId } : undefined,
-      include: {
-        category: true,
-        stockLevels: { include: { warehouse: true } },
-      },
-      orderBy: { name: 'asc' },
+  /**
+   * Sin `cursor`/`limit`: devuelve el array completo (compatibilidad con
+   * clientes que todavía no piden paginación). Con cualquiera de los dos,
+   * devuelve `{ items, nextCursor }` — ver Task 9/10 de
+   * docs/superpowers/plans/2026-09-07-integridad-operacional-b.md.
+   */
+  async findAllProducts(categoryId?: string): Promise<ProductWithLevels[]>;
+  async findAllProducts(categoryId: string | undefined, cursor: string | undefined, limit: number | undefined): Promise<CursorPage<ProductWithLevels>>;
+  async findAllProducts(categoryId?: string, cursor?: string, limit?: number) {
+    const include = { category: true, stockLevels: { include: { warehouse: true } } } as const;
+    const where = categoryId ? { categoryId } : undefined;
+
+    if (cursor === undefined && limit === undefined) {
+      return this.prisma.producto.findMany({ where, include, orderBy: { name: 'asc' } });
+    }
+
+    const take = normalizeLimit(limit);
+    const rows = await this.prisma.producto.findMany({
+      where,
+      include,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: take + 1,
     });
+    return toCursorPage(rows, take);
   }
 
   async findProductById(id: string) {
@@ -292,11 +318,21 @@ export class StockService {
 
   // ============ Suppliers ============
 
-  findAllSuppliers() {
-    return this.prisma.proveedor.findMany({
+  /** Sin cursor/limit: array completo. Con alguno: `{ items, nextCursor }` — ver Task 9. */
+  async findAllSuppliers(): Promise<SupplierWithProducts[]>;
+  async findAllSuppliers(cursor: string | undefined, limit: number | undefined): Promise<CursorPage<SupplierWithProducts>>;
+  async findAllSuppliers(cursor?: string, limit?: number) {
+    if (cursor === undefined && limit === undefined) {
+      return this.prisma.proveedor.findMany({ include: { products: true }, orderBy: { name: 'asc' } });
+    }
+    const take = normalizeLimit(limit);
+    const rows = await this.prisma.proveedor.findMany({
       include: { products: true },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: take + 1,
     });
+    return toCursorPage(rows, take);
   }
 
   async createSupplier(dto: CreateSupplierDto) {
@@ -347,15 +383,28 @@ export class StockService {
 
   // ============ Purchase orders ============
 
-  async findAllPurchaseOrders(status?: string) {
+  /** Sin cursor/limit: array completo. Con alguno: `{ items, nextCursor }` — ver Task 9. */
+  async findAllPurchaseOrders(status?: string): Promise<PurchaseOrderWithItems[]>;
+  async findAllPurchaseOrders(status: string | undefined, cursor: string | undefined, limit: number | undefined): Promise<CursorPage<PurchaseOrderWithItems>>;
+  async findAllPurchaseOrders(status?: string, cursor?: string, limit?: number) {
     // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
     // de dejar que Prisma rechace el valor.
-    if (status && !ESTADOS_ORDEN_VALIDOS.has(status)) return [];
-    return this.prisma.ordenCompra.findMany({
-      where: status ? { status: status as EstadoOrdenCompra } : undefined,
+    if (status && !ESTADOS_ORDEN_VALIDOS.has(status)) {
+      return cursor === undefined && limit === undefined ? [] : { items: [], nextCursor: null };
+    }
+    const where = status ? { status: status as EstadoOrdenCompra } : undefined;
+    if (cursor === undefined && limit === undefined) {
+      return this.prisma.ordenCompra.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' } });
+    }
+    const take = normalizeLimit(limit);
+    const rows = await this.prisma.ordenCompra.findMany({
+      where,
       include: { items: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: take + 1,
     });
+    return toCursorPage(rows, take);
   }
 
   async findPurchaseOrderById(id: string) {

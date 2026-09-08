@@ -4,6 +4,7 @@ import {
 import { Prisma, EstadoTicket } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
+import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
@@ -31,6 +32,11 @@ import {
 interface TicketItemData extends Omit<Prisma.ItemTicketVentaUncheckedCreateWithoutTicketInput, 'createdAt'> {
   stockAllocations?: Prisma.InputJsonValue;
 }
+
+/** Tipo de retorno explícito para findAllTickets — ver comentario en Task 9. */
+type TicketWithItems = Prisma.TicketVentaGetPayload<{
+  include: { items: true; operator: { select: { username: true } } };
+}>;
 
 @Injectable()
 export class SalesService {
@@ -795,16 +801,41 @@ export class SalesService {
 
   // ============ Tickets ============
 
-  async findAllTickets(status?: string, operatorId?: string) {
-    return this.prisma.ticketVenta.findMany({
-      where: {
-        ...(status ? { status: status as EstadoTicket } : {}),
-        ...(operatorId ? { operatorId } : {}),
-      },
-      include: { items: true, operator: { select: { username: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+  /**
+   * Sin `cursor`: mantiene el `take: 100` histórico (compatibilidad). Con
+   * `cursor` (y opcionalmente `limit`), pagina de verdad — antes no había
+   * forma de ver tickets más viejos que los últimos 100. Ver Task 9 de
+   * docs/superpowers/plans/2026-09-07-integridad-operacional-b.md.
+   */
+  async findAllTickets(status?: string, operatorId?: string): Promise<TicketWithItems[]>;
+  async findAllTickets(
+    status: string | undefined,
+    operatorId: string | undefined,
+    cursor: string | undefined,
+    limit: number | undefined,
+  ): Promise<CursorPage<TicketWithItems>>;
+  async findAllTickets(status?: string, operatorId?: string, cursor?: string, limit?: number) {
+    const where = {
+      ...(status ? { status: status as EstadoTicket } : {}),
+      ...(operatorId ? { operatorId } : {}),
+    };
+    const include = { items: true, operator: { select: { username: true } } } as const;
+
+    if (cursor === undefined) {
+      return this.prisma.ticketVenta.findMany({
+        where, include, orderBy: { createdAt: 'desc' }, take: limit ? normalizeLimit(limit) : 100,
+      });
+    }
+    const take = normalizeLimit(limit);
+    const rows = await this.prisma.ticketVenta.findMany({
+      where,
+      include,
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      cursor: { id: cursor },
+      skip: 1,
+      take: take + 1,
     });
+    return toCursorPage(rows, take);
   }
 
   async findTicketById(id: string, operatorId?: string) {
