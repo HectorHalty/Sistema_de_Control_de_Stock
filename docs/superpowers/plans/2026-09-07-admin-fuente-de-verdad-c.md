@@ -156,16 +156,22 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
     queda como último chequeo manual recomendado antes de mergear.
   - `npm test` 175/175, `npm run build` sin errores.
 
-- [ ] **Task 5: Limpieza — quitar el `useLocalStorage` de datos de servidor**
-  - Una vez migrados Inventario y Ventas, `useLocalStorage` (el hook a mano)
-    deja de usarse para datos que vienen de la API en esos dos dominios.
-    Sigue existiendo para preferencias puramente locales sin equivalente en
-    servidor (`darkMode`, `alertDay`, flags de notificaciones) — no se toca
-    eso.
-  - Revisar `shared/storage/keys.ts`: las claves de inventario/ventas que
-    dejan de usarse quedan documentadas como legacy (no se borran de
-    entrada — usuarios con datos viejos en el navegador todavía las tienen;
-    limpiarlas es un paso aparte, no de esta tarea).
+- [x] **Task 5: Limpieza — quitar el `useLocalStorage` de datos de servidor**
+  - Ya no queda `useLocalStorage` para los 10 datasets migrados a React
+    Query (8 de Inventario + `kitchens`/`salesProducts` de Ventas) — pasaron
+    a `useState` en las Tasks 2/4. `salesTickets` también se convirtió a
+    `useState` (lo llena `hydrateTickets`, imperativa, no una query — ver
+    Task 4).
+  - `useLocalStorage` sigue existiendo para lo que de verdad es preferencia
+    local sin equivalente en servidor (`darkMode`, `alertDay`, flags de
+    notificaciones, `auditLog`/`consumptionLogs` de inventario) y para las
+    otras 9 claves de ventas fuera del alcance de esta pasada (categorías,
+    impresoras, mesas, historial, config de ticket, etc.) — no se tocaron.
+  - `shared/storage/keys.ts` anotado: las 10 claves que dejaron de escribirse
+    quedan marcadas `// legacy` con un comentario explicando por qué no se
+    borran (un navegador con datos de antes de Proyecto C todavía las
+    tiene).
+  - `npm test` 175/175, `npm run build` sin errores.
 
 - [ ] **Task 6: Verificación completa y documentación**
   - `npm test` y `npm run build` de `web-admin` en verde.
