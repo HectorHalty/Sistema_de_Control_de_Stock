@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
 import { salesApi, settingsApi } from '@/app/api/client';
-import { isApiReachable } from '@/app/api/adapters';
 import { invalidatePrinterTestCache } from '@/features/sales/lib/printer-test-cache';
 import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal, normalizeSalesProduct } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
@@ -107,9 +107,14 @@ export function useSalesState() {
   );
   const salesCategoriesRef = useRef(salesCategories);
   salesCategoriesRef.current = salesCategories;
-  const [kitchens, setKitchens] = useLocalStorage<Kitchen[]>(storageKeys.sales.kitchens, initialKitchens);
-  const [salesProducts, setSalesProducts] = useLocalStorage<SalesProduct[]>(storageKeys.sales.products, initialSalesProducts);
-  const [salesTickets, setSalesTickets] = useLocalStorage<SalesTicket[]>(storageKeys.sales.tickets, []);
+  // kitchens, salesProducts y salesTickets vienen de la API — React Query es
+  // la fuente de lectura (Proyecto C, Task 4:
+  // docs/superpowers/plans/2026-09-07-admin-fuente-de-verdad-c.md). Ya no se
+  // inicializan de localStorage; localStorage sigue existiendo como caché de
+  // revalidación de React Query (Task 0), no como estado inicial a mano.
+  const [kitchens, setKitchens] = useState<Kitchen[]>(initialKitchens);
+  const [salesProducts, setSalesProducts] = useState<SalesProduct[]>(initialSalesProducts);
+  const [salesTickets, setSalesTickets] = useState<SalesTicket[]>([]);
   const [salesTicketCounter, setSalesTicketCounter] = useLocalStorage<number>(storageKeys.sales.ticketCounter, 1000);
   const [salesTables, setSalesTables] = useLocalStorage<SalesTable[]>(storageKeys.sales.tables, initialTables);
   const [salesHistory, setSalesHistory] = useLocalStorage<SalesHistoryEntry[]>(storageKeys.sales.history, []);
@@ -159,86 +164,103 @@ export function useSalesState() {
     });
   }, [setSalesProducts]);
 
+  const queryClient = useQueryClient();
+
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   // En producción usamos API estricta para evitar cambios solo locales.
   const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(true);
-  const mountHydrationGen = useRef(0);
 
+  /**
+   * Igual que en `use-inventory-state.ts` (Task 2): antes bumpeaba un
+   * "mountGen" a mano para que una hidratación inicial en vuelo no pisara
+   * cambios más nuevos. React Query ya protege eso (sólo la fetch más
+   * reciente de cada query commitea); esto sólo cancela explícitamente lo
+   * que siga circulando de fondo. Nombre preservado: el POS
+   * (`VentasPosContext.tsx`) lo llama como `invalidateSalesHydration`.
+   */
   const invalidateMountHydration = useCallback(() => {
-    mountHydrationGen.current += 1;
-  }, []);
-
-  const applyHydration = useCallback((mountGen: number | undefined, apply: () => void) => {
-    if (mountGen === undefined || mountGen === mountHydrationGen.current) apply();
-  }, []);
+    void queryClient.cancelQueries({ queryKey: ['sales'] });
+  }, [queryClient]);
 
   const markApiSynced = useCallback(() => {
     invalidateMountHydration();
     setSalesApiAvailable(prev => (prev === false ? false : true));
   }, [invalidateMountHydration]);
 
-  // ============ API-first: hidratación y CRUD del catálogo de ventas ============
-  // Productos de venta (con receta) y cocinas viven en la API. Al montar, si la API
-  // responde, sobrescribimos el caché local con lo del servidor; si no, seguimos
-  // operando contra localStorage.
+  // ============ API-first: hidratación (React Query) y CRUD del catálogo de ventas ============
+  // Productos de venta (con receta) y cocinas viven en la API.
 
-  const hydrateKitchens = useCallback(async (mountGen?: number) => {
-    const ks = await salesApi.kitchens.list();
-    applyHydration(mountGen, () => setKitchens(ks.map(mapApiKitchenToLocal)));
-  }, [setKitchens, applyHydration]);
+  const kitchensQuery = useQuery({
+    queryKey: ['sales', 'kitchens'],
+    queryFn: () => salesApi.kitchens.list().then(rows => rows.map(mapApiKitchenToLocal)),
+  });
+  const salesProductsQuery = useQuery({
+    queryKey: ['sales', 'products'],
+    queryFn: () => salesApi.products.list().then(rows => rows.map(mapApiSalesProductToLocal)),
+  });
 
-  const hydrateSalesProducts = useCallback(async (mountGen?: number): Promise<SalesProduct[]> => {
-    const ps = await salesApi.products.list();
-    const server = ps.map(mapApiSalesProductToLocal);
-    applyHydration(mountGen, () => setSalesProducts(prev => {
+  useEffect(() => {
+    if (kitchensQuery.data === undefined) return;
+    setKitchens(kitchensQuery.data);
+  }, [kitchensQuery.data]);
+
+  useEffect(() => {
+    if (salesProductsQuery.data === undefined) return;
+    const server = salesProductsQuery.data;
+    setSalesProducts(prev => {
       const serverIds = new Set(server.map(p => p.id));
       const pendingLocal = prev
         .filter(p => isLocalOnlyId(p.id) && !serverIds.has(p.id))
         .map(normalizeSalesProduct);
       return [...server, ...pendingLocal];
-    }));
-    return server;
-  }, [setSalesProducts, applyHydration]);
+    });
+  }, [salesProductsQuery.data]);
 
-  const hydrateTickets = useCallback(
-    async (products: SalesProduct[], mountGen?: number) => {
-      const ts = await salesApi.tickets.list();
-      const local = ts.map(t => mapApiTicketToLocal(t, products));
-      applyHydration(mountGen, () => {
-        setSalesTickets(prev => mergeTicketsFromServer(local, prev));
-        setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
-        const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
-        if (maxNum > 0) setSalesTicketCounter(c => Math.max(c, maxNum));
-      });
-    },
-    [setSalesTickets, setSalesHistory, setSalesTicketCounter, applyHydration],
+  const hydrateKitchens = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['sales', 'kitchens'] }),
+    [queryClient],
+  );
+  const hydrateSalesProducts = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['sales', 'products'] }),
+    [queryClient],
   );
 
+  // `hydrateTickets` recibe `products` explícito porque el POS
+  // (`VentasPosContext.tsx`) lo llama así en 3 lugares — no se toca esa
+  // firma. No está respaldado por `useQuery` (no hay un solo "momento" de
+  // lectura: se llama con la lista de productos vigente en cada punto de
+  // la app, no con la de una query propia).
+  const hydrateTickets = useCallback(
+    async (products: SalesProduct[]) => {
+      const ts = await salesApi.tickets.list();
+      const local = ts.map(t => mapApiTicketToLocal(t, products));
+      setSalesTickets(prev => mergeTicketsFromServer(local, prev));
+      setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
+      const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
+      if (maxNum > 0) setSalesTicketCounter(c => Math.max(c, maxNum));
+    },
+    [setSalesTickets, setSalesHistory, setSalesTicketCounter],
+  );
+
+  // Hidratación inicial de tickets: se dispara una vez que la primera
+  // carga de productos resuelve (necesita la lista para mapear items de
+  // ticket a producto) — mismo orden que la cadena manual de antes
+  // (kitchens+products en paralelo, tickets después).
+  const ticketsHydratedOnce = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    const mountGen = mountHydrationGen.current;
-    isApiReachable().then(async ok => {
-      if (cancelled) return;
-      if (!ok) {
-        setSalesApiAvailable(false);
-        return;
-      }
-      try {
-        const [, products] = await Promise.all([hydrateKitchens(mountGen), hydrateSalesProducts(mountGen)]);
-        await hydrateTickets(products, mountGen);
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setSalesApiAvailable(true);
-        }
-      } catch {
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setSalesApiAvailable(false);
-        }
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hydrateKitchens, hydrateSalesProducts, hydrateTickets]);
+    if (ticketsHydratedOnce.current) return;
+    if (salesProductsQuery.data === undefined) return;
+    ticketsHydratedOnce.current = true;
+    hydrateTickets(salesProductsQuery.data)
+      .then(() => setSalesApiAvailable(true))
+      .catch(() => setSalesApiAvailable(false));
+  }, [salesProductsQuery.data, hydrateTickets]);
+
+  useEffect(() => {
+    if (kitchensQuery.isError || salesProductsQuery.isError) {
+      setSalesApiAvailable(false);
+    }
+  }, [kitchensQuery.isError, salesProductsQuery.isError]);
 
   useEffect(() => {
     void settingsApi.salesCategories.list().then(rows => {

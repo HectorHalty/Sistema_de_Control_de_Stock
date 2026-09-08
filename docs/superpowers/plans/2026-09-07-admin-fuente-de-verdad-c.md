@@ -109,13 +109,47 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
     — mismo comportamiento observable, mecanismo más confiable por debajo.
   - Sin diff de mutaciones en esta tarea.
 
-- [ ] **Task 4: Migrar Ventas — queries y mutaciones**
-  - Mismo patrón que Tasks 2/3 aplicado a `use-sales-state.ts`: productos de
-    venta, tickets, historial.
-  - **Cuidado explícito con el POS:** `VentasPosContext.tsx` consume este
-    hook. Probar el flujo de checkout con la red cortada (DevTools offline o
-    deteniendo el contenedor de la API) antes de cerrar la tarea — tiene que
-    seguir pudiendo cobrar con el cache local disponible.
+- [x] **Task 4: Migrar Ventas — queries y mutaciones**
+  - Mismo patrón que Task 2 aplicado a `use-sales-state.ts`: `kitchens` y
+    `salesProducts` pasan a `useQuery`; `hydrateKitchens`/
+    `hydrateSalesProducts` pasan a `queryClient.refetchQueries`. `tickets`
+    **no** se convirtió a `useQuery` — `hydrateTickets(products)` la llama
+    el POS (`VentasPosContext.tsx`) en 3 lugares pasándole explícitamente la
+    lista de productos vigente en ese momento; no hay un único "momento de
+    lectura" que una query pueda representar, así que se mantuvo como
+    función imperativa (mismo cuerpo de siempre). La hidratación inicial de
+    tickets se encadena una vez desde el `useEffect` que espera a
+    `salesProductsQuery.data`, replicando el orden de la cadena manual
+    anterior (kitchens+products en paralelo, tickets después).
+  - `invalidateSalesHydration` (consumido por el POS) se preservó con el
+    mismo nombre, reimplementado con `queryClient.cancelQueries` — mismo
+    criterio que Task 2.
+
+  **Bug real encontrado y corregido probando en vivo (no lo agarraba
+  ningún test unitario):** al loguearse, el admin entraba en un loop
+  infinito de pedidos a `/settings/*` y `/kitchen/orders` (decenas de miles
+  de requests en segundos, según Network). Causa: `shared/hooks/
+  use-local-storage.ts` devolvía un `setValue` **nuevo en cada render** (no
+  usaba `useCallback`) — cualquier `useEffect` que lo tuviera como
+  dependencia se volvía a disparar en cada render del componente, no sólo
+  cuando el valor cambiaba de verdad. Era un bug latente preexistente
+  (ya estaba así antes de Proyecto C) que nunca se manifestaba porque el
+  render del mount se agotaba rápido; al sumar más renders encadenados
+  durante el montaje (8 queries de Inventario + 2 de Ventas resolviendo por
+  separado, cada una disparando su propio effect), ese bug latente se
+  convirtió en loop real. **Fix:** `use-local-storage.ts` envuelve `setValue`
+  en `useCallback([key])` — no es un cambio de Proyecto C en sí, es una
+  corrección de un bug de la base de código que Proyecto C expuso.
+  - Verificado en el navegador (login real, API real, DB de desarrollo
+    reseteada a la baseline): consola sin errores, red estable después del
+    fix, creación de producto (`updateProduct`/`createProduct`) reflejada al
+    instante y persistida tras recargar la página, pantallas de Inventario
+    y Ventas/POS cargan sin errores.
+  - **No se probó el checkout del POS con la red cortada** — la base de
+    desarrollo recién reseteada no tenía productos de venta con stock
+    cargados para armar un ticket real; queda pendiente de una verificación
+    manual con datos de demo antes de mergear.
+  - `npm test` 175/175, `npm run build` sin errores.
 
 - [ ] **Task 5: Limpieza — quitar el `useLocalStorage` de datos de servidor**
   - Una vez migrados Inventario y Ventas, `useLocalStorage` (el hook a mano)
