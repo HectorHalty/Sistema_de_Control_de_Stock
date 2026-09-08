@@ -3,6 +3,7 @@ import {
   footballApi,
   getAccessToken,
   type FootballCancha,
+  type FootballInscription,
   type FootballJornada,
   type FootballJornadaPreferencias,
   type FootballMatch,
@@ -23,6 +24,106 @@ function FutbolSuccess({ message }: { message: string }) {
     <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
       {message}
     </div>
+  );
+}
+
+function TorneoFixtureWizard({
+  torneoId,
+  onGenerated,
+}: {
+  torneoId: string | null;
+  onGenerated: () => void | Promise<void>;
+}) {
+  const [fechas, setFechas] = useState('10');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const notSaturday = Boolean(fechaInicio) && new Date(`${fechaInicio}T00:00:00`).getDay() !== 6;
+
+  async function generate(e: React.FormEvent) {
+    e.preventDefault();
+    const token = getAccessToken();
+    if (!token || !torneoId || !fechaInicio) return;
+    const fechasNum = Number(fechas);
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await footballApi.generateFixture(
+        torneoId,
+        { fechas: fechasNum, fechaInicio },
+        token,
+      );
+      setSuccess(`Fixture completo generado: ${result.jornadasCreadas} jornada(s) creadas.`);
+      await onGenerated();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo generar el fixture';
+      if (/jornada/i.test(msg) && /ya tiene|existe|cargad/i.test(msg)) {
+        setError(
+          `${msg} — Este torneo ya tiene jornadas cargadas. Usá "Avanzado: agregar jornada suelta" más abajo para casos puntuales.`,
+        );
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={generate}
+      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+    >
+      <h3 className="text-sm font-semibold">Generar fixture completo del torneo</h3>
+      <p className="text-xs text-muted-foreground">
+        Crea todas las jornadas de la temporada en un solo paso. Si la cantidad de fechas supera
+        una vuelta completa, las fechas extra se arman como revancha (ida y vuelta) invirtiendo
+        local/visitante.
+      </p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          Cantidad de fechas
+          <input
+            className={futbolFieldClass()}
+            type="number"
+            min={1}
+            value={fechas}
+            onChange={(e) => setFechas(e.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">
+          Fecha de inicio
+          <input
+            className={futbolFieldClass()}
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={busy || !torneoId || !fechaInicio || !fechas}
+            className={futbolButtonClass()}
+          >
+            Generar fixture completo
+          </button>
+        </div>
+      </div>
+      {notSaturday && (
+        <p className="text-xs text-amber-600">⚠️ Esta fecha no es sábado.</p>
+      )}
+      {!torneoId && (
+        <p className="text-xs text-muted-foreground">
+          Seleccioná un torneo para poder generar su fixture.
+        </p>
+      )}
+      {error && <FutbolError message={error} />}
+      {success && <FutbolSuccess message={success} />}
+    </form>
   );
 }
 
@@ -205,6 +306,7 @@ export function FixturePanel() {
   const [jornadas, setJornadas] = useState<FootballJornada[]>([]);
   const [matches, setMatches] = useState<FootballMatch[]>([]);
   const [canchas, setCanchas] = useState<FootballCancha[]>([]);
+  const [inscripciones, setInscripciones] = useState<FootballInscription[]>([]);
   const [selectedJornada, setSelectedJornada] = useState('');
   const [numero, setNumero] = useState('1');
   const [fecha, setFecha] = useState('');
@@ -220,12 +322,16 @@ export function FixturePanel() {
     setLoading(true);
     setError(null);
     try {
-      const [j, c] = await Promise.all([
+      const [j, c, i] = await Promise.all([
         footballApi.jornadas.list(token, torneoId ?? undefined),
         footballApi.canchas(token),
+        torneoId
+          ? footballApi.inscriptions.list(token, torneoId)
+          : Promise.resolve<FootballInscription[]>([]),
       ]);
       setJornadas(j);
       setCanchas(c);
+      setInscripciones(i);
       const jId = selectedJornada || j[0]?.id || '';
       if (!selectedJornada && j[0]) setSelectedJornada(j[0].id);
       if (jId) {
@@ -335,6 +441,12 @@ export function FixturePanel() {
 
   const selectedJornadaData = jornadas.find((j) => j.id === selectedJornada);
 
+  function equipoLibreNombre(jornada: FootballJornada | undefined) {
+    if (!jornada?.equipoLibreId) return null;
+    const insc = inscripciones.find((i) => i.id === jornada.equipoLibreId);
+    return insc?.equipo?.name ?? insc?.abbr ?? null;
+  }
+
   async function updateSchedule(matchId: string, canchaId: string, horaInicio: string) {
     const token = getAccessToken();
     if (!token || !canchaId) return;
@@ -373,8 +485,11 @@ export function FixturePanel() {
         </div>
       )}
 
+      <TorneoFixtureWizard torneoId={torneoId} onGenerated={reload} />
+
       <SaturdayMultiCatSection />
 
+      <h3 className="text-sm font-semibold">Avanzado: agregar jornada suelta</h3>
       <form
         onSubmit={createJornada}
         className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-4"
@@ -419,6 +534,7 @@ export function FixturePanel() {
               {j.suspendida ? ' — SUSP.' : ''}
               {j.publicada ? ' ✓ pub.' : ''}
               — {new Date(j.fecha).toLocaleDateString('es-AR')}
+              {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
             </option>
           ))}
         </select>
@@ -450,6 +566,11 @@ export function FixturePanel() {
 
       {selectedJornadaData?.suspendida && (
         <p className="text-sm text-amber-600">Esta jornada está suspendida.</p>
+      )}
+      {equipoLibreNombre(selectedJornadaData) && (
+        <p className="text-sm text-muted-foreground">
+          Libre esta fecha: <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
+        </p>
       )}
 
       {selectedJornada && (
