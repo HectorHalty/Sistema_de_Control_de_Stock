@@ -127,15 +127,28 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     `db:drift` en 0.
   - `npm run test:db` 53/53 en verde contra el esquema nuevo.
 
-- [ ] **Task 7: Bloqueo optimista — backend**
-  - En cada `update` de las 4 entidades desde el admin: incluir `version` en
-    el `where` y hacer `version: { increment: 1 }` en el `data`. Si el
-    `update` no afecta ninguna fila (versión desactualizada), devolver 409
-    con un mensaje claro ("Este registro fue modificado por otra persona,
-    recargá y volvé a intentar").
-  - Test: dos actualizaciones concurrentes con la misma versión de partida —
-    una debe ganar, la otra debe recibir 409, ninguna debe perder datos
-    silenciosamente.
+- [x] **Task 7: Bloqueo optimista — backend**
+  - Helper compartido `common/optimistic-lock.ts`
+    (`assertVersionedUpdateApplied`): un `updateMany` condicionado por
+    `{ id, version }` es una sola sentencia SQL atómica, no hace falta
+    `SELECT ... FOR UPDATE` aparte. `count === 0` → 409 con mensaje claro.
+  - `version` es **opcional** en los 4 DTOs (`UpdateProductDto`,
+    `UpdateSalesProductDto`, `UpdatePurchaseOrderDto`, `UpsertConfigDto`):
+    mientras el admin no la mande (Task 8), el update sigue el camino viejo
+    sin chequeo — rollout no disruptivo.
+  - `stock.service.ts` (`updateProduct`, `updatePurchaseOrder`),
+    `sales.service.ts` (`updateSalesProduct`), `settings.service.ts`
+    (`upsertConfig`, reescrito a mano porque `upsert` no admite condicionar
+    la rama de `update` por versión).
+  - Ajustados los mocks de `test/helpers/stock-test-store.ts`
+    (`producto`/`ordenCompra`: `findUnique` con `include`, `updateMany`
+    versionado) para que la suite de siempre siguiera pasando.
+  - Test nuevo `test/db/optimistic-lock.test.ts` contra Postgres real: dos
+    ediciones concurrentes con la misma versión (una gana, la otra 409, sin
+    mezclar datos), un update sin `version` no chequea nada, y el caso de
+    `Configuracion` (versión vieja en registro existente → 409; primera vez
+    con versión 0 → crea sin conflicto). 4/4 verde.
+  - `npm test` 209/209, `npm run test:db` 57/57.
 
 - [ ] **Task 8: Bloqueo optimista — frontend admin**
   - El admin tiene que mandar la `version` que tenía al cargar el registro, y

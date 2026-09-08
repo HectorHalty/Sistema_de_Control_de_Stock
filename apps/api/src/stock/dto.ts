@@ -72,6 +72,18 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   image?: string | null;
+
+  /**
+   * Bloqueo optimista: versión que el cliente tenía al cargar el producto.
+   * Si no coincide con la actual, el update se rechaza con 409 en vez de
+   * pisar silenciosamente la edición de otra persona. Opcional por ahora
+   * para no romper llamadas existentes (scripts, tests) que todavía no la
+   * mandan — sin ella, el update no chequea versión (comportamiento previo).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
 }
 
 export class AdjustStockDto {
@@ -231,6 +243,12 @@ export class UpdatePurchaseOrderDto {
   @ValidateNested({ each: true })
   @Type(() => PurchaseOrderItemDto)
   items?: PurchaseOrderItemDto[];
+
+  /** Bloqueo optimista — ver UpdateProductDto.version. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
 }
 
 export class ReceiveAllocationDto {

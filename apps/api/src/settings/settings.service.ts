@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, EstadoMesa, EstadoCuentaEquipo } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
 import {
   CreateAuditDto,
   CreatePrinterDto,
@@ -25,12 +26,33 @@ export class SettingsService {
     });
   }
 
-  upsertConfig(dto: UpsertConfigDto) {
-    return this.prisma.configuracion.upsert({
-      where: { key: dto.key },
-      create: { key: dto.key, scope: dto.scope, value: dto.value as Prisma.InputJsonValue },
-      update: { scope: dto.scope, value: dto.value as Prisma.InputJsonValue },
+  async upsertConfig(dto: UpsertConfigDto) {
+    if (dto.version === undefined) {
+      // Sin versión: comportamiento previo, sin chequeo (create-or-overwrite).
+      return this.prisma.configuracion.upsert({
+        where: { key: dto.key },
+        create: { key: dto.key, scope: dto.scope, value: dto.value as Prisma.InputJsonValue },
+        update: { scope: dto.scope, value: dto.value as Prisma.InputJsonValue },
+      });
+    }
+
+    // `upsert` no admite condicionar la rama de `update` por versión, así que
+    // se arma a mano: updateMany versionado y, si no pega, create() (primera
+    // vez) o 409 (versión desactualizada de un registro que sí existe).
+    const { count } = await this.prisma.configuracion.updateMany({
+      where: { key: dto.key, version: dto.version },
+      data: { scope: dto.scope, value: dto.value as Prisma.InputJsonValue, version: { increment: 1 } },
     });
+    if (count === 0) {
+      const existing = await this.prisma.configuracion.findUnique({ where: { key: dto.key } });
+      if (existing) {
+        assertVersionedUpdateApplied(0);
+      }
+      return this.prisma.configuracion.create({
+        data: { key: dto.key, scope: dto.scope, value: dto.value as Prisma.InputJsonValue },
+      });
+    }
+    return this.prisma.configuracion.findUnique({ where: { key: dto.key } });
   }
 
   listSalesCategories() {

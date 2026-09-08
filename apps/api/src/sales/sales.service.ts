@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, EstadoTicket } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
+import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
@@ -734,24 +735,31 @@ export class SalesService {
     price?: number; emoji?: string; active?: boolean; kind?: string;
     recipe?: { stockProductId: string; quantity: number }[];
     bundle?: { componentProductId: string; quantity: number }[];
+    version?: number;
   }) {
     await this.findSalesProductById(id);
 
     return this.prisma.$transaction(async (tx) => {
-      const { recipe, bundle, kind, ...productData } = data;
+      const { recipe, bundle, kind, version, ...productData } = data;
       const nextKind = kind === 'promo' ? 'promo' : kind === 'simple' ? 'simple' : undefined;
 
       if (nextKind === 'promo') {
         await this.validatePromoBundle(id, bundle ?? []);
       }
 
-      await tx.productoVenta.update({
-        where: { id },
-        data: {
-          ...productData,
-          ...(nextKind ? { kind: nextKind } : {}),
-        },
-      });
+      const updateData: Prisma.ProductoVentaUpdateInput = {
+        ...productData,
+        ...(nextKind ? { kind: nextKind } : {}),
+      };
+      if (version !== undefined) {
+        const { count } = await tx.productoVenta.updateMany({
+          where: { id, version },
+          data: { ...updateData, version: { increment: 1 } },
+        });
+        assertVersionedUpdateApplied(count);
+      } else {
+        await tx.productoVenta.update({ where: { id }, data: updateData });
+      }
 
       if (nextKind === 'promo') {
         await tx.itemReceta.deleteMany({ where: { salesProductId: id } });

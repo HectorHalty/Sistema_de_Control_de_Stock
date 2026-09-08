@@ -152,6 +152,12 @@ export class UpdateKitchenDto {
 }
 
 export class UpdateSalesProductDto {
+  /** Bloqueo optimista — ver stock/dto.ts UpdateProductDto.version. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
+
   @IsOptional()
   @IsString()
   name?: string;

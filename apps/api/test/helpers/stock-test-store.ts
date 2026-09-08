@@ -239,6 +239,27 @@ export function createPrismaMock(state: StockTestState) {
         }
         return order;
       },
+      findUnique: async ({ where, include }: { where: { id: string }; include?: { items: boolean } }) => {
+        const order = state.purchaseOrders.find(o => o.id === where.id);
+        if (!order) return null;
+        if (include?.items) {
+          return { ...order, items: state.purchaseOrderItems.filter(i => i.purchaseOrderId === order.id) };
+        }
+        return order;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; version?: number }; data: { status?: string; receivedAt?: Date; provider?: string; supplierId?: string | null; version?: { increment: number } } }) => {
+        const order = state.purchaseOrders.find(o => o.id === where.id) as (typeof state.purchaseOrders[number] & { version?: number }) | undefined;
+        if (!order || (where.version !== undefined && (order.version ?? 0) !== where.version)) {
+          return { count: 0 };
+        }
+        if (data.status) order.status = data.status;
+        if (data.receivedAt) order.receivedAt = data.receivedAt;
+        if (data.provider !== undefined) order.provider = data.provider;
+        if (data.supplierId !== undefined) order.supplierId = data.supplierId;
+        if (data.version) order.version = (order.version ?? 0) + data.version.increment;
+        order.updatedAt = new Date();
+        return { count: 1 };
+      },
       create: async ({ data, include }: { data: Record<string, unknown>; include?: { items: boolean } }) => {
         const id = randomUUID();
         const now = new Date();
@@ -250,6 +271,7 @@ export function createPrismaMock(state: StockTestState) {
           supplierId: (data.supplierId as string | null) ?? null,
           status: data.status as string,
           receivedAt: null,
+          version: 0,
           createdAt: now,
           updatedAt: now,
         };
@@ -426,8 +448,32 @@ export function createPrismaMock(state: StockTestState) {
           })),
         }));
       },
-      findUnique: async ({ where }: { where: { id: string } }) =>
-        state.products.find(p => p.id === where.id) ?? null,
+      findUnique: async ({ where, include }: { where: { id: string }; include?: { stockLevels?: boolean | { include?: { warehouse: boolean } } } }) => {
+        const row = state.products.find(p => p.id === where.id);
+        if (!row) return null;
+        if (include?.stockLevels) {
+          const stockLevels = state.stockLevels.filter(s => s.productId === where.id).map(s => ({
+            ...s,
+            warehouse: state.warehouses.find(w => w.id === s.warehouseId) ?? null,
+          }));
+          return { ...row, stockLevels };
+        }
+        return row;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; version?: number }; data: Record<string, unknown> & { version?: { increment: number } } }) => {
+        const row = state.products.find(p => p.id === where.id) as (Record<string, unknown> & { version?: number }) | undefined;
+        if (!row || (where.version !== undefined && (row.version ?? 0) !== where.version)) {
+          return { count: 0 };
+        }
+        for (const [key, value] of Object.entries(data)) {
+          if (key === 'version' && value && typeof value === 'object' && 'increment' in (value as object)) {
+            row.version = (row.version ?? 0) + (value as { increment: number }).increment;
+          } else if (value !== undefined) {
+            row[key] = value;
+          }
+        }
+        return { count: 1 };
+      },
       create: async ({ data, include }: { data: Record<string, unknown>; include?: { stockLevels?: boolean } }) => {
         const id = randomUUID();
         const row = {
@@ -439,6 +485,7 @@ export function createPrismaMock(state: StockTestState) {
           orderUnit: (data.orderUnit as number | null | undefined) ?? null,
           image: (data.image as string | null | undefined) ?? null,
           categoryId: data.categoryId as string,
+          version: 0,
         };
         state.products.push(row);
         if (include?.stockLevels) return { ...row, stockLevels: [] };

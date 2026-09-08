@@ -9,6 +9,7 @@ import { CreateProductDto, UpdateProductDto, AdjustStockDto,
 } from './dto';
 import { StockMovementsService } from './stock-movements.service';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
+import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
 
 /** Valores del enum, para descartar filtros inválidos sin consultar la base. */
 const ESTADOS_ORDEN_VALIDOS = new Set<string>(Object.values(EstadoOrdenCompra));
@@ -78,19 +79,32 @@ export class StockService {
 
   async updateProduct(id: string, dto: UpdateProductDto) {
     await this.findProductById(id);
-    return this.prisma.producto.update({
+    const data = {
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.code !== undefined ? { code: dto.code } : {}),
+      ...(dto.description !== undefined ? { description: dto.description } : {}),
+      ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+      ...(dto.unit !== undefined ? { unit: dto.unit } : {}),
+      ...(dto.orderUnit !== undefined ? { orderUnit: dto.orderUnit } : {}),
+      ...(dto.image !== undefined ? { image: dto.image } : {}),
+    };
+
+    if (dto.version !== undefined) {
+      const { count } = await this.prisma.producto.updateMany({
+        where: { id, version: dto.version },
+        data: { ...data, version: { increment: 1 } },
+      });
+      assertVersionedUpdateApplied(count);
+    } else {
+      await this.prisma.producto.update({ where: { id }, data });
+    }
+
+    const result = await this.prisma.producto.findUnique({
       where: { id },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.code !== undefined ? { code: dto.code } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
-        ...(dto.unit !== undefined ? { unit: dto.unit } : {}),
-        ...(dto.orderUnit !== undefined ? { orderUnit: dto.orderUnit } : {}),
-        ...(dto.image !== undefined ? { image: dto.image } : {}),
-      },
       include: { stockLevels: { include: { warehouse: true } } },
     });
+    if (!result) throw new NotFoundException(`Product ${id} not found`);
+    return result;
   }
 
   async deleteProduct(id: string) {
@@ -445,14 +459,24 @@ export class StockService {
         }
       }
 
-      return tx.ordenCompra.update({
-        where: { id: order.id },
-        data: {
-          ...(provider !== undefined ? { provider } : {}),
-          ...(dto.supplierId !== undefined ? { supplierId: dto.supplierId } : {}),
-        },
-        include: { items: true },
-      });
+      const data = {
+        ...(provider !== undefined ? { provider } : {}),
+        ...(dto.supplierId !== undefined ? { supplierId: dto.supplierId } : {}),
+      };
+
+      if (dto.version !== undefined) {
+        const { count } = await tx.ordenCompra.updateMany({
+          where: { id: order.id, version: dto.version },
+          data: { ...data, version: { increment: 1 } },
+        });
+        assertVersionedUpdateApplied(count);
+      } else {
+        await tx.ordenCompra.update({ where: { id: order.id }, data });
+      }
+
+      const result = await tx.ordenCompra.findUnique({ where: { id: order.id }, include: { items: true } });
+      if (!result) throw new NotFoundException(`Purchase order ${order.id} not found`);
+      return result;
     });
   }
 
