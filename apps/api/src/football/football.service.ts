@@ -163,6 +163,70 @@ export class FootballService {
     return this.prisma.categoriaConfig.findMany({ orderBy: { nombre: 'asc' } });
   }
 
+  async createCategoria(data: {
+    codigo: string;
+    nombre: string;
+    genero: 'hombres' | 'mujeres';
+    maxPlantel?: number;
+    maxIncorporaciones?: number;
+    minJugadoresInicio?: number;
+    grupoCanchasId?: string;
+    colorHex?: string;
+  }) {
+    const existing = await this.prisma.categoriaConfig.findUnique({ where: { codigo: data.codigo } });
+    if (existing) throw new ConflictException(`Ya existe una categoría con código "${data.codigo}"`);
+
+    return this.prisma.categoriaConfig.create({
+      data: {
+        codigo: data.codigo,
+        nombre: data.nombre,
+        genero: data.genero,
+        maxPlantel: data.maxPlantel ?? 20,
+        maxIncorporaciones: data.maxIncorporaciones ?? 3,
+        minJugadoresInicio: data.minJugadoresInicio ?? 7,
+        grupoCanchasId: data.grupoCanchasId,
+        colorHex: data.colorHex,
+      },
+    });
+  }
+
+  async updateCategoria(
+    id: string,
+    data: {
+      codigo?: string;
+      nombre?: string;
+      genero?: 'hombres' | 'mujeres';
+      maxPlantel?: number;
+      maxIncorporaciones?: number;
+      minJugadoresInicio?: number;
+      grupoCanchasId?: string | null;
+      colorHex?: string | null;
+    },
+  ) {
+    const existing = await this.prisma.categoriaConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Categoría no encontrada');
+
+    if (data.codigo && data.codigo !== existing.codigo) {
+      const dup = await this.prisma.categoriaConfig.findUnique({ where: { codigo: data.codigo } });
+      if (dup) throw new ConflictException(`Ya existe una categoría con código "${data.codigo}"`);
+    }
+
+    return this.prisma.categoriaConfig.update({ where: { id }, data });
+  }
+
+  async deleteCategoria(id: string) {
+    const existing = await this.prisma.categoriaConfig.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Categoría no encontrada');
+
+    const torneosCount = await this.prisma.torneo.count({ where: { categoriaId: id } });
+    if (torneosCount > 0) {
+      throw new ConflictException('No se puede borrar una categoría que ya tiene torneos asociados');
+    }
+
+    await this.prisma.categoriaConfig.delete({ where: { id } });
+    return { ok: true };
+  }
+
   async listCanchas() {
     return this.prisma.cancha.findMany({
       where: { activa: true },
@@ -236,13 +300,34 @@ export class FootballService {
 
   async updateInscription(
     id: string,
-    data: { abbr?: string; color?: string; activo?: boolean; descuentoPuntosWO?: number },
+    data: {
+      abbr?: string;
+      color?: string;
+      activo?: boolean;
+      descuentoPuntosWO?: number;
+      torneoId?: string;
+    },
   ) {
     const existing = await this.prisma.equipoInscripcion.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Inscripción ${id} no encontrada`);
+
+    const { torneoId, ...rest } = data;
+
+    if (torneoId && torneoId !== existing.torneoId) {
+      const torneo = await this.prisma.torneo.findUnique({ where: { id: torneoId } });
+      if (!torneo) throw new NotFoundException('Torneo destino no encontrado');
+
+      const conflicto = await this.prisma.equipoInscripcion.findUnique({
+        where: { torneoId_equipoId: { torneoId, equipoId: existing.equipoId } },
+      });
+      if (conflicto) {
+        throw new ConflictException('Este equipo ya está inscripto en el torneo destino');
+      }
+    }
+
     return this.prisma.equipoInscripcion.update({
       where: { id },
-      data,
+      data: { ...rest, ...(torneoId ? { torneoId } : {}) },
       include: { equipo: true, torneo: { include: { categoria: true } } },
     });
   }
@@ -320,19 +405,30 @@ export class FootballService {
       orderBy: [{ rolPlantel: 'asc' }, { persona: { apellido: 'asc' } }],
     });
 
+    const jugadoresMapeados = jugadores.map((j) => ({
+      id: j.id,
+      personaId: j.personaId,
+      nombre: j.persona.nombre,
+      apellido: j.persona.apellido,
+      dni: j.persona.dni,
+      email: j.persona.email,
+      fechaNacimiento: j.persona.fechaNacimiento?.toISOString().slice(0, 10) ?? null,
+      numeroCamiseta: j.numeroCamiseta,
+      rolPlantel: j.rolPlantel,
+    }));
+
+    // Capitán del plantel: si hay capitán y subcapitán, se prioriza el capitán
+    // como principal. Se devuelve a partir de la misma lista ya cargada
+    // (sin query adicional) para no duplicar el filtro por rolPlantel.
+    const capitan =
+      jugadoresMapeados.find((j) => j.rolPlantel === 'capitan') ??
+      jugadoresMapeados.find((j) => j.rolPlantel === 'subcapitan') ??
+      null;
+
     return {
       inscripcion,
-      jugadores: jugadores.map((j) => ({
-        id: j.id,
-        personaId: j.personaId,
-        nombre: j.persona.nombre,
-        apellido: j.persona.apellido,
-        dni: j.persona.dni,
-        email: j.persona.email,
-        fechaNacimiento: j.persona.fechaNacimiento?.toISOString().slice(0, 10) ?? null,
-        numeroCamiseta: j.numeroCamiseta,
-        rolPlantel: j.rolPlantel,
-      })),
+      jugadores: jugadoresMapeados,
+      capitan,
     };
   }
 

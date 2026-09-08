@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
-import { TipoEventoPartido } from '@prisma/client';
+import { GeneroCategoria, TipoEventoPartido } from '@prisma/client';
 
 export class UpdateInscriptionDto {
   @IsOptional()
@@ -18,6 +18,81 @@ export class UpdateInscriptionDto {
   @IsOptional()
   @IsInt()
   descuentoPuntosWO?: number;
+
+  @IsOptional()
+  @IsUUID()
+  torneoId?: string;
+}
+
+export class CreateCategoriaDto {
+  @IsString()
+  codigo: string;
+
+  @IsString()
+  nombre: string;
+
+  @IsEnum(GeneroCategoria)
+  genero: GeneroCategoria;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxPlantel?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxIncorporaciones?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minJugadoresInicio?: number;
+
+  @IsOptional()
+  @IsUUID()
+  grupoCanchasId?: string;
+
+  @IsOptional()
+  @IsString()
+  colorHex?: string;
+}
+
+export class UpdateCategoriaDto {
+  @IsOptional()
+  @IsString()
+  codigo?: string;
+
+  @IsOptional()
+  @IsString()
+  nombre?: string;
+
+  @IsOptional()
+  @IsEnum(GeneroCategoria)
+  genero?: GeneroCategoria;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxPlantel?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxIncorporaciones?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minJugadoresInicio?: number;
+
+  @IsOptional()
+  @IsUUID()
+  grupoCanchasId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  colorHex?: string | null;
 }
 
 export class UpdateCaptainDto {

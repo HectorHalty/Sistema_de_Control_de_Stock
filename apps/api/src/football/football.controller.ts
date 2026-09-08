@@ -17,7 +17,9 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
 import {
+  CreateCategoriaDto,
   UpdateCaptainDto,
+  UpdateCategoriaDto,
   UpdateInscriptionDto,
   UpdateMatchScheduleDto,
   UpdateMatchScoreDto,
@@ -93,6 +95,24 @@ export class FootballController {
   @Roles(...FOOTBALL_READ_ROLES)
   listCategorias() {
     return this.footballService.listCategorias();
+  }
+
+  @Post('categorias')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createCategoria(@Body() body: CreateCategoriaDto) {
+    return this.footballService.createCategoria(body);
+  }
+
+  @Put('categorias/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateCategoria(@Param('id') id: string, @Body() body: UpdateCategoriaDto) {
+    return this.footballService.updateCategoria(id, body);
+  }
+
+  @Delete('categorias/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  deleteCategoria(@Param('id') id: string) {
+    return this.footballService.deleteCategoria(id);
   }
 
   @Get('canchas')
