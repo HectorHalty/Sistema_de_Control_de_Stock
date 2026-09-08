@@ -1,12 +1,26 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { ErrorBoundary } from '@/app/layout/ErrorBoundary';
 import { authApi, isApiError, setAccessToken } from '@/app/api/client';
 import { attachNumberInputScrollGuard } from '@/shared/utils/number-input-scroll';
 import { storageKeys } from '@/shared/storage/keys';
+import { queryClient } from '@/app/queryClient';
 import { LoginPage } from '@/features/platform/pages/LoginPage';
 import type { CurrentUser } from '@/features/platform/types';
+
+/**
+ * localStorage acá es sólo la caché de lectura offline de React Query
+ * (Proyecto C) — no la fuente de verdad inicial que era antes. Si falla
+ * (cuota excedida, modo privado), React Query sigue funcionando en memoria
+ * sin persistencia entre recargas: no es un error fatal.
+ */
+const queryPersister = createSyncStoragePersister({
+  storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  key: 'lch-admin-query-cache',
+});
 
 function readStoredSession(): { user: CurrentUser; token: string } | null {
   try {
@@ -137,8 +151,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <AppShell />
-    </ErrorBoundary>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
+      <ErrorBoundary>
+        <AppShell />
+      </ErrorBoundary>
+    </PersistQueryClientProvider>
   );
 }

@@ -19,17 +19,19 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
 
 ## Tareas
 
-- [ ] **Task 0: Instalar React Query y montar el `QueryClientProvider`**
-  - `npm install @tanstack/react-query @tanstack/query-sync-storage-persister
-    @tanstack/react-query-persist-client` en `apps/web-admin`.
-  - `QueryClientProvider` en la raíz de la app (`app/App.tsx` o donde ya
-    viven los providers existentes), con `persistQueryClient` apuntando a
-    `window.localStorage` — mismo mecanismo de persistencia que hoy, pero
-    manejado por la librería en vez de a mano en cada hook.
-  - `QueryCache`/`MutationCache` con `onError` por defecto: por ahora sólo
-    loguea (la notificación real llega en la Task 1), para separar el setup
-    de infraestructura del mecanismo de aviso.
-  - Sin migrar ningún hook todavía. `npm test` y `npm run build` en verde.
+- [x] **Task 0: Instalar React Query y montar el `QueryClientProvider`**
+  - Instalado `@tanstack/react-query` + `@tanstack/query-sync-storage-persister`
+    + `@tanstack/react-query-persist-client` v5.102.8 en `apps/web-admin`.
+  - `app/queryClient.ts`: `QueryClient` con `QueryCache`/`MutationCache` y un
+    `onError` por defecto (`notifyQueryError`, hoy sólo loguea — Task 1 lo
+    pisa con el toast real vía `setQueryErrorNotifier`, sin tocar este
+    archivo).
+  - `app/App.tsx`: `PersistQueryClientProvider` envolviendo `ErrorBoundary`/
+    `AppShell`, persister de `localStorage` (clave `lch-admin-query-cache`).
+    Si `localStorage` falla (cuota, modo privado), React Query sigue
+    funcionando en memoria sin persistencia — no es fatal.
+  - Sin migrar ningún hook todavía. `npm test` (171/171) y `npm run build`
+    en verde.
 
 - [ ] **Task 1: Notificación global de errores**
   - Componente de toast/notificación centralizado (revisar primero si
