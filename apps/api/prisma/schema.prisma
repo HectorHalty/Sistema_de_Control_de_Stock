@@ -106,6 +106,7 @@ enum TipoEventoPartido {
   azul
   doble_amarilla
   expulsion_directa
+  gol_en_contra
 }
 
 enum GeneroCategoria {
@@ -144,8 +145,8 @@ model Usuario {
   name      String
   role      RolUsuario @default(Vendedor)
   password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   salesTickets TicketVenta[]      @relation("TicketsOperador")
   auditEntries EntradaAuditoria[]
@@ -673,15 +674,16 @@ model EquipoInscripcion {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  torneo       Torneo               @relation(fields: [torneoId], references: [id], onDelete: Cascade)
-  equipo       EquipoFutbol         @relation(fields: [equipoId], references: [id], onDelete: Restrict)
-  jugadores    InscripcionJugador[]
-  capitanes    CapitanAutorizado[]
-  homePartidos PartidoFutbol[]      @relation("HomeInscripcion")
-  awayPartidos PartidoFutbol[]      @relation("AwayInscripcion")
-  byePartidos  PartidoFutbol[]      @relation("EquipoLibre")
-  preferencias PreferenciaHorario[]
-  seguidores   CuentaPublica[]      @relation("EquipoSeguido")
+  torneo         Torneo               @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  equipo         EquipoFutbol         @relation(fields: [equipoId], references: [id], onDelete: Restrict)
+  jugadores      InscripcionJugador[]
+  capitanes      CapitanAutorizado[]
+  homePartidos   PartidoFutbol[]      @relation("HomeInscripcion")
+  awayPartidos   PartidoFutbol[]      @relation("AwayInscripcion")
+  byePartidos    PartidoFutbol[]      @relation("EquipoLibre")
+  jornadasLibres Jornada[]            @relation("JornadaLibre")
+  preferencias   PreferenciaHorario[]
+  seguidores     CuentaPublica[]      @relation("EquipoSeguido")
 
   @@unique([torneoId, equipoId])
   @@index([torneoId, activo])
@@ -837,10 +839,12 @@ model Jornada {
   suspendida     Boolean  @default(false)
   esRecuperacion Boolean  @default(false)
   publicada      Boolean  @default(false)
+  equipoLibreId  String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   torneo       Torneo               @relation(fields: [torneoId], references: [id], onDelete: Cascade)
+  equipoLibre  EquipoInscripcion?   @relation("JornadaLibre", fields: [equipoLibreId], references: [id], onDelete: SetNull)
   partidos     PartidoFutbol[]
   preferencias PreferenciaHorario[]
 
@@ -886,6 +890,7 @@ model PartidoFutbol {
   equipoLibreId     String?
   esWO              Boolean       @default(false)
   motivoWO          String?
+  reemplazaAId      String?       @unique
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -899,6 +904,8 @@ model PartidoFutbol {
   equipoLibre        EquipoInscripcion? @relation("EquipoLibre", fields: [equipoLibreId], references: [id], onDelete: SetNull)
   eventos            EventoPartido[]
   suspensionesOrigen Suspension[]       @relation("SuspensionOrigen")
+  reemplazaA         PartidoFutbol?     @relation("MatchRecovery", fields: [reemplazaAId], references: [id], onDelete: SetNull)
+  reemplazadoPor     PartidoFutbol?     @relation("MatchRecovery")
 
   @@index([status])
   @@index([date])
@@ -929,15 +936,17 @@ model EventoPartido {
 }
 
 model Suspension {
-  id              String   @id @default(uuid())
-  personaId       String
-  torneoId        String?
-  motivo          String
-  fechasRestantes Int      @default(1)
-  activa          Boolean  @default(true)
-  origenPartidoId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  personaId           String
+  torneoId            String?
+  motivo              String
+  fechasRestantes     Int?
+  pendienteDefinir    Boolean  @default(false)
+  ajustadoManualmente Boolean  @default(false)
+  activa              Boolean  @default(true)
+  origenPartidoId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   persona       Persona        @relation(fields: [personaId], references: [id], onDelete: Cascade)
   torneo        Torneo?        @relation(fields: [torneoId], references: [id], onDelete: SetNull)
