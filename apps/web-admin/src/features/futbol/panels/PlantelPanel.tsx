@@ -14,6 +14,16 @@ import {
   useFutbolOverview,
 } from '../futbol-shared';
 
+function formatFechaNacimiento(value?: string | null) {
+  if (!value) return '—';
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}/${month}/${year}`;
+  }
+  return value;
+}
+
 export function PlantelPanel() {
   const { torneoId } = useFutbolOverview();
   const [equipos, setEquipos] = useState<FootballInscription[]>([]);
@@ -93,25 +103,40 @@ export function PlantelPanel() {
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-4 py-3">Jugador</th>
+                <th className="px-4 py-3">Dorsal</th>
                 <th className="px-4 py-3">DNI</th>
+                <th className="px-4 py-3">Fecha Nac.</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Rol</th>
               </tr>
             </thead>
             <tbody>
-              {roster.jugadores.map((j) => (
-                <tr key={j.id} className="border-t border-border">
-                  <td className="px-4 py-3">
-                    {j.apellido}, {j.nombre}
-                  </td>
-                  <td className="px-4 py-3">{j.dni}</td>
-                  <td className="px-4 py-3">{j.email ?? '—'}</td>
-                  <td className="px-4 py-3">{j.rolPlantel}</td>
-                </tr>
-              ))}
+              {roster.jugadores.map((j) => {
+                const esCapitan = roster.capitan?.personaId === j.personaId;
+                return (
+                  <tr
+                    key={j.id}
+                    className={`border-t border-border ${esCapitan ? 'bg-primary/10' : ''}`}
+                  >
+                    <td className="px-4 py-3">
+                      {j.apellido}, {j.nombre}
+                      {esCapitan && (
+                        <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 text-xs font-semibold text-primary">
+                          Capitán
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{j.numeroCamiseta ?? '—'}</td>
+                    <td className="px-4 py-3">{j.dni}</td>
+                    <td className="px-4 py-3">{formatFechaNacimiento(j.fechaNacimiento)}</td>
+                    <td className="px-4 py-3">{j.email ?? '—'}</td>
+                    <td className="px-4 py-3">{j.rolPlantel}</td>
+                  </tr>
+                );
+              })}
               {roster.jugadores.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                     Sin jugadores cargados aún
                   </td>
                 </tr>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Pencil, RefreshCw } from 'lucide-react';
 import { footballApi, getAccessToken, type FootballSuspension } from '@/app/api/client';
 import {
   FutbolError,
@@ -8,6 +8,135 @@ import {
   futbolFieldClass,
   useFutbolOverview,
 } from '../futbol-shared';
+
+function FechasRestantesCell({
+  row,
+  onSave,
+}: {
+  row: FootballSuspension;
+  onSave: (fechasRestantes: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(row.fechasRestantes ?? 0));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(String(row.fechasRestantes ?? 0));
+    setEditing(false);
+  }, [row.fechasRestantes, row.id]);
+
+  async function commit() {
+    setSaving(true);
+    try {
+      await onSave(Number(value) || 0);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (row.fechasRestantes === null) {
+    if (!editing) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            A definir
+          </span>
+          <button
+            type="button"
+            className={futbolButtonClass('ghost')}
+            onClick={() => {
+              setValue('0');
+              setEditing(true);
+            }}
+          >
+            Definir cantidad de fechas
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          autoFocus
+          className={`${futbolFieldClass()} w-20`}
+          value={value}
+          disabled={saving}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          type="button"
+          disabled={saving}
+          className={futbolButtonClass()}
+          onClick={() => void commit()}
+        >
+          Guardar
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          className={futbolButtonClass('ghost')}
+          onClick={() => setEditing(false)}
+        >
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {editing ? (
+        <>
+          <input
+            type="number"
+            min={0}
+            autoFocus
+            className={`${futbolFieldClass()} w-20`}
+            value={value}
+            disabled={saving}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <button
+            type="button"
+            disabled={saving}
+            className={futbolButtonClass()}
+            onClick={() => void commit()}
+          >
+            Guardar
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            className={futbolButtonClass('ghost')}
+            onClick={() => setEditing(false)}
+          >
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="font-medium">{row.fechasRestantes}</span>
+          <button
+            type="button"
+            aria-label="Editar fechas restantes"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil size={14} />
+          </button>
+        </>
+      )}
+      {row.ajustadoManualmente && (
+        <span className="text-xs text-muted-foreground" title="No se pisa al sincronizar desde eventos">
+          (editado manualmente)
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function SuspendidosPanel() {
   const { torneoId } = useFutbolOverview();
@@ -62,9 +191,10 @@ export function SuspendidosPanel() {
   return (
     <FutbolPanelShell title="Suspendidos">
       <p className="text-sm text-muted-foreground">
-        Las sanciones se generan automáticamente al cargar tarjetas en Resultados (roja: 2 fechas,
-        doble amarilla: 1, 5 amarillas acumuladas: 1). Las fechas restantes se descuentan con cada
-        partido jugado del equipo (excepto jornadas suspendidas por lluvia).
+        Las sanciones se generan automáticamente al cargar tarjetas en Resultados (roja directa: a
+        definir por el admin, doble amarilla: 1 fecha, 5 amarillas acumuladas: 1). Las fechas
+        restantes se descuentan con cada partido jugado del equipo (excepto jornadas suspendidas por
+        lluvia).
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -109,14 +239,9 @@ export function SuspendidosPanel() {
                   <td className="px-4 py-3">{row.persona?.dni}</td>
                   <td className="px-4 py-3">{row.motivo}</td>
                   <td className="px-4 py-3">
-                    <input
-                      type="number"
-                      min={0}
-                      className={`${futbolFieldClass()} w-20`}
-                      defaultValue={row.fechasRestantes}
-                      onBlur={(e) =>
-                        updateRow(row.id, { fechasRestantes: Number(e.target.value) || 0 })
-                      }
+                    <FechasRestantesCell
+                      row={row}
+                      onSave={(fechasRestantes) => updateRow(row.id, { fechasRestantes })}
                     />
                   </td>
                   <td className="px-4 py-3">

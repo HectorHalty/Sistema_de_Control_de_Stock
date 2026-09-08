@@ -23,6 +23,7 @@ const EVENT_TYPES = [
   { value: 'roja', label: 'Roja' },
   { value: 'doble_amarilla', label: 'Doble amarilla' },
   { value: 'expulsion_directa', label: 'Expulsión directa' },
+  { value: 'gol_en_contra', label: 'Gol en contra' },
 ] as const;
 
 function eventLabel(tipo: string) {
