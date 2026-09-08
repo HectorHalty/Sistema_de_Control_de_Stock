@@ -8,6 +8,7 @@ import { authApi, isApiError, setAccessToken } from '@/app/api/client';
 import { attachNumberInputScrollGuard } from '@/shared/utils/number-input-scroll';
 import { storageKeys } from '@/shared/storage/keys';
 import { queryClient } from '@/app/queryClient';
+import { GlobalToast } from '@/shared/components/GlobalToast';
 import { LoginPage } from '@/features/platform/pages/LoginPage';
 import type { CurrentUser } from '@/features/platform/types';
 
@@ -155,6 +156,7 @@ export default function App() {
       <ErrorBoundary>
         <AppShell />
       </ErrorBoundary>
+      <GlobalToast />
     </PersistQueryClientProvider>
   );
 }

@@ -33,15 +33,32 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
   - Sin migrar ningún hook todavía. `npm test` (171/171) y `npm run build`
     en verde.
 
-- [ ] **Task 1: Notificación global de errores**
-  - Componente de toast/notificación centralizado (revisar primero si
-    `VentasPosContext.tsx` (`setToast`) ya tiene una UI reusable, o si hay
-    que crear una — no duplicar si ya existe algo razonable).
-  - Conectar `onError` del `QueryCache`/`MutationCache` de la Task 0 a ese
-    componente: cualquier query o mutation que falle dispara el aviso, sin
-    que cada hook tenga que acordarse de llamarlo.
-  - Test: una query/mutation de prueba que falla dispara el toast (test de
-    componente, no E2E).
+- [x] **Task 1: Notificación global de errores**
+  - `VentasPosContext.tsx`/`ReturnsModule.tsx` tienen su propio `toast`
+    (estado de React, scope local al POS) — no sirve como mecanismo global
+    porque `queryClient.ts` vive fuera del árbol de React y no puede usar
+    hooks. Se creó uno nuevo, reusando el mismo estilo visual
+    (`fixed top-4 left-1/2 ... bg-gray-900`) para que no se sienta como un
+    elemento ajeno a la app.
+  - `shared/notify.ts`: pub/sub mínimo sin dependencias
+    (`notifyError`/`subscribeToErrors`) — el puente entre código fuera de
+    React (`queryClient.ts`) y la UI.
+  - `shared/components/GlobalToast.tsx`: único suscriptor en producción,
+    montado una vez en `App.tsx` (dentro del `PersistQueryClientProvider`).
+    Auto-descarta a los 6s.
+  - `app/queryClient.ts`: el `onError` de `QueryCache`/`MutationCache` ahora
+    llama `notifyError` directamente — reemplaza el placeholder de la
+    Task 0.
+  - No reemplaza los `try/catch` puntuales que ya muestran su propio mensaje
+    en algunas pantallas — es la red de seguridad para lo que antes fallaba
+    en silencio (la hidratación de los 6 `use-*-state.ts`, confirmado en el
+    spec).
+  - Test nuevo `shared/notify.test.ts` (lógica del pub/sub — el proyecto no
+    tiene `@testing-library/react` para probar el componente en sí, y no se
+    suma sólo para esto): entrega a suscriptores activos, no entrega tras
+    `unsubscribe`, ids distintos por evento, múltiples suscriptores reciben
+    el mismo evento. 4/4 verde.
+  - `npm test` 175/175, `npm run build` sin errores.
 
 - [ ] **Task 2: Migrar Inventario — queries de lectura**
   - Reemplazar los `useLocalStorage` + `useEffect` de hidratación en

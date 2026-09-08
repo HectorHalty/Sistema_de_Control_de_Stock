@@ -9,20 +9,11 @@
  * mano de forma síncrona.
  *
  * El `onError` por defecto de acá abajo es el punto único donde CUALQUIER
- * query o mutation que falle puede avisar al operador (Task 1 conecta el
- * toast real; por ahora sólo loguea para separar infraestructura de UI).
+ * query o mutation que falle avisa al operador, vía `notifyError`
+ * (`shared/notify.ts`) → `<GlobalToast />` (Task 1).
  */
 import { QueryCache, QueryClient, MutationCache } from '@tanstack/react-query';
-
-/** Reemplazado por Task 1 con el toast real. Exportado para que Task 1 lo pise sin tocar este archivo. */
-export let notifyQueryError: (message: string) => void = (message) => {
-  // eslint-disable-next-line no-console
-  console.error('[react-query]', message);
-};
-
-export function setQueryErrorNotifier(fn: (message: string) => void): void {
-  notifyQueryError = fn;
-}
+import { notifyError } from '@/shared/notify';
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -42,9 +33,9 @@ export const queryClient = new QueryClient({
     },
   },
   queryCache: new QueryCache({
-    onError: (error) => notifyQueryError(describeError(error)),
+    onError: (error) => notifyError(describeError(error)),
   }),
   mutationCache: new MutationCache({
-    onError: (error) => notifyQueryError(describeError(error)),
+    onError: (error) => notifyError(describeError(error)),
   }),
 });
