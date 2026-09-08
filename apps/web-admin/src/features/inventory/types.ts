@@ -112,22 +112,6 @@ export interface ConsumptionLog {
   }[];
 }
 
-export interface EmployeeConsumptionEntry {
-  id: string;
-  date: string;
-  day: string;
-  createdAtISO: string;
-  productId: string;
-  productName: string;
-  productCode: string;
-  warehouseId: string;
-  warehouseName: string;
-  quantity: number;
-  unit: UnidadMedida;
-  previousStock: number;
-  newStock: number;
-}
-
 export type AuditModule = 'stock' | 'ventas';
 
 export interface AuditEntry {

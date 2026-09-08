@@ -25,7 +25,6 @@ export default function AuthenticatedApp({ initialUser, onLogout }: Authenticate
     backfilledRef.current = true;
     const backfilled = buildBackfillMovements({
       existingMovements: appState.stockMovements,
-      employeeConsumptionLogs: appState.employeeConsumptionLogs,
       salesTickets: appState.salesTickets,
       salesProducts: appState.salesProducts,
       orders: appState.orders,

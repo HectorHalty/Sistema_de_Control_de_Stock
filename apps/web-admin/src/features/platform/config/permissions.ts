@@ -19,7 +19,6 @@ export type StockRoute =
   | 'pedidos'
   | 'proveedores'
   | 'consumo'
-  | 'registrar-consumo'
   | 'reportes';
 
 export type StockReportTab = 'control' | 'movimientos' | 'alertas' | 'historial';
@@ -29,6 +28,8 @@ export type VentasTab =
   | 'mostrador'
   | 'pedidos'
   | 'devoluciones'
+  /** Registrar consumo interno — ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md. */
+  | 'consumo'
   | 'productos'
   | 'mesas'
   | 'reportes';
@@ -76,7 +77,6 @@ const STOCK_ROUTES: Record<PlatformRole, StockRoute[] | 'all'> = {
     'pedidos',
     'proveedores',
     'consumo',
-    'registrar-consumo',
     'reportes',
   ],
   Vendedor: [],
@@ -93,7 +93,7 @@ const STOCK_REPORT_DENIED: Partial<Record<PlatformRole, StockReportTab[]>> = {
 const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
   SuperAdmin: 'all',
   Operador_Stock: [],
-  Vendedor: ['mostrador', 'pedidos', 'devoluciones'],
+  Vendedor: ['mostrador', 'pedidos', 'devoluciones', 'consumo'],
   Gerente_Ventas: 'all',
   Operador_Futbol: [],
   Operador_Cocina: [],
@@ -199,7 +199,6 @@ export function stockRouteFromPath(pathname: string): StockRoute | null {
   if (pathname.startsWith('/pedidos')) return 'pedidos';
   if (pathname.startsWith('/proveedores')) return 'proveedores';
   if (pathname.startsWith('/consumo')) return 'consumo';
-  if (pathname.startsWith('/registrar-consumo')) return 'registrar-consumo';
   if (pathname.startsWith('/reportes')) return 'reportes';
   return null;
 }

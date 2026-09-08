@@ -269,27 +269,6 @@ export const stockApi = {
       return apiFetch<ApiStockMovement[]>(`/stock/movements${qs ? `?${qs}` : ''}`);
     },
   },
-  employeeConsumptions: {
-    list: (limit?: number) => {
-      const q = limit ? `?limit=${limit}` : '';
-      return apiFetch<ApiEmployeeConsumption[]>(`/stock/employee-consumptions${q}`);
-    },
-    create: (
-      data: {
-        productId: string;
-        warehouseId: string;
-        quantity: number;
-        note?: string;
-        operatorId?: string;
-        operatorName?: string;
-        operatorRole?: string;
-      },
-      token: string,
-    ) =>
-      apiFetch<ApiEmployeeConsumption>('/stock/employee-consumptions', {
-        method: 'POST', token, body: data,
-      }),
-  },
   countSessions: {
     list: (limit?: number) => {
       const q = limit ? `?limit=${limit}` : '';
@@ -404,6 +383,9 @@ export const salesApi = {
   },
   checkout: (data: CheckoutPayload, token: string) =>
     apiFetch<CheckoutResult>('/sales/checkout', { method: 'POST', token, body: data }),
+  /** Consumo interno: mismo payload que checkout, el servidor fuerza precio $0 y origen 'consumo'. */
+  consumption: (data: CheckoutPayload, token: string) =>
+    apiFetch<CheckoutResult>('/sales/consumption', { method: 'POST', token, body: data }),
   returnSale: (data: ReturnPayload, token: string) =>
     apiFetch<ReturnResult>('/sales/return', { method: 'POST', token, body: data }),
   returnItems: (data: ReturnItemsPayload, token: string) =>
@@ -921,25 +903,6 @@ export interface ApiStockMovement {
   operatorName?: string | null;
 }
 
-export interface ApiEmployeeConsumption {
-  id: string;
-  day: string;
-  createdAt: string;
-  productId: string;
-  productName: string;
-  productCode?: string | null;
-  warehouseId: string;
-  warehouseName: string;
-  quantity: number | string;
-  unit: string;
-  previousStock: number | string;
-  newStock: number | string;
-  operatorId?: string | null;
-  operatorName?: string | null;
-  operatorRole?: string | null;
-  note?: string | null;
-}
-
 export interface ApiStockCountEntry {
   id: string;
   sessionId: string;
@@ -1016,6 +979,8 @@ export interface SalesTicket {
   status: string;
   total: number;
   operatorId: string;
+  /** 'pos' | 'online' | 'consumo' — un ticket de consumo interno tiene total $0 y no se imprime. */
+  origen?: string;
   note?: string;
   operator?: { username: string };
   items: {

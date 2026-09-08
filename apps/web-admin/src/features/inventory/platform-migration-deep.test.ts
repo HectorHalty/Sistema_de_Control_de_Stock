@@ -4,7 +4,6 @@ import {
   mapApiMovementToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
-  mapApiEmployeeConsumptionToLocal,
   mapApiCountSessionToLocal,
 } from '@/features/inventory/api/inventory-mappers';
 import type { StockProduct, ApiPurchaseOrder, ApiSupplier } from '@/app/api/client';
@@ -159,24 +158,8 @@ describe('Integridad — mappers inventario (catálogo + operaciones + pedidos)'
     expect(mov.reference).toBe('PED-001');
   });
 
-  it('Fase 3.1: consumo empleado mapea stocks previo/nuevo', () => {
-    const row = mapApiEmployeeConsumptionToLocal({
-      id: 'ec1',
-      day: '2026-06-16',
-      createdAt: '2026-06-16T12:00:00Z',
-      productId: 'uuid-p',
-      productName: 'Coca',
-      productCode: 'BEB-001',
-      warehouseId: 'w1',
-      warehouseName: 'Depósito',
-      quantity: 2,
-      unit: 'unidades',
-      previousStock: 12,
-      newStock: 10,
-    });
-    expect(row.previousStock).toBe(12);
-    expect(row.newStock).toBe(10);
-  });
+  // Fase 3.1 (mapApiEmployeeConsumptionToLocal) se retiró junto con
+  // ConsumoEmpleado — ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
 
   it('Fase 3.2: proveedor expone productIds planos', () => {
     const supplier: ApiSupplier = {

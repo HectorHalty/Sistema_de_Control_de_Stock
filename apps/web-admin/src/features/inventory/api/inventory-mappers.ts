@@ -11,13 +11,12 @@ import type {
   Warehouse as ApiWarehouse,
   Category as ApiCategory,
   ApiStockMovement,
-  ApiEmployeeConsumption,
   ApiStockCountSession,
   ApiSupplier,
   ApiPurchaseOrder,
 } from '@/app/api/client';
 import type {
-  Product, Warehouse, Category, StockMovement, EmployeeConsumptionEntry, StockCountSession,
+  Product, Warehouse, Category, StockMovement, StockCountSession,
   Supplier, Order,
 } from '@/features/inventory/types';
 
@@ -67,28 +66,6 @@ export function mapApiMovementToLocal(api: ApiStockMovement): StockMovement {
     reference: api.reference ?? undefined,
     operatorId: api.operatorId ?? undefined,
     operatorName: api.operatorName ?? undefined,
-  };
-}
-
-export function mapApiEmployeeConsumptionToLocal(api: ApiEmployeeConsumption): EmployeeConsumptionEntry {
-  return {
-    id: api.id,
-    date: new Date(api.createdAt).toLocaleString('es-AR'),
-    day: api.day,
-    createdAtISO: api.createdAt,
-    productId: api.productId,
-    productName: api.productName,
-    productCode: api.productCode ?? '',
-    warehouseId: api.warehouseId,
-    warehouseName: api.warehouseName,
-    quantity: Number(api.quantity),
-    unit: api.unit as EmployeeConsumptionEntry['unit'],
-    previousStock: Number(api.previousStock),
-    newStock: Number(api.newStock),
-    operatorId: api.operatorId ?? undefined,
-    operatorName: api.operatorName ?? undefined,
-    operatorRole: api.operatorRole ?? undefined,
-    note: api.note ?? undefined,
   };
 }
 

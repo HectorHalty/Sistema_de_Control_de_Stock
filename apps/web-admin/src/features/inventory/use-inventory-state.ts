@@ -10,7 +10,6 @@ import {
   mapApiWarehouseToLocal,
   mapApiCategoryToLocal,
   mapApiMovementToLocal,
-  mapApiEmployeeConsumptionToLocal,
   mapApiCountSessionToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
@@ -32,7 +31,7 @@ import {
   resolveCategoryForProduct,
   uuidProductIds,
 } from './catalog-persistence';
-import type { AuditEntry, AuditModule, Category, ConsumptionLog, EmployeeConsumptionEntry, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
+import type { AuditEntry, AuditModule, Category, ConsumptionLog, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -48,9 +47,9 @@ function appendAudit(
 }
 
 export function useInventoryState() {
-  // Los 8 datasets que vienen del servidor (products, warehouses, orders,
-  // categories, suppliers, stockMovements, stockCountSessions,
-  // employeeConsumptionLogs) YA NO se inicializan de localStorage — ver
+  // Los 7 datasets que vienen del servidor (products, warehouses, orders,
+  // categories, suppliers, stockMovements, stockCountSessions) YA NO se
+  // inicializan de localStorage — ver
   // Proyecto C, Task 2 (docs/superpowers/plans/2026-09-07-admin-fuente-de-
   // verdad-c.md). React Query es la fuente de verdad de lectura; localStorage
   // queda como caché de revalidación (Task 0, PersistQueryClientProvider),
@@ -60,13 +59,17 @@ export function useInventoryState() {
   // ningún endpoint de lectura (auditLog se manda al servidor al crear vía
   // addStockAudit, pero nunca se hidrata de vuelta) — no son parte del
   // problema que resuelve este proyecto.
+  //
+  // El consumo de empleado (registerEmployeeConsumption, employeeConsumptionLogs)
+  // se retiró de acá: ahora vive en Ventas como un ticket real (precio $0,
+  // origen 'consumo'), no como un registro aparte de retiro de insumo suelto
+  // — ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [warehouses, setWarehouses] = useState<Warehouse[]>(initialWarehouses);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>(storageKeys.inventory.auditLog, initialAuditLog);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [consumptionLogs, setConsumptionLogs] = useLocalStorage<ConsumptionLog[]>(storageKeys.inventory.consumption, []);
-  const [employeeConsumptionLogs, setEmployeeConsumptionLogs] = useState<EmployeeConsumptionEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [stockCountSessions, setStockCountSessions] = useState<StockCountSession[]>([]);
@@ -129,10 +132,6 @@ export function useInventoryState() {
     queryKey: ['inventory', 'movements'],
     queryFn: () => stockApi.movements.list({ limit: 500 }).then(rows => rows.map(mapApiMovementToLocal)),
   });
-  const employeeConsumptionsQuery = useQuery({
-    queryKey: ['inventory', 'employeeConsumptions'],
-    queryFn: () => stockApi.employeeConsumptions.list(200).then(rows => rows.map(mapApiEmployeeConsumptionToLocal)),
-  });
   const countSessionsQuery = useQuery({
     queryKey: ['inventory', 'countSessions'],
     queryFn: () => stockApi.countSessions.list(100).then(rows => rows.map(mapApiCountSessionToLocal)),
@@ -165,10 +164,6 @@ export function useInventoryState() {
   );
   const hydrateMovements = useCallback(
     () => queryClient.refetchQueries({ queryKey: ['inventory', 'movements'] }),
-    [queryClient],
-  );
-  const hydrateEmployeeConsumptions = useCallback(
-    () => queryClient.refetchQueries({ queryKey: ['inventory', 'employeeConsumptions'] }),
     [queryClient],
   );
   const hydrateCountSessions = useCallback(
@@ -218,11 +213,6 @@ export function useInventoryState() {
   }, [movementsQuery.data]);
 
   useEffect(() => {
-    if (employeeConsumptionsQuery.data === undefined) return;
-    setEmployeeConsumptionLogs(employeeConsumptionsQuery.data);
-  }, [employeeConsumptionsQuery.data]);
-
-  useEffect(() => {
     if (countSessionsQuery.data === undefined) return;
     setStockCountSessions(countSessionsQuery.data);
   }, [countSessionsQuery.data]);
@@ -244,7 +234,7 @@ export function useInventoryState() {
 
   const hydrationQueries = [
     categoriesQuery, warehousesQuery, productsQuery, movementsQuery,
-    employeeConsumptionsQuery, countSessionsQuery, suppliersQuery, ordersQuery,
+    countSessionsQuery, suppliersQuery, ordersQuery,
   ];
 
   useEffect(() => {
@@ -260,9 +250,9 @@ export function useInventoryState() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     categoriesQuery.isError, warehousesQuery.isError, productsQuery.isError, movementsQuery.isError,
-    employeeConsumptionsQuery.isError, countSessionsQuery.isError, suppliersQuery.isError, ordersQuery.isError,
+    countSessionsQuery.isError, suppliersQuery.isError, ordersQuery.isError,
     categoriesQuery.isSuccess, warehousesQuery.isSuccess, productsQuery.isSuccess, movementsQuery.isSuccess,
-    employeeConsumptionsQuery.isSuccess, countSessionsQuery.isSuccess, suppliersQuery.isSuccess, ordersQuery.isSuccess,
+    countSessionsQuery.isSuccess, suppliersQuery.isSuccess, ordersQuery.isSuccess,
   ]);
 
   const persistCategoryId = useCallback(
@@ -582,29 +572,6 @@ export function useInventoryState() {
     [],
   );
 
-  const registerEmployeeConsumption = useCallback(
-    async (input: {
-      productId: string;
-      warehouseId: string;
-      quantity: number;
-      operatorId?: string;
-      operatorName?: string;
-      operatorRole?: string;
-      note?: string;
-    }): Promise<void> => {
-      const { operatorId, operatorName, ...rest } = input;
-      await stockApi.employeeConsumptions.create({
-        ...rest,
-        ...operatorFields({ operatorId, operatorName }),
-      }, '');
-      markApiSynced();
-      scheduleBackgroundHydrate(() =>
-        Promise.all([hydrateProducts(), hydrateMovements(), hydrateEmployeeConsumptions()]),
-      );
-    },
-    [hydrateProducts, hydrateMovements, hydrateEmployeeConsumptions, markApiSynced],
-  );
-
   const saveStockCountSession = useCallback(
     async (session: StockCountSession): Promise<void> => {
       await stockApi.countSessions.create(
@@ -632,12 +599,11 @@ export function useInventoryState() {
   const refreshOperations = useCallback(async () => {
     await Promise.all([
       hydrateMovements(),
-      hydrateEmployeeConsumptions(),
       hydrateCountSessions(),
       hydrateSuppliers(),
       hydrateOrders(),
     ]);
-  }, [hydrateMovements, hydrateEmployeeConsumptions, hydrateCountSessions, hydrateSuppliers, hydrateOrders]);
+  }, [hydrateMovements, hydrateCountSessions, hydrateSuppliers, hydrateOrders]);
 
   const createSupplier = useCallback(
     async (input: { name: string; productIds: string[] }): Promise<void> => {
@@ -796,8 +762,6 @@ export function useInventoryState() {
     setCategories,
     consumptionLogs,
     setConsumptionLogs,
-    employeeConsumptionLogs,
-    setEmployeeConsumptionLogs,
     suppliers,
     setSuppliers,
     stockMovements,
@@ -812,7 +776,6 @@ export function useInventoryState() {
     invalidateInventoryHydration: invalidateMountHydration,
     refreshStockProducts: hydrateProducts,
     refreshOperations,
-    registerEmployeeConsumption,
     saveStockCountSession,
     createSupplier,
     updateSupplier,

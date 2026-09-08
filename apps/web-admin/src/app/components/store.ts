@@ -11,7 +11,6 @@ export type {
   Order,
   Supplier,
   ConsumptionLog,
-  EmployeeConsumptionEntry,
   AuditEntry,
   AuditModule,
   StockMovement,

@@ -93,6 +93,23 @@ export function useSalesApiAdapter() {
     }
   }, []);
 
+  /** Consumo interno: mismo payload que checkout, servidor fuerza precio $0 y origen 'consumo'. */
+  const registerConsumption = useCallback(async (payload: CheckoutPayload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await salesApi.consumption(payload, '');
+      setApiAvailable(true);
+      return { ok: true, apiUnavailable: false, result } as const;
+    } catch (e) {
+      const msg = mutationError(e, 'No se pudo registrar el consumo');
+      setError(msg);
+      return { ok: false, apiUnavailable: false, error: msg } as const;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const returnSale = useCallback(async (payload: ReturnPayload) => {
     setLoading(true);
     setError(null);
@@ -157,7 +174,7 @@ export function useSalesApiAdapter() {
     }
   }, []);
 
-  return { checkout, returnSale, returnItems, voidTicket, updateTicketItems, loading, error, apiAvailable };
+  return { checkout, registerConsumption, returnSale, returnItems, voidTicket, updateTicketItems, loading, error, apiAvailable };
 }
 
 // ==================== Printing Adapter ====================

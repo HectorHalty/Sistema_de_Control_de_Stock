@@ -1,5 +1,4 @@
 import type {
-  EmployeeConsumptionEntry,
   Order,
   SalesProduct,
   SalesTicket,
@@ -9,7 +8,6 @@ import { buildRequiredStockFromCart } from '@/features/sales/stock-link';
 
 interface BackfillSources {
   existingMovements: StockMovement[];
-  employeeConsumptionLogs: EmployeeConsumptionEntry[];
   salesTickets: SalesTicket[];
   salesProducts: SalesProduct[];
   orders: Order[];
@@ -30,11 +28,17 @@ function dayToISO(day: string): string {
 
 /**
  * Reconstruye el libro de movimientos a partir del historial ya existente
- * (consumos de empleados, tickets de venta/devolución y pedidos recibidos).
- * Idempotente: omite cualquier documento cuya referencia ya tenga movimientos.
+ * (tickets de venta/consumo/devolución y pedidos recibidos). Idempotente:
+ * omite cualquier documento cuya referencia ya tenga movimientos.
+ *
+ * El backfill de consumos de empleados (viejo modelo de insumo suelto, sin
+ * receta) se retiró junto con `ConsumoEmpleado` — ver
+ * docs/superpowers/plans/2026-09-08-consumo-como-venta.md. Un consumo hoy
+ * es un `TicketVenta` más (origen 'consumo'), así que ya lo cubre el punto
+ * 1 de acá abajo igual que cualquier venta.
  */
 export function buildBackfillMovements(sources: BackfillSources): StockMovement[] {
-  const { existingMovements, employeeConsumptionLogs, salesTickets, salesProducts, orders } = sources;
+  const { existingMovements, salesTickets, salesProducts, orders } = sources;
 
   const referencedDocs = new Set(
     existingMovements.map(m => m.reference).filter((r): r is string => !!r),
@@ -42,22 +46,7 @@ export function buildBackfillMovements(sources: BackfillSources): StockMovement[
 
   const result: StockMovement[] = [];
 
-  // 1) Consumos de empleados.
-  for (const e of employeeConsumptionLogs) {
-    if (referencedDocs.has(e.id)) continue;
-    if (e.quantity <= 0) continue;
-    result.push({
-      id: newId(),
-      createdAtISO: e.createdAtISO || dayToISO(e.day),
-      type: 'consumo',
-      productId: e.productId,
-      warehouseId: e.warehouseId,
-      quantity: -Math.abs(e.quantity),
-      reference: e.id,
-    });
-  }
-
-  // 2) Tickets de venta y devolución.
+  // 1) Tickets de venta, consumo y devolución.
   for (const ticket of salesTickets) {
     if (referencedDocs.has(ticket.id)) continue;
     // Los anulados tienen efecto neto cero sobre el stock; se omiten.

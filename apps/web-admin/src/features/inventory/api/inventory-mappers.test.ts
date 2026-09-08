@@ -6,7 +6,6 @@ import {
   mapApiCategoryToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
-  mapApiEmployeeConsumptionToLocal,
   mapApiCountSessionToLocal,
   nextProductCode,
 } from '@/features/inventory/api/inventory-mappers';
@@ -74,30 +73,11 @@ describe('mapApiProductToLocal', () => {
   });
 });
 
-describe('unidades en consumos y conteos', () => {
-  function consumption(unit: string) {
-    return {
-      id: 'c1',
-      createdAt: '2026-06-16T12:00:00Z',
-      day: 'lunes',
-      productId: 'p1',
-      productName: 'Aceite',
-      warehouseId: 'w1',
-      warehouseName: 'Depósito',
-      quantity: 2,
-      unit,
-      previousStock: 10,
-      newStock: 8,
-    } as unknown as Parameters<typeof mapApiEmployeeConsumptionToLocal>[0];
-  }
-
-  it.each(['unidades', 'kg', 'litros', 'cajas'])(
-    'el consumo de empleado conserva la unidad %s',
-    unit => {
-      expect(mapApiEmployeeConsumptionToLocal(consumption(unit)).unit).toBe(unit);
-    },
-  );
-
+// El consumo de empleado (mapApiEmployeeConsumptionToLocal) se retiró junto
+// con ConsumoEmpleado — el consumo interno ahora es un TicketVenta más
+// (origen 'consumo'), sin mapper propio. Ver
+// docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
+describe('unidades en conteos', () => {
   function countSession(unit: string) {
     return {
       id: 's1',

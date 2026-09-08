@@ -46,7 +46,7 @@ export type PosTicket = {
   items: OrderItem[];
   total: number;
   status: 'emitido' | 'anulado';
-  kind: 'venta' | 'devolucion';
+  kind: 'venta' | 'devolucion' | 'consumo';
   voidReason?: string;
   voidedAt?: string;
   source: 'Mostrador' | 'Mesa';
@@ -98,6 +98,8 @@ type VentasPosStore = {
   ) => Promise<PosTicket | null>;
   voidTicket: (id: string, reason?: string) => Promise<PosTicket | null>;
   replaceTicketItems: (id: string, items: OrderItem[]) => Promise<PosTicket | null>;
+  /** Consumo interno: mismo circuito que printTicket pero sin cobrar ni imprimir. */
+  registerConsumption: (items: OrderItem[], note?: string) => Promise<PosTicket | null>;
   printReturn: (items: OrderItem[]) => Promise<PosTicket | null>;
   salesCategories: string[];
   salesCategoryEmojis: Record<string, string>;
@@ -152,6 +154,7 @@ function mapCategory(category: string): string {
 
 function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitchen[]): PosTicket {
   const isReturn = ticket.status === 'devuelto';
+  const isConsumption = ticket.origen === 'consumo';
   return {
     id: ticket.id,
     number: ticket.number,
@@ -166,7 +169,7 @@ function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitche
     })),
     total: ticket.total,
     status: ticket.status === 'anulado' ? 'anulado' : 'emitido',
-    kind: isReturn ? 'devolucion' : 'venta',
+    kind: isReturn ? 'devolucion' : isConsumption ? 'consumo' : 'venta',
     source: ticket.note?.startsWith('Mesa:') ? 'Mesa' : 'Mostrador',
     context: ticket.note,
     operator: ticket.operatorName || operatorName,
@@ -409,6 +412,80 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
       return null;
     },
     [ctx, currentUser, enrichCartKitchens, selectedTableId, salesApi, finishSaleLocal],
+  );
+
+  const registerConsumption: VentasPosStore['registerConsumption'] = useCallback(
+    async (items, note) => {
+      const cart = enrichCartKitchens(items);
+      if (cart.length === 0) return null;
+
+      const operatorId = currentUser.id;
+      if (!operatorId) {
+        setToast('Sesión inválida. Cerrá sesión y volvé a ingresar.');
+        return null;
+      }
+
+      const unsynced = cart.filter(i => !isUuid(i.salesProductId));
+      if (unsynced.length > 0) {
+        setToast(
+          'Hay productos no sincronizados con el servidor. Recargá la página o recrealos en Ventas → Productos.',
+        );
+        return null;
+      }
+
+      if (cartHasLocalStockIds(cart, ctx.salesProducts)) {
+        setToast(
+          'Hay ingredientes de stock no sincronizados. Guardá primero el producto de inventario y volvé a armar la receta.',
+        );
+        return null;
+      }
+
+      // El consumo se bloquea igual que una venta si no hay stock — no hay
+      // opción de "validar u omitir" acá como en el checkout normal.
+      const validation = validateStockForCart(cart, ctx.salesProducts, ctx.products);
+      if (!validation.ok) {
+        setToast(`No hay stock: ${validation.missing.map(m => m.name).join(', ')}`);
+        return null;
+      }
+
+      const idempotencyKey = `consumo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const apiResult = await salesApi.registerConsumption({
+        items: cart.map(i => ({ salesProductId: i.salesProductId, quantity: i.quantity })),
+        operatorId,
+        note,
+        idempotencyKey,
+      });
+
+      if (apiResult.ok && 'result' in apiResult) {
+        const ticket = mapApiTicketToLocal(
+          apiResult.result.ticket,
+          ctx.salesProducts,
+          currentUser.name,
+        );
+        ctx.invalidateSalesHydration();
+        ctx.invalidateInventoryHydration();
+        ctx.setSalesTicketCounter(ticket.number);
+        // El servidor ya descontó stock por receta — no duplicar localmente.
+        const pos = finishSaleLocal(ticket, cart, false);
+        scheduleBackgroundHydrate(() => ctx.hydrateTickets(ctx.salesProducts));
+        scheduleBackgroundHydrate(() => ctx.refreshStockProducts());
+        ctx.addSalesAudit({
+          user: currentUser.name,
+          action: `Consumo registrado #${ticket.number}`,
+          element: `Ticket ${ticket.number}`,
+          previousValue: '-',
+          newValue: `${cart.length} item(s)`,
+        });
+        return pos;
+      }
+      if ('error' in apiResult && apiResult.error) {
+        setToast(`Error en consumo: ${apiResult.error}`);
+        return null;
+      }
+      setToast('No se pudo registrar el consumo en el servidor.');
+      return null;
+    },
+    [ctx, currentUser, enrichCartKitchens, salesApi, finishSaleLocal],
   );
 
   const voidTicket: VentasPosStore['voidTicket'] = useCallback(
@@ -916,6 +993,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     toast,
     setToast,
     printTicket,
+    registerConsumption,
     voidTicket,
     replaceTicketItems,
     printReturn,

@@ -97,6 +97,7 @@ export function mapApiTicketToLocal(
     operatorId: api.operatorId,
     operatorName: api.operator?.username || operatorNameFallback,
     note: api.note,
+    origen: api.origen,
     stockAllocations: (() => {
       const fromTicket = parseStockAllocations(api.stockAllocations);
       if (fromTicket.length > 0) return fromTicket;

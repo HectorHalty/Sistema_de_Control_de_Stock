@@ -42,6 +42,8 @@ export interface SalesTicket {
   operatorId: string;
   operatorName: string;
   note?: string;
+  /** 'pos' | 'online' | 'consumo' — un ticket de consumo interno tiene total $0 y no se imprime. */
+  origen?: string;
   /** Snapshot de descuento por almacén (checkout API o POS local). */
   stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
 }

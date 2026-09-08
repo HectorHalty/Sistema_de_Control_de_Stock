@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Ban, Receipt, RotateCcw, Clock } from "lucide-react";
+import { CheckCircle2, Ban, Receipt, RotateCcw, Clock, UserMinus } from "lucide-react";
 import { useStore, Ticket } from "./VentasPosContext";
 import { EditableOrderModal } from "./EditableOrderModal";
 import { useAppContext } from '@/app/providers/AppContext';
 import { getVentasAuditEntries } from '@/shared/utils/audit-log';
 import { AuditHistoryTable } from '@/shared/components/AuditHistoryTable';
 
-type Filter = "todos" | "emitido" | "anulado" | "devolucion";
+type Filter = "todos" | "emitido" | "anulado" | "devolucion" | "consumo";
 type View = "tickets" | "cambios";
 
 export function HistoryModule() {
@@ -27,6 +27,7 @@ export function HistoryModule() {
     if (statusFilter === "anulado" && t.status !== "anulado") return false;
     if (statusFilter === "emitido" && (t.status !== "emitido" || t.kind !== "venta")) return false;
     if (statusFilter === "devolucion" && t.kind !== "devolucion") return false;
+    if (statusFilter === "consumo" && t.kind !== "consumo") return false;
     return true;
   });
 
@@ -35,6 +36,7 @@ export function HistoryModule() {
     const ventas = userTickets.filter((t) => t.status === "emitido" && t.kind === "venta");
     const anulados = userTickets.filter((t) => t.status === "anulado");
     const devoluciones = userTickets.filter((t) => t.kind === "devolucion");
+    const consumos = userTickets.filter((t) => t.status === "emitido" && t.kind === "consumo");
     return {
       user: u,
       ventasCount: ventas.length,
@@ -43,6 +45,7 @@ export function HistoryModule() {
       anuladosTotal: anulados.reduce((s, t) => s + t.total, 0),
       devolucionesCount: devoluciones.length,
       devolucionesTotal: devoluciones.reduce((s, t) => s + t.total, 0),
+      consumosCount: consumos.length,
     };
   });
 
@@ -128,6 +131,12 @@ export function HistoryModule() {
                     {s.devolucionesCount} · ${s.devolucionesTotal.toLocaleString()}
                   </span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                    <UserMinus className="w-3.5 h-3.5" /> Consumos
+                  </span>
+                  <span className="text-foreground">{s.consumosCount}</span>
+                </div>
               </div>
             </div>
           ))}
@@ -151,7 +160,7 @@ export function HistoryModule() {
               ))}
             </select>
             <div className="flex bg-muted rounded-lg p-1">
-              {(["todos", "emitido", "anulado", "devolucion"] as const).map((f) => (
+              {(["todos", "emitido", "anulado", "devolucion", "consumo"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setStatusFilter(f)}
@@ -165,7 +174,9 @@ export function HistoryModule() {
                     ? "Ventas"
                     : f === "anulado"
                     ? "Anulados"
-                    : "Devoluciones"}
+                    : f === "devolucion"
+                    ? "Devoluciones"
+                    : "Consumos"}
                 </button>
               ))}
             </div>
@@ -188,6 +199,8 @@ export function HistoryModule() {
                     ? "border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/40"
                     : t.kind === "devolucion"
                     ? "border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/40"
+                    : t.kind === "consumo"
+                    ? "border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/40"
                     : "border-border bg-card"
                 }`}
               >
@@ -197,6 +210,8 @@ export function HistoryModule() {
                       ? "bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400"
                       : t.kind === "devolucion"
                       ? "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      : t.kind === "consumo"
+                      ? "bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
                       : "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
                   }`}
                 >
@@ -204,6 +219,8 @@ export function HistoryModule() {
                     <Ban className="w-5 h-5" />
                   ) : t.kind === "devolucion" ? (
                     <RotateCcw className="w-5 h-5" />
+                  ) : t.kind === "consumo" ? (
+                    <UserMinus className="w-5 h-5" />
                   ) : (
                     <CheckCircle2 className="w-5 h-5" />
                   )}
@@ -217,6 +234,11 @@ export function HistoryModule() {
                           DEVOLUCIÓN
                         </span>
                       )}
+                      {t.kind === "consumo" && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded">
+                          CONSUMO
+                        </span>
+                      )}
                     </span>
                     <span
                       className={
@@ -224,6 +246,8 @@ export function HistoryModule() {
                           ? "text-red-600 dark:text-red-400 line-through"
                           : t.kind === "devolucion"
                           ? "text-red-600 dark:text-red-400"
+                          : t.kind === "consumo"
+                          ? "text-orange-600 dark:text-orange-400"
                           : "text-emerald-600 dark:text-emerald-400"
                       }
                     >

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ban, ClipboardList, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Ban, ClipboardList, RotateCcw, CheckCircle2, UserMinus } from "lucide-react";
 import { useStore, Ticket } from "./VentasPosContext";
 import { EditableOrderModal } from "./EditableOrderModal";
 
@@ -69,6 +69,8 @@ export function MyOrdersModule() {
                     ? "border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/40"
                     : t.kind === "devolucion"
                     ? "border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/40"
+                    : t.kind === "consumo"
+                    ? "border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/40"
                     : "border-border bg-card"
                 }`}
               >
@@ -78,6 +80,8 @@ export function MyOrdersModule() {
                       ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
                       : t.kind === "devolucion"
                       ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                      : t.kind === "consumo"
+                      ? "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300"
                       : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
                   }`}
                 >
@@ -85,6 +89,8 @@ export function MyOrdersModule() {
                     <Ban className="w-4 h-4" />
                   ) : t.kind === "devolucion" ? (
                     <RotateCcw className="w-4 h-4" />
+                  ) : t.kind === "consumo" ? (
+                    <UserMinus className="w-4 h-4" />
                   ) : (
                     <CheckCircle2 className="w-4 h-4" />
                   )}
@@ -102,6 +108,11 @@ export function MyOrdersModule() {
                         DEVOLUCIÓN
                       </span>
                     )}
+                    {t.kind === "consumo" && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded">
+                        CONSUMO
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {t.createdAt} · {t.items.length} ítems · {t.source}
@@ -113,6 +124,8 @@ export function MyOrdersModule() {
                       ? "text-muted-foreground line-through"
                       : t.kind === "devolucion"
                       ? "text-red-600 dark:text-red-400"
+                      : t.kind === "consumo"
+                      ? "text-orange-600 dark:text-orange-400"
                       : "text-emerald-600 dark:text-emerald-400"
                   }`}
                 >

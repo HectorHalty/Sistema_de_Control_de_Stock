@@ -14,7 +14,6 @@ import { ConsumptionPage } from '@/features/inventory/pages/ConsumptionPage';
 import { DashboardPage } from '@/features/inventory/pages/DashboardPage';
 import { OrdersPage } from '@/features/inventory/pages/OrdersPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
-import { RegisterConsumptionPage } from '@/features/inventory/pages/RegisterConsumptionPage';
 import { ReportsPage } from '@/features/inventory/pages/ReportsPage';
 import { SuppliersPage } from '@/features/inventory/pages/SuppliersPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
@@ -159,7 +158,6 @@ const router = createHashRouter([
       { path: 'pedidos', Component: () => <StockRouteGuard><OrdersPage /></StockRouteGuard> },
       { path: 'proveedores', Component: () => <StockRouteGuard><SuppliersPage /></StockRouteGuard> },
       { path: 'consumo', Component: () => <StockRouteGuard><ConsumptionPage /></StockRouteGuard> },
-      { path: 'registrar-consumo', Component: () => <StockRouteGuard><RegisterConsumptionPage /></StockRouteGuard> },
       { path: 'reportes', Component: () => <StockRouteGuard><ReportsPage /></StockRouteGuard> },
       { path: 'configuracion', Component: SettingsGuard },
     ],

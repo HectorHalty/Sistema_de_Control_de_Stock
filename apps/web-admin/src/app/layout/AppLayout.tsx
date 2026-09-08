@@ -61,7 +61,7 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
   futbol: { label: 'Futbol', to: '/futbol', icon: Trophy },
 };
 
-const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
+const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/reportes'];
 const BOTTOM_NAV_IDLE_MS = 4000;
 
 /** Misma altura/ancho visual que cada botón del menú colapsado. */
@@ -95,7 +95,6 @@ function buildContextNavItems(
       { route: 'pedidos', label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
       { route: 'proveedores', label: 'Proveedores', to: '/proveedores', icon: Users },
       { route: 'consumo', label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
-      { route: 'registrar-consumo', label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
       { route: 'reportes', label: 'Reportes', to: '/reportes', icon: BarChart3 },
     ];
 
@@ -120,6 +119,7 @@ function buildContextNavItems(
       { key: 'mostrador' as VentasTab, label: 'Mostrador', icon: CircleDollarSign },
       { key: 'pedidos' as VentasTab, label: 'Mis Pedidos', icon: ShoppingCart },
       { key: 'devoluciones' as VentasTab, label: 'Devoluciones', icon: RotateCcw },
+      { key: 'consumo' as VentasTab, label: 'Registrar Consumo', icon: UserMinus },
       { key: 'productos' as VentasTab, label: 'Productos', icon: Package },
       { key: 'mesas' as VentasTab, label: 'Mesas', icon: Warehouse },
       { key: 'reportes' as VentasTab, label: 'Reportes', icon: BarChart3 },

@@ -2,14 +2,14 @@
 import { getStockAuditEntries } from '@/shared/utils/audit-log';
 import { useAppContext } from '@/app/providers/AppContext';
 import { canSeeStockHistory, canSeeStockMetrics } from '@/features/platform/config/modules';
-import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, UserMinus, X } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, TrendingUp, Clock, ChevronRight, ClipboardList, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import logoIcon from '@/assets/logo-LCH.png';
 import { getUnitLabel } from '@/app/components/store';
 import type { AuditEntry } from '@/app/components/store';
 
 export function DashboardPage() {
-  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, employeeConsumptionLogs, currentUser } = useAppContext();
+  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, currentUser } = useAppContext();
 
   const stockAuditEntries = useMemo(
     () => getStockAuditEntries(auditLog, salesAuditLog),
@@ -38,14 +38,6 @@ export function DashboardPage() {
       color: 'bg-amber-600',
       sub: 'Actualizar por almacén',
       to: '/consumo',
-    },
-    {
-      label: 'Registrar Consumo',
-      value: employeeConsumptionLogs.length,
-      icon: UserMinus,
-      color: 'bg-orange-600',
-      sub: 'Retiros de stock',
-      to: '/registrar-consumo',
     },
     {
       label: 'Pedidos Pendientes',
