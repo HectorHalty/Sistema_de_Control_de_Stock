@@ -247,6 +247,19 @@ export function HorariosCanchasPanel() {
     [grid],
   );
 
+  // Las canchas de "mujeres" y las de "hombres_a"/"hombres_b" comparten
+  // numeración (ambos grupos tienen cancha 1, 2, 3...), así que hay que
+  // filtrar por grupoCanchas.codigo — no alcanza con mostrar grid.canchas
+  // tal cual en las dos grillas, o se duplican columnas con el mismo número.
+  const canchasHombres = useMemo(
+    () => (grid?.canchas ?? []).filter((c) => c.grupoCanchas?.codigo?.startsWith('hombres')),
+    [grid],
+  );
+  const canchasMujeres = useMemo(
+    () => (grid?.canchas ?? []).filter((c) => c.grupoCanchas?.codigo === 'mujeres'),
+    [grid],
+  );
+
   async function assignMatch(matchId: string, canchaId: string, hora: string) {
     const token = getAccessToken();
     if (!token) return;
@@ -414,7 +427,7 @@ export function HorariosCanchasPanel() {
               titulo="Hombres"
               genero="hombres"
               partidos={partidosHombres}
-              canchas={grid?.canchas ?? []}
+              canchas={canchasHombres}
               pendientes={pendientes}
               onAssign={assignMatch}
               onSuspendMatch={suspendMatch}
@@ -427,7 +440,7 @@ export function HorariosCanchasPanel() {
               titulo="Mujeres"
               genero="mujeres"
               partidos={partidosMujeres}
-              canchas={grid?.canchas ?? []}
+              canchas={canchasMujeres}
               pendientes={pendientes}
               onAssign={assignMatch}
               onSuspendMatch={suspendMatch}
