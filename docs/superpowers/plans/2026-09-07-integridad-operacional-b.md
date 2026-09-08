@@ -226,11 +226,36 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     `cursor`/`nextCursor` de verdad.
   - Sin diff de frontend en esta tarea.
 
-- [ ] **Task 11: Documentación y cierre**
-  - `docs/RUNBOOK.md`: documentar el nuevo lockout basado en Postgres, el
-    canal de `LISTEN/NOTIFY`, y el contrato de paginación por cursor.
-  - `db:drift` en 0, `npm test` en verde, `progress.md` de esta serie
-    (`.superpowers/sdd/`, gitignorado) cerrado.
+- [x] **Task 11: Documentación y cierre**
+  - `docs/RUNBOOK.md` actualizado: lockout de login en Postgres (sección
+    Auth + Known Limitations), canal `LISTEN/NOTIFY` de SSE y su
+    degradación, contrato de paginación por cursor (`?cursor=&limit=`,
+    `{ items, nextCursor }`) y qué endpoints lo soportan, bloqueo optimista
+    (`version`) y qué entidades/formularios lo usan hoy.
+  - `db:drift` en 0. `npm test` 209/209. `npm run test:db` 61/61 (contra
+    Postgres real, migraciones `baseline` + `constraints` aplicadas desde
+    cero en cada corrida).
+
+## Estado final
+
+Las 7 áreas del spec quedaron resueltas o documentadas explícitamente:
+
+| Tema | Resultado |
+|---|---|
+| Transacciones partidas | Auditoría limpia (Task 1) |
+| Carreras de stock (online/kitchen) | Auditoría limpia (Task 2) |
+| Login lockout en memoria | Resuelto — Postgres (Task 3) |
+| SSE en memoria | Resuelto — `LISTEN/NOTIFY` (Task 4) |
+| Agregación en SQL | Investigado, no amerita cambio (Task 5) |
+| Bloqueo optimista | Backend completo, frontend 3/4 (Tasks 6-8) |
+| Paginación | Backend completo y compatible; frontend bloqueado por arquitectura (Tasks 9-10) |
+
+Pendientes explícitos que quedan fuera de esta rama, no perdidos:
+- `Configuracion.version` sin wiring en `persistRemoteConfig` (Task 8).
+- Paginación sin consumir en el admin — depende de que Proyecto C rediseñe
+  la hidratación local-first (Task 10).
+- Auditoría de agregación SQL a revisar de nuevo si el volumen de datos de
+  fútbol crece varios órdenes de magnitud (Task 5).
 
 ## Riesgos que el plan deja explícitos
 
