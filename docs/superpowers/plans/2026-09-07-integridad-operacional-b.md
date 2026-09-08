@@ -150,10 +150,27 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     con versión 0 → crea sin conflicto). 4/4 verde.
   - `npm test` 209/209, `npm run test:db` 57/57.
 
-- [ ] **Task 8: Bloqueo optimista — frontend admin**
-  - El admin tiene que mandar la `version` que tenía al cargar el registro, y
-    mostrar el error 409 de forma legible (no un toast genérico de "error").
-  - Alcance mínimo: los 4 formularios que tocan las entidades de la Task 6/7.
+- [x] **Task 8: Bloqueo optimista — frontend admin (Producto, ProductoVenta,
+  OrdenCompra; Configuracion queda documentado como pendiente)**
+  - El 409 ya se mostraba legible sin cambios: `formatApiErrorMessage`
+    (`app/api/client.ts`) cae al mensaje de texto plano del backend cuando no
+    matchea ninguno de sus casos especiales — el mensaje de
+    `assertVersionedUpdateApplied` llega tal cual al operador.
+  - `version` agregado a los tipos locales (`Product`, `Order`,
+    `SalesProduct` en `features/*/types.ts`) y a los mappers API→local
+    (`inventory-mappers.ts`, `sales-mappers.ts`), y enviado de vuelta en los
+    tres flujos de edición: `updateProduct`, `updatePurchaseOrder` (incluido
+    el hilo hasta `OrdersPage.tsx`), `updateSalesProduct`.
+  - **Configuracion queda sin wiring de `version` en el frontend.** El
+    backend ya lo soporta (Task 7), pero `persistRemoteConfig` (usado por
+    fútbol/stock/online/ventas) es un guardado fire-and-forget/debounced
+    sobre un blob de configuración por pantalla, no un formulario
+    cargar-editar-guardar como los otros tres — versionarlo bien requiere
+    rastrear la versión por clave en cada una de las 4 pantallas que lo usan,
+    que es más superficie de cambio de la prevista en "4 formularios". Queda
+    como pendiente explícito, no como bug.
+  - `npm test` de `web-admin` 171/171 en verde, `npm run build` compila sin
+    errores nuevos.
 
 - [ ] **Task 9: Paginación por cursor — backend**
   - Convertir a paginación por cursor (`id` + `createdAt` como desempate) los

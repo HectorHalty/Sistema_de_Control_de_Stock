@@ -28,6 +28,8 @@ export interface SalesProduct {
   recipe: { stockProductId: string; quantity: number }[];
   bundle: SalesProductBundleItem[];
   active: boolean;
+  /** Bloqueo optimista: versión leída del servidor (ausente en productos aún no sincronizados). */
+  version?: number;
 }
 
 export interface SalesTicket {

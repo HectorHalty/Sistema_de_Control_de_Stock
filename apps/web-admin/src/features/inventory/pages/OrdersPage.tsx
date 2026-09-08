@@ -160,6 +160,7 @@ export function OrdersPage() {
       const updated = await updatePurchaseOrder({
         orderId: selectedOrder.id,
         items,
+        version: selectedOrder.version,
       });
       setSelectedOrder(updated);
       setSuccessMsg('Pedido actualizado');

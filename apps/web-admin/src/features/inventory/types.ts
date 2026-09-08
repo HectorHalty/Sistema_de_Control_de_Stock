@@ -17,6 +17,8 @@ export interface Product {
   orderUnit?: number;
   image: string;
   stockByWarehouse: { warehouseId: string; quantity: number }[];
+  /** Bloqueo optimista: versión leída del servidor (ausente en productos aún no sincronizados). */
+  version?: number;
 }
 
 export interface Warehouse {
@@ -33,6 +35,8 @@ export interface Order {
   status: 'Pendiente' | 'Recibido';
   receivedAtISO?: string;
   items: { productId: string; quantityOrdered: number; quantityReceived?: number }[];
+  /** Bloqueo optimista: versión leída del servidor. */
+  version?: number;
 }
 
 /**

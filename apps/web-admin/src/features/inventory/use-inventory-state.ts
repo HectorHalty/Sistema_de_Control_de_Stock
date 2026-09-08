@@ -300,6 +300,7 @@ export function useInventoryState() {
             unit: input.unit,
             orderUnit: emptyToNullInt(input.orderUnit),
             image: emptyToNull(input.image),
+            version: previous.version,
           },
           '',
         );
@@ -657,6 +658,7 @@ export function useInventoryState() {
       supplierId?: string | null;
       provider?: string;
       items: { productId: string; quantityOrdered: number }[];
+      version?: number;
     }): Promise<Order> => {
       const items = input.items.filter(i => !isLocalOnlyId(i.productId) && i.quantityOrdered > 0);
       if (items.length === 0) throw new Error('El pedido no tiene productos sincronizados con el servidor.');
@@ -664,6 +666,7 @@ export function useInventoryState() {
         supplierId: input.supplierId,
         provider: input.provider,
         items,
+        version: input.version,
       }, '');
       markApiSynced();
       const order = mapApiPurchaseOrderToLocal(updated);

@@ -43,6 +43,7 @@ export function mapApiSalesProductToLocal(api: ApiSalesProduct): SalesProduct {
       name: b.componentProduct?.name,
       emoji: b.componentProduct?.emoji ?? undefined,
     })),
+    version: api.version,
   });
 }
 

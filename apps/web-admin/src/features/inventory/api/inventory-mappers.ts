@@ -35,6 +35,7 @@ export function mapApiProductToLocal(api: ApiProduct): Product {
       warehouseId: sl.warehouseId,
       quantity: Number(sl.quantity), // Decimal llega como string por JSON
     })),
+    version: api.version,
   };
 }
 
@@ -129,6 +130,7 @@ export function mapApiPurchaseOrderToLocal(api: ApiPurchaseOrder): Order {
       quantityOrdered: Number(i.quantityOrdered),
       quantityReceived: i.quantityReceived != null ? Number(i.quantityReceived) : undefined,
     })),
+    version: api.version,
   };
 }
 

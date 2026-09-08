@@ -318,7 +318,7 @@ export function useSalesState() {
       try {
         const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
         const resolved: SalesProduct = { ...input, categoriaVentaId };
-        const body = { ...toApiSalesProductBody(resolved), active: resolved.active };
+        const body = { ...toApiSalesProductBody(resolved), active: resolved.active, version: resolved.version };
         if (isLocalOnlyId(resolved.id)) {
           const created = await salesApi.products.create(toApiSalesProductBody(resolved), '');
           upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(created));

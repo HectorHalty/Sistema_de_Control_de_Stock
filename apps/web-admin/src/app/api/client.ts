@@ -363,6 +363,8 @@ export const stockApi = {
         supplierId?: string | null;
         provider?: string;
         items: { productId: string; quantityOrdered: number }[];
+        /** Bloqueo optimista: mandar ApiPurchaseOrder.version tal cual se leyó. */
+        version?: number;
       },
       token: string,
     ) =>
@@ -818,10 +820,11 @@ export const settingsApi = {
   config: {
     list: (scope?: string) => {
       const q = scope ? `?scope=${encodeURIComponent(scope)}` : '';
-      return apiFetch<Array<{ id: string; key: string; scope: string; value: unknown }>>(`/settings/config${q}`);
+      return apiFetch<Array<{ id: string; key: string; scope: string; value: unknown; version?: number }>>(`/settings/config${q}`);
     },
-    upsert: (data: { key: string; scope: string; value: unknown }, token: string) =>
-      apiFetch<{ id: string; key: string; scope: string; value: unknown }>('/settings/config', {
+    /** `version` opcional: mandar la que se leyó para detectar edición concurrente (409 si no coincide). */
+    upsert: (data: { key: string; scope: string; value: unknown; version?: number }, token: string) =>
+      apiFetch<{ id: string; key: string; scope: string; value: unknown; version?: number }>('/settings/config', {
         method: 'PUT', token, body: data,
       }),
   },
@@ -879,6 +882,8 @@ export interface StockProduct {
   unit: string;
   orderUnit?: number;
   image?: string;
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este producto. */
+  version?: number;
   stockLevels: StockLevel[];
   category?: Category;
 }
@@ -979,6 +984,8 @@ export interface ApiPurchaseOrder {
   receivedAt?: string | null;
   createdAt: string;
   items: ApiPurchaseOrderItem[];
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este pedido. */
+  version?: number;
 }
 
 export interface SalesProduct {
@@ -998,6 +1005,8 @@ export interface SalesProduct {
     quantity: number;
     componentProduct?: { id: string; name: string; emoji?: string };
   }>;
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este producto. */
+  version?: number;
 }
 
 export interface SalesTicket {
@@ -1402,6 +1411,8 @@ export interface CreateProductPayload {
 export interface UpdateProductPayload {
   name?: string; code?: string; description?: string | null;
   categoryId?: string; unit?: string; orderUnit?: number | null; image?: string | null;
+  /** Bloqueo optimista: mandar StockProduct.version tal cual se leyó. */
+  version?: number;
 }
 
 export interface CreateSalesProductPayload {
@@ -1416,6 +1427,8 @@ export interface UpdateSalesProductPayload {
   price?: number; emoji?: string; active?: boolean; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
   bundle?: { componentProductId: string; quantity: number }[];
+  /** Bloqueo optimista: mandar SalesProduct.version tal cual se leyó. */
+  version?: number;
 }
 
 export interface CheckoutItem {
