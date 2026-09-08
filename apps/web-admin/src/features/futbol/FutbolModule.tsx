@@ -67,7 +67,7 @@ export function FutbolModule() {
   }
 
   return (
-    <div className="h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-border">
+    <div className="min-h-[calc(100vh-16rem)]">
       {tab === 'inicio' && <FutbolInicioPanel />}
       {tab === 'equipos' && <EquiposPanel />}
       {tab === 'categorias' && <CategoriasPanel />}
