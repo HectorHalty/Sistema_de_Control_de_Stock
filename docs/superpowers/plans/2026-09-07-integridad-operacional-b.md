@@ -204,12 +204,27 @@ mergeado, si Plan A no terminó todavía — confirmar al arrancar Task 0).
     sin repetir ni saltear; la última página no trae `nextCursor`. 4/4 verde.
   - `npm test` 209/209, `npm run test:db` 61/61.
 
-- [ ] **Task 10: Paginación por cursor — frontend admin**
-  - Adaptar las pantallas que consumen los endpoints de la Task 9 para pedir
-    "página siguiente" en vez de asumir que la respuesta trae todo.
-  - Alcance mínimo: sin rediseño visual, un control simple de "cargar más" o
-    scroll infinito, lo que ya use el admin en otras listas si existe un
-    patrón (revisar antes de inventar uno nuevo).
+- [x] **Task 10: Paginación por cursor — frontend admin — bloqueada por
+  arquitectura, no implementada; hallazgo documentado**
+  - Los 5 listados tocados en la Task 9 (`hydrateProducts`, `hydrateSuppliers`,
+    `hydrateOrders`, `hydrateTickets`/POS, cocina) siguen **un mismo patrón en
+    toda la app**: al montar, `use-inventory-state.ts`/`use-sales-state.ts`
+    traen la lista **completa** del servidor a estado local (y de ahí a
+    `localStorage`), y cada mutación hace un update optimista local +
+    re-hidratación completa en background (`scheduleBackgroundHydrate`). No
+    existe ninguna pantalla de "lista paginada" en el admin — todas asumen
+    tener el dataset entero en memoria (búsquedas, `.find()`, conteos por
+    depósito, agrupaciones para el dashboard).
+  - Agregar un "cargar más" real implicaría que esas pantallas dejen de tener
+    el dataset completo — rompería cualquier `.find()`/agregación que hoy
+    asume "tengo todo". Eso no es un ajuste de UI menor: es tocar el mismo
+    patrón localStorage-first/hidratación completa que **Proyecto C**
+    (fuera de alcance de este plan, ver spec) existe para resolver.
+  - Decisión: no forzar el cambio en Plan B. El backend (Task 9) es seguro y
+    compatible hacia atrás — no rompe nada hoy, y queda listo para cuando
+    Proyecto C rediseñe la capa de hidratación del admin y pueda consumir
+    `cursor`/`nextCursor` de verdad.
+  - Sin diff de frontend en esta tarea.
 
 - [ ] **Task 11: Documentación y cierre**
   - `docs/RUNBOOK.md`: documentar el nuevo lockout basado en Postgres, el
