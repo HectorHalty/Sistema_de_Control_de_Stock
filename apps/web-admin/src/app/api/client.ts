@@ -516,7 +516,53 @@ export const footballApi = {
     data: { publicado?: boolean; activo?: boolean; nombre?: string },
     token: string,
   ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
+  generateFixture: (
+    torneoId: string,
+    data: { fechas: number; fechaInicio: string },
+    token: string,
+  ) =>
+    apiFetch<{ torneoId: string; jornadasCreadas: number; jornadas: FootballJornada[] }>(
+      `/football/torneos/${torneoId}/generate-fixture`,
+      { method: 'POST', token, body: data },
+    ),
   canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
+  categorias: {
+    list: (token: string) => apiFetch<FootballCategoriaConfig[]>('/football/categorias', { token }),
+    create: (
+      data: {
+        codigo: string;
+        nombre: string;
+        genero: 'hombres' | 'mujeres';
+        maxPlantel?: number;
+        maxIncorporaciones?: number;
+        minJugadoresInicio?: number;
+        grupoCanchasId?: string;
+        colorHex?: string;
+      },
+      token: string,
+    ) => apiFetch<FootballCategoriaConfig>('/football/categorias', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: Partial<{
+        codigo: string;
+        nombre: string;
+        genero: 'hombres' | 'mujeres';
+        maxPlantel: number;
+        maxIncorporaciones: number;
+        minJugadoresInicio: number;
+        grupoCanchasId: string;
+        colorHex: string;
+      }>,
+      token: string,
+    ) =>
+      apiFetch<FootballCategoriaConfig>(`/football/categorias/${id}`, {
+        method: 'PUT',
+        token,
+        body: data,
+      }),
+    remove: (id: string, token: string) =>
+      apiFetch<{ ok: boolean }>(`/football/categorias/${id}`, { method: 'DELETE', token }),
+  },
   teams: {
     list: (token: string) => apiFetch<FootballTeam[]>('/football/teams', { token }),
     create: (data: { name: string; shortName?: string; logo?: string; color?: string }, token: string) =>
@@ -540,7 +586,13 @@ export const footballApi = {
     ) => apiFetch<FootballInscription>('/football/inscriptions', { method: 'POST', token, body: data }),
     update: (
       id: string,
-      data: { abbr?: string; color?: string; activo?: boolean; descuentoPuntosWO?: number },
+      data: {
+        abbr?: string;
+        color?: string;
+        activo?: boolean;
+        descuentoPuntosWO?: number;
+        torneoId?: string;
+      },
       token: string,
     ) => apiFetch<FootballInscription>(`/football/inscriptions/${id}`, { method: 'PUT', token, body: data }),
   },
@@ -674,6 +726,13 @@ export const footballApi = {
       }),
     deleteEvent: (eventId: string, token: string) =>
       apiFetch<void>(`/football/events/${eventId}`, { method: 'DELETE', token }),
+    suspend: (id: string, token: string, motivo?: string) =>
+      apiFetch<{
+        originalMatchId: string;
+        recoveryJornadaId: string;
+        recoveryFecha: string;
+        match: FootballMatch;
+      }>(`/football/matches/${id}/suspend`, { method: 'POST', token, body: { motivo } }),
   },
   standings: (token: string, torneoId?: string) => {
     const q = torneoId ? `?torneoId=${torneoId}` : '';
@@ -701,6 +760,22 @@ export const footballApi = {
         '/football/scheduling/publish-fecha',
         { method: 'POST', token, body: data },
       ),
+    suspendSaturday: (token: string, fecha: string) =>
+      apiFetch<{
+        fecha: string;
+        jornadasSuspendidas: number;
+        detalle: {
+          jornadaId: string;
+          torneoId: string;
+          categoriaNombre: string;
+          jornadaRecuperacionId: string;
+          movedMatches: number;
+        }[];
+      }>('/football/scheduling/suspend-saturday', { method: 'POST', token, body: { fecha } }),
+  },
+  planillas: {
+    get: (token: string, fecha: string) =>
+      apiFetch<FootballPlanillasResponse>(`/football/planillas?fecha=${fecha}`, { token }),
   },
   suspensions: {
     list: (token: string, torneoId?: string) => {
@@ -712,6 +787,9 @@ export const footballApi = {
       data: { fechasRestantes?: number; activa?: boolean; motivo?: string },
       token: string,
     ) => apiFetch<FootballSuspension>(`/football/suspensions/${id}`, { method: 'PUT', token, body: data }),
+    // Nota: al enviar `fechasRestantes`, el backend marca automaticamente
+    // ajustadoManualmente=true y pendienteDefinir=false — es el mecanismo
+    // para "completar a mano" una roja directa (ver SuspendidosPanel).
     sync: (token: string, torneoId?: string) => {
       const q = torneoId ? `?torneoId=${torneoId}` : '';
       return apiFetch<{ updated: number }>(`/football/suspensions/sync${q}`, { method: 'POST', token });
@@ -1232,6 +1310,7 @@ export interface FootballRosterPlayer {
 export interface FootballRoster {
   inscripcion: FootballInscription;
   jugadores: FootballRosterPlayer[];
+  capitan: FootballRosterPlayer | null;
 }
 
 export interface FootballJornada {
@@ -1242,7 +1321,21 @@ export interface FootballJornada {
   suspendida: boolean;
   esRecuperacion: boolean;
   publicada: boolean;
+  equipoLibreId?: string | null;
   _count?: { partidos: number };
+}
+
+export interface FootballCategoriaConfig {
+  id: string;
+  codigo: string;
+  nombre: string;
+  genero: 'hombres' | 'mujeres';
+  maxPlantel: number;
+  maxIncorporaciones: number;
+  minJugadoresInicio: number;
+  grupoCanchasId?: string | null;
+  colorHex?: string | null;
+  _count?: { torneos: number };
 }
 
 export interface FootballJornadaPreferencias {
@@ -1280,11 +1373,21 @@ export interface FootballMatch {
   eventos?: FootballMatchEvent[];
 }
 
+export type FootballEventType =
+  | 'gol'
+  | 'asistencia'
+  | 'amarilla'
+  | 'roja'
+  | 'azul'
+  | 'doble_amarilla'
+  | 'expulsion_directa'
+  | 'gol_en_contra';
+
 export interface FootballMatchEvent {
   id: string;
   partidoId: string;
   personaId: string;
-  tipo: string;
+  tipo: FootballEventType | string;
   minuto?: number | null;
   articuloRef?: string | null;
   persona?: {
@@ -1300,7 +1403,10 @@ export interface FootballSuspension {
   personaId: string;
   torneoId?: string | null;
   motivo: string;
-  fechasRestantes: number;
+  /** null cuando pendienteDefinir es true (roja directa recien cargada, sin fechas asignadas todavia). */
+  fechasRestantes: number | null;
+  pendienteDefinir: boolean;
+  ajustadoManualmente: boolean;
   activa: boolean;
   persona?: { nombre: string; apellido: string; dni: string };
 }
@@ -1343,10 +1449,45 @@ export interface SaturdayGridResponse {
     canchaNumero?: number;
     categoria: string;
     categoriaColor?: string | null;
+    genero?: 'hombres' | 'mujeres';
     local: string;
     visitante: string;
     bloqueadoManual: boolean;
     jornada: number | null;
+  }[];
+}
+
+export interface FootballPlanillaJugador {
+  personaId: string;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  fechaNacimiento: string | null;
+  numeroCamiseta: number | null;
+}
+
+export interface FootballPlanillaEquipo {
+  inscripcionId: string;
+  equipoNombre: string;
+  abbr: string | null;
+  roster: FootballPlanillaJugador[];
+}
+
+export interface FootballPlanillasResponse {
+  fecha: string;
+  categorias: {
+    categoriaId: string;
+    categoriaNombre: string;
+    genero: 'hombres' | 'mujeres';
+    torneoId: string;
+    campeonatoNombre: string;
+    matches: {
+      matchId: string;
+      canchaNumero: number | null;
+      horaInicio: string | null;
+      home: FootballPlanillaEquipo;
+      away: FootballPlanillaEquipo;
+    }[];
   }[];
 }
 
