@@ -235,11 +235,10 @@ export function MenuWebPanel() {
   ];
 
   return (
-    <OnlinePanelShell title="Menú web" subtitle="Productos y secciones visibles en la carta web">
-      <p className="text-sm text-muted-foreground">
-        Elegí productos ya creados en Ventas para publicarlos en la cantina. El precio se completa
-        automáticamente y podés ajustarlo para promos web.
-      </p>
+    <OnlinePanelShell
+      title="Menú web"
+      subtitle="Publicá productos de Ventas en la carta web; el precio se completa solo y podés ajustarlo para promos"
+    >
       {error && <OnlineError message={error} />}
 
       <div className="flex flex-wrap gap-2">

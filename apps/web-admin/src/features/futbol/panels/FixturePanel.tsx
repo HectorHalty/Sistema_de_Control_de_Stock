@@ -471,12 +471,8 @@ export function FixturePanel() {
   return (
     <FutbolPanelShell
       title="Fixture"
-      subtitle="Generá y editá el fixture del torneo"
+      subtitle="Creá jornadas y cruces, cargá preferencias por equipo, auto-programá canchas/horarios y publicá en la web"
     >
-      <p className="text-sm text-muted-foreground">
-        Creá jornadas, cargá preferencias de horario por equipo, generá cruces, auto-programá
-        canchas/horarios y publicá en la web.
-      </p>
 
       {error && <FutbolError message={error} />}
       {success && <FutbolSuccess message={success} />}

@@ -92,11 +92,11 @@ export function CocinaOnlinePanel() {
 
   return (
     <>
-      <OnlinePanelShell title="Cocina online" subtitle="Pedidos web en preparación">
+      <OnlinePanelShell
+        title="Cocina online"
+        subtitle="Pedidos web por cocina; el ticket más antiguo pendiente aparece listo para preparar"
+      >
         <div className="sticky top-0 z-10 -mx-1 space-y-3 rounded-xl border border-border bg-background/95 p-3 backdrop-blur">
-          <p className="text-sm text-muted-foreground">
-            Pedidos online por cocina. El ticket más antiguo pendiente aparece listo para preparar.
-          </p>
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Cocina
@@ -222,8 +222,8 @@ export function CocinaOnlinePanel() {
       {redeemed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
           <div className="w-full max-w-lg rounded-xl border border-[#3d7a3d]/40 bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-              <QrCode size={24} />
+            <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+              <QrCode size={20} />
               Pedido entregado
             </div>
             <div className="space-y-3 text-sm">

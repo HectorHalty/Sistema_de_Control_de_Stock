@@ -294,12 +294,8 @@ export function ResultadosPanel() {
   return (
     <FutbolPanelShell
       title="Resultados"
-      subtitle="Cargá resultados y eventos de cada partido"
+      subtitle="Cargá marcadores y eventos (goles, tarjetas); alimentan goleadores y suspendidos en la web pública"
     >
-      <p className="text-sm text-muted-foreground">
-        Cargá marcadores y eventos (goles, tarjetas). Los goles actualizan el marcador automáticamente
-        y alimentan goleadores y suspendidos en la web pública.
-      </p>
       {error && <FutbolError message={error} />}
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando partidos...</p>

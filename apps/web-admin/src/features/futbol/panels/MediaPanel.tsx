@@ -108,10 +108,6 @@ export function MediaPanel() {
       title="Media por fecha"
       subtitle="Fotos y videos por fecha para la web pública"
     >
-      <p className="text-sm text-muted-foreground">
-        Fotos y videos vinculados a fechas de partido. Se almacenan en MinIO y pueden mostrarse en la web
-        pública.
-      </p>
 
       <div className={futbolCardClass('space-y-3 p-4')}>
         <p className="text-sm font-semibold">Subir archivo</p>

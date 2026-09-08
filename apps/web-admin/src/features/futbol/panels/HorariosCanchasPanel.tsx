@@ -352,13 +352,8 @@ export function HorariosCanchasPanel() {
   return (
     <FutbolPanelShell
       title="Horarios y Canchas"
-      subtitle="Asigná horarios y canchas por jornada"
+      subtitle="Asigná partidos a las grillas de hombres y mujeres por fecha, o suspendé por lluvia a nivel partido, categoría o sábado completo"
     >
-      <p className="text-sm text-muted-foreground">
-        Elegí la fecha para administrar las grillas de hombres y mujeres: asigná partidos
-        pendientes a una celda vacía, o suspendé por lluvia a nivel partido, categoría o sábado
-        completo.
-      </p>
 
       <div className={futbolCardClass('flex flex-wrap items-end gap-2 p-4')}>
         <label className="space-y-1 text-xs text-muted-foreground">

@@ -84,15 +84,13 @@ export function MetricasPanel() {
   const hasData = (metrics?.totalPedidos ?? 0) > 0;
 
   return (
-    <OnlinePanelShell title="Métricas online" subtitle="Indicadores de ventas online">
+    <OnlinePanelShell
+      title="Métricas online"
+      subtitle="Recaudación, evolución diaria y top por cocina"
+    >
       {error && <OnlineError message={error} />}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Mismo estilo que ventas: recaudación, evolución diaria y top por cocina.
-          </p>
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
         <div className={`${onlineCardClass('p-1')} flex gap-1`}>
           {(['7d', '30d', '90d', 'Año'] as MetricsRange[]).map((r) => (
             <button
@@ -153,7 +151,7 @@ export function MetricasPanel() {
 
           {hasData && (
             <>
-              <div className="rounded-xl border border-border bg-card p-5">
+              <div className={onlineCardClass('p-5')}>
                 <h4 className="mb-4 font-semibold">Evolución de ventas</h4>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
@@ -181,7 +179,7 @@ export function MetricasPanel() {
               </div>
 
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="rounded-xl border border-border bg-card p-5">
+                <div className={onlineCardClass('p-5')}>
                   <h4 className="mb-3 font-semibold">Pedidos por estado</h4>
                   <ul className="space-y-2 text-sm">
                     {metrics.porEstado.map((s) => (
@@ -194,7 +192,7 @@ export function MetricasPanel() {
                 </div>
 
                 {metrics.topProductsByKitchen.length > 0 && (
-                  <div className="rounded-xl border border-border bg-card p-5">
+                  <div className={onlineCardClass('p-5')}>
                     <div className="mb-3 flex items-center gap-2">
                       <Warehouse className="h-5 w-5 text-[#3d7a3d]" />
                       <h4 className="font-semibold">Ventas por cocina</h4>
@@ -225,7 +223,7 @@ export function MetricasPanel() {
               </div>
 
               {metrics.topProductsByKitchen.length > 0 && (
-                <div className="rounded-xl border border-border bg-card p-5">
+                <div className={onlineCardClass('p-5')}>
                   <h4 className="mb-3 font-semibold">Top productos por cocina</h4>
                   <div className="mb-4 flex flex-wrap gap-2">
                     {metrics.topProductsByKitchen.map((k) => (

@@ -12,7 +12,7 @@ function difLabel(n: number) {
 }
 
 export function PosicionesPanel() {
-  const { torneoId, data: overview } = useFutbolOverview();
+  const { torneoId } = useFutbolOverview();
   const [rows, setRows] = useState<StandingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +42,8 @@ export function PosicionesPanel() {
   return (
     <FutbolPanelShell
       title="Tabla de posiciones"
-      subtitle="Tabla calculada a partir de los resultados"
+      subtitle="Calculada desde los resultados; se publica en la web cuando el torneo está marcado como publicado"
     >
-      <p className="text-sm text-muted-foreground">
-        Calculada desde resultados cargados en el torneo{' '}
-        {overview?.torneo?.nombre ? `· ${overview.torneo.nombre}` : ''}.
-        Se publica en la web cuando el torneo está marcado como publicado.
-      </p>
       {error && <FutbolError message={error} />}
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
