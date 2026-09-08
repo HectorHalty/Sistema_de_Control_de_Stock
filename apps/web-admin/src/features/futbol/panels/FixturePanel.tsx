@@ -8,9 +8,11 @@ import {
   type FootballJornadaPreferencias,
   type FootballMatch,
 } from '@/app/api/client';
+import { Calendar, ListPlus } from 'lucide-react';
 import {
   FutbolError,
   FutbolPanelShell,
+  FutbolSuccess,
   futbolButtonClass,
   futbolFieldClass,
   useFutbolOverview,
@@ -18,14 +20,6 @@ import {
 import { FixtureGridPreview } from './FixtureGridPreview';
 import { SaturdayGridPreview } from './SaturdayGridPreview';
 import type { SaturdayGridResponse } from '@/app/api/client';
-
-function FutbolSuccess({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
-      {message}
-    </div>
-  );
-}
 
 function TorneoFixtureWizard({
   torneoId,
@@ -77,7 +71,10 @@ function TorneoFixtureWizard({
       onSubmit={generate}
       className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
-      <h3 className="text-sm font-semibold">Generar fixture completo del torneo</h3>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Calendar size={16} className="text-primary" />
+        Generar fixture completo del torneo
+      </h3>
       <p className="text-xs text-muted-foreground">
         Crea todas las jornadas de la temporada en un solo paso. Si la cantidad de fechas supera
         una vuelta completa, las fechas extra se arman como revancha (ida y vuelta) invirtiendo
@@ -114,7 +111,9 @@ function TorneoFixtureWizard({
         </div>
       </div>
       {notSaturday && (
-        <p className="text-xs text-amber-600">⚠️ Esta fecha no es sábado.</p>
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          ⚠️ Esta fecha no es sábado.
+        </div>
       )}
       {!torneoId && (
         <p className="text-xs text-muted-foreground">
@@ -181,8 +180,11 @@ function SaturdayMultiCatSection() {
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-      <h3 className="text-sm font-semibold">Programación sábado (multi-categoría)</h3>
+    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Calendar size={16} className="text-muted-foreground" />
+        Programación sábado (multi-categoría)
+      </h3>
       <p className="text-xs text-muted-foreground">
         Auto-programa todas las categorías del campeonato activo compartiendo canchas 1–8. Creá
         jornadas con la misma fecha en cada categoría antes de usar esto.
@@ -489,102 +491,115 @@ export function FixturePanel() {
 
       <SaturdayMultiCatSection />
 
-      <h3 className="text-sm font-semibold">Avanzado: agregar jornada suelta</h3>
-      <form
-        onSubmit={createJornada}
-        className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-4"
-      >
-        <input
-          className={futbolFieldClass()}
-          type="number"
-          min={1}
-          placeholder="N° jornada"
-          value={numero}
-          onChange={(e) => setNumero(e.target.value)}
-        />
-        <input
-          className={futbolFieldClass()}
-          type="date"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-        />
-        <button type="submit" disabled={busy || !torneoId} className={futbolButtonClass()}>
-          Crear jornada
-        </button>
-        <button
-          type="button"
-          disabled={busy || !selectedJornada}
-          onClick={() => void generateRoundRobin()}
-          className={futbolButtonClass('ghost')}
-        >
-          Generar cruces (round-robin)
-        </button>
-      </form>
+      <details className="group rounded-xl border border-border bg-card open:pb-4">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-foreground marker:hidden">
+          <ListPlus size={16} className="text-muted-foreground" />
+          Avanzado: agregar jornada suelta
+          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+            Mostrar
+          </span>
+          <span className="ml-auto hidden text-xs font-normal text-muted-foreground group-open:inline">
+            Ocultar
+          </span>
+        </summary>
+        <div className="space-y-4 px-4">
+          <form onSubmit={createJornada} className="grid gap-3 md:grid-cols-4">
+            <input
+              className={futbolFieldClass()}
+              type="number"
+              min={1}
+              placeholder="N° jornada"
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+            />
+            <input
+              className={futbolFieldClass()}
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+            />
+            <button type="submit" disabled={busy || !torneoId} className={futbolButtonClass()}>
+              Crear jornada
+            </button>
+            <button
+              type="button"
+              disabled={busy || !selectedJornada}
+              onClick={() => void generateRoundRobin()}
+              className={futbolButtonClass('ghost')}
+            >
+              Generar cruces (round-robin)
+            </button>
+          </form>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          value={selectedJornada}
-          onChange={(e) => setSelectedJornada(e.target.value)}
-        >
-          {jornadas.map((j) => (
-            <option key={j.id} value={j.id}>
-              Jornada {j.numero}
-              {j.esRecuperacion ? ' (recup.)' : ''}
-              {j.suspendida ? ' — SUSP.' : ''}
-              {j.publicada ? ' ✓ pub.' : ''}
-              — {new Date(j.fecha).toLocaleDateString('es-AR')}
-              {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-          onClick={() => void autoSchedule()}
-          className={futbolButtonClass()}
-        >
-          Auto-programar canchas
-        </button>
-        <button
-          type="button"
-          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-          onClick={() => void publishJornada()}
-          className={futbolButtonClass('ghost')}
-        >
-          Publicar jornada
-        </button>
-        <button
-          type="button"
-          disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-          onClick={() => void suspendRain()}
-          className={futbolButtonClass('ghost')}
-        >
-          Suspender por lluvia
-        </button>
-      </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className={futbolFieldClass('max-w-xs')}
+              value={selectedJornada}
+              onChange={(e) => setSelectedJornada(e.target.value)}
+            >
+              {jornadas.map((j) => (
+                <option key={j.id} value={j.id}>
+                  Jornada {j.numero}
+                  {j.esRecuperacion ? ' (recup.)' : ''}
+                  {j.suspendida ? ' — SUSP.' : ''}
+                  {j.publicada ? ' ✓ pub.' : ''}
+                  — {new Date(j.fecha).toLocaleDateString('es-AR')}
+                  {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+              onClick={() => void autoSchedule()}
+              className={futbolButtonClass()}
+            >
+              Auto-programar canchas
+            </button>
+            <button
+              type="button"
+              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+              onClick={() => void publishJornada()}
+              className={futbolButtonClass('ghost')}
+            >
+              Publicar jornada
+            </button>
+            <button
+              type="button"
+              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+              onClick={() => void suspendRain()}
+              className={futbolButtonClass('ghost')}
+            >
+              Suspender por lluvia
+            </button>
+          </div>
 
-      {selectedJornadaData?.suspendida && (
-        <p className="text-sm text-amber-600">Esta jornada está suspendida.</p>
-      )}
-      {equipoLibreNombre(selectedJornadaData) && (
-        <p className="text-sm text-muted-foreground">
-          Libre esta fecha: <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
-        </p>
-      )}
+          {selectedJornadaData?.suspendida && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+              Esta jornada está suspendida.
+            </div>
+          )}
+          {equipoLibreNombre(selectedJornadaData) && (
+            <p className="text-sm text-muted-foreground">
+              Libre esta fecha:{' '}
+              <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
+            </p>
+          )}
 
-      {selectedJornada && (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold">Preferencias de horario (jornada)</h3>
-          <p className="text-xs text-muted-foreground">
-            El auto-programador intenta respetar estos horarios. Si no hay slot, muestra un aviso.
-          </p>
-          <PreferenciasHorarioSection
-            jornadaId={selectedJornada}
-            disabled={selectedJornadaData?.suspendida}
-          />
+          {selectedJornada && (
+            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
+              <h4 className="text-sm font-semibold text-foreground">Preferencias de horario (jornada)</h4>
+              <p className="text-xs text-muted-foreground">
+                El auto-programador intenta respetar estos horarios. Si no hay slot, muestra un aviso.
+              </p>
+              <PreferenciasHorarioSection
+                jornadaId={selectedJornada}
+                disabled={selectedJornadaData?.suspendida}
+              />
+            </div>
+          )}
         </div>
-      )}
+      </details>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando partidos...</p>
@@ -606,7 +621,7 @@ export function FixturePanel() {
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <select
-                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm"
+                    className={futbolFieldClass('max-w-[160px]')}
                     value={m.canchaId ?? ''}
                     onChange={(e) =>
                       void updateSchedule(m.id, e.target.value, m.horaInicio ?? '14:00')
@@ -621,7 +636,7 @@ export function FixturePanel() {
                   </select>
                   <input
                     type="time"
-                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm"
+                    className={futbolFieldClass('max-w-[160px]')}
                     value={m.horaInicio ?? '14:00'}
                     onChange={(e) => {
                       const canchaId = m.canchaId ?? canchas[0]?.id ?? '';

@@ -43,8 +43,8 @@ export function SaturdayGridPreview({ data }: { data: SaturdayGridResponse }) {
                       <div
                         className="rounded-lg border px-2 py-1.5 text-center text-[11px] font-medium"
                         style={{
-                          borderColor: `${match.categoriaColor ?? '#6BFF9E'}66`,
-                          background: `${match.categoriaColor ?? '#6BFF9E'}18`,
+                          borderColor: `${match.categoriaColor ?? '#3d7a3d'}66`,
+                          background: `${match.categoriaColor ?? '#3d7a3d'}18`,
                         }}
                         title={`${match.local} vs ${match.visitante}`}
                       >

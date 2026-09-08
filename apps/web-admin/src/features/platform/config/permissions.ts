@@ -37,8 +37,6 @@ export type VentasTab =
 export type FutbolTab =
   | 'inicio'
   | 'equipos'
-  | 'capitanes'
-  | 'plantel'
   | 'categorias'
   | 'fixture'
   | 'horarios'

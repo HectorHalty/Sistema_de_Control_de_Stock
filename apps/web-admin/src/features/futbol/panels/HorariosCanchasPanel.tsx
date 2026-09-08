@@ -7,20 +7,14 @@ import {
   type FootballTorneo,
   type SaturdayGridResponse,
 } from '@/app/api/client';
+import { Ban } from 'lucide-react';
 import {
   FutbolError,
   FutbolPanelShell,
+  FutbolSuccess,
   futbolButtonClass,
   futbolFieldClass,
 } from '../futbol-shared';
-
-function FutbolSuccess({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
-      {message}
-    </div>
-  );
-}
 
 /** Franjas horarias por defecto para poder abrir celdas vacías aunque todavía no haya nada asignado ese día. */
 const DEFAULT_FRANJAS = [
@@ -102,35 +96,36 @@ function GenderGrid({
                 const match = cellMap.get(key) ?? null;
                 const isOpen = openCell === key;
                 return (
-                  <td key={c.id} className="px-2 py-2 align-top">
+                  <td key={c.id} className="p-2 align-top">
                     {match ? (
                       <div
-                        className="space-y-1 rounded-lg border px-2 py-1.5 text-center text-[11px] font-medium"
+                        className="space-y-1.5 rounded-lg border p-2 text-center text-xs font-medium"
                         style={{
-                          borderColor: `${match.categoriaColor ?? '#6BFF9E'}66`,
-                          background: `${match.categoriaColor ?? '#6BFF9E'}18`,
+                          borderColor: `${match.categoriaColor ?? '#3d7a3d'}66`,
+                          background: `${match.categoriaColor ?? '#3d7a3d'}18`,
                         }}
                         title={`${match.local} vs ${match.visitante}`}
                       >
-                        <span className="block text-[9px] font-bold uppercase opacity-80">
+                        <span className="block text-[10px] font-bold uppercase tracking-wide opacity-80">
                           {match.categoria}
                         </span>
-                        <span className="block">
+                        <span className="block leading-tight">
                           {match.local.slice(0, 10)} vs {match.visitante.slice(0, 10)}
                         </span>
                         <button
                           type="button"
                           disabled={busy}
-                          className="mt-1 rounded border border-red-500/40 px-1.5 py-0.5 text-[10px] text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300"
+                          className="flex w-full items-center justify-center gap-1 rounded-lg border border-red-500/40 py-1 text-[11px] text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300"
                           onClick={() => void onSuspendMatch(match.id)}
                         >
+                          <Ban size={12} />
                           Suspender
                         </button>
                       </div>
                     ) : isOpen ? (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <select
-                          className="w-full rounded-lg border border-border bg-background px-1 py-1 text-[11px]"
+                          className={futbolFieldClass('px-2 py-1 text-xs')}
                           value={pickedMatch}
                           onChange={(e) => setPickedMatch(e.target.value)}
                         >
@@ -145,7 +140,7 @@ function GenderGrid({
                           <button
                             type="button"
                             disabled={!pickedMatch || busy}
-                            className="flex-1 rounded border border-primary/40 px-1.5 py-0.5 text-[10px] text-primary disabled:opacity-50"
+                            className={futbolButtonClass('primary', 'flex-1 px-2 py-1 text-xs')}
                             onClick={async () => {
                               if (!pickedMatch) return;
                               await onAssign(pickedMatch, c.id, hora);
@@ -157,7 +152,7 @@ function GenderGrid({
                           </button>
                           <button
                             type="button"
-                            className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            className={futbolButtonClass('ghost', 'px-2 py-1 text-xs')}
                             onClick={() => {
                               setOpenCell(null);
                               setPickedMatch('');
@@ -170,14 +165,14 @@ function GenderGrid({
                     ) : (
                       <button
                         type="button"
-                        className="block w-full text-center text-muted-foreground/30 hover:text-primary"
+                        className="flex w-full items-center justify-center rounded-lg border border-dashed border-border py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
                         onClick={() => {
                           setOpenCell(key);
                           setPickedMatch('');
                         }}
                         title="Asignar partido pendiente"
                       >
-                        + —
+                        + Asignar
                       </button>
                     )}
                   </td>
@@ -379,8 +374,11 @@ export function HorariosCanchasPanel() {
       {error && <FutbolError message={error} />}
       {success && <FutbolSuccess message={success} />}
 
-      <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
-        <h3 className="text-sm font-semibold">Suspender por lluvia</h3>
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Ban size={16} className="text-red-600 dark:text-red-300" />
+          Suspender por lluvia
+        </h3>
         <div className="flex flex-wrap items-end gap-2">
           <select
             className={futbolFieldClass('max-w-[260px]')}

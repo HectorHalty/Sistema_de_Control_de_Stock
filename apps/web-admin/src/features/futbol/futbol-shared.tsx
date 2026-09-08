@@ -43,11 +43,12 @@ export function futbolFieldClass(extra = '') {
   return `w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary ${extra}`.trim();
 }
 
-export function futbolButtonClass(variant: 'primary' | 'ghost' = 'primary') {
-  if (variant === 'ghost') {
-    return 'rounded-xl border border-border px-3 py-2 text-sm text-foreground hover:bg-muted';
-  }
-  return 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50';
+export function futbolButtonClass(variant: 'primary' | 'ghost' = 'primary', extra = '') {
+  const base =
+    variant === 'ghost'
+      ? 'rounded-xl border border-border px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-50'
+      : 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50';
+  return `${base} ${extra}`.trim();
 }
 
 export function FutbolPanelShell({
@@ -67,7 +68,15 @@ export function FutbolPanelShell({
 
 export function FutbolError({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+      {message}
+    </div>
+  );
+}
+
+export function FutbolSuccess({ message }: { message: string }) {
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
       {message}
     </div>
   );

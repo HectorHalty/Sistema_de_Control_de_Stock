@@ -151,7 +151,7 @@ function MatchEventsSection({
               {events.map((ev) => (
                 <li
                   key={ev.id}
-                  className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
                 >
                   <span>
                     <span className="font-medium">
@@ -169,7 +169,7 @@ function MatchEventsSection({
                     type="button"
                     disabled={saving}
                     onClick={() => void handleDelete(ev.id)}
-                    className="rounded p-1 text-red-500 hover:bg-red-500/10"
+                    className="rounded-lg p-1 text-red-600 hover:bg-red-500/10 dark:text-red-300"
                     aria-label="Eliminar evento"
                   >
                     <Trash2 size={14} />

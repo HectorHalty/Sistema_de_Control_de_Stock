@@ -9,8 +9,6 @@ import {
 import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlaceholderPage';
 import { FutbolInicioPanel } from './panels/FutbolInicioPanel';
 import { EquiposPanel } from './panels/EquiposPanel';
-import { CapitanesPanel } from './panels/CapitanesPanel';
-import { PlantelPanel } from './panels/PlantelPanel';
 import { CategoriasPanel } from './panels/CategoriasPanel';
 import { FixturePanel } from './panels/FixturePanel';
 import { HorariosCanchasPanel } from './panels/HorariosCanchasPanel';
@@ -24,8 +22,6 @@ import { MediaPanel } from './panels/MediaPanel';
 const VALID_TABS: FutbolTab[] = [
   'inicio',
   'equipos',
-  'capitanes',
-  'plantel',
   'categorias',
   'fixture',
   'horarios',
@@ -74,8 +70,6 @@ export function FutbolModule() {
     <div className="h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-border">
       {tab === 'inicio' && <FutbolInicioPanel />}
       {tab === 'equipos' && <EquiposPanel />}
-      {tab === 'capitanes' && <CapitanesPanel />}
-      {tab === 'plantel' && <PlantelPanel />}
       {tab === 'categorias' && <CategoriasPanel />}
       {tab === 'fixture' && <FixturePanel />}
       {tab === 'horarios' && <HorariosCanchasPanel />}

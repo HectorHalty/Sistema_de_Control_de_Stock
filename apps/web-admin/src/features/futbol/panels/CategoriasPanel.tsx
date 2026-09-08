@@ -9,6 +9,7 @@ import {
 import {
   FutbolError,
   FutbolPanelShell,
+  FutbolSuccess,
   futbolButtonClass,
   futbolFieldClass,
 } from '../futbol-shared';
@@ -31,7 +32,7 @@ const emptyForm: CategoriaFormState = {
   nombre: '',
   genero: 'hombres',
   maxPlantel: '',
-  colorHex: '#6BFF9E',
+  colorHex: '#3d7a3d',
 };
 
 export function CategoriasPanel() {
@@ -90,7 +91,7 @@ export function CategoriasPanel() {
       nombre: cat.nombre,
       genero: cat.genero,
       maxPlantel: cat.maxPlantel != null ? String(cat.maxPlantel) : '',
-      colorHex: cat.colorHex ?? '#6BFF9E',
+      colorHex: cat.colorHex ?? '#3d7a3d',
     });
     setInfo(null);
   }
@@ -196,11 +197,7 @@ export function CategoriasPanel() {
   return (
     <FutbolPanelShell title="Categorías">
       {error && <FutbolError message={error} />}
-      {info && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-300">
-          {info}
-        </div>
-      )}
+      {info && <FutbolSuccess message={info} />}
 
       {/* Alta / edición de categorías */}
       <form
