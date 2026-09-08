@@ -82,8 +82,13 @@ export function PosicionesPanel() {
                     <td className="px-3 py-3 text-center">{row.goalsFor}</td>
                     <td className="px-3 py-3 text-center">{row.goalsAgainst}</td>
                     <td
-                      className="px-3 py-3 text-center font-semibold"
-                      style={{ color: dg > 0 ? '#6bff9e' : dg < 0 ? '#ef4444' : undefined }}
+                      className={`px-3 py-3 text-center font-semibold ${
+                        dg > 0
+                          ? 'text-primary'
+                          : dg < 0
+                          ? 'text-red-600 dark:text-red-400'
+                          : ''
+                      }`}
                     >
                       {difLabel(dg)}
                     </td>

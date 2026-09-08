@@ -65,7 +65,7 @@ export function FutbolModule() {
   }
 
   return (
-    <div className="theme-neon-public dark h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-[#2a2a2a]">
+    <div className="h-full min-h-[calc(100vh-12rem)] rounded-2xl border border-border">
       {tab === 'inicio' && <FutbolInicioPanel />}
       {tab === 'equipos' && <EquiposPanel />}
       {tab === 'capitanes' && <CapitanesPanel />}

@@ -37,10 +37,10 @@ function ChartTooltip({
   const ventas = payload[0]?.value ?? 0;
   const tickets = payload[0]?.payload?.tickets ?? 0;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95">
-      <p className="text-xs font-medium capitalize text-gray-500 dark:text-gray-400">{label}</p>
+    <div className="rounded-xl border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+      <p className="text-xs font-medium capitalize text-muted-foreground">{label}</p>
       <p className="text-base font-semibold text-emerald-600 dark:text-emerald-400">{formatMoney(ventas)}</p>
-      <p className="text-xs text-gray-400 dark:text-gray-500">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
+      <p className="text-xs text-muted-foreground">{tickets} ticket{tickets !== 1 ? "s" : ""}</p>
     </div>
   );
 }
@@ -56,8 +56,8 @@ function KitchenBarTooltip({
   const row = payload[0]?.payload;
   if (!row) return null;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-      <p className="max-w-[10rem] truncate text-sm font-medium text-gray-900 dark:text-gray-100">{row.name}</p>
+    <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-lg">
+      <p className="max-w-[10rem] truncate text-sm font-medium text-foreground">{row.name}</p>
       <p className="text-sm text-emerald-600 dark:text-emerald-400">{row.value} u. · {formatMoney(row.revenue)}</p>
     </div>
   );
@@ -106,14 +106,14 @@ export function DashboardModule() {
       {/* Header + rango */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          <h3 className="text-xl font-semibold text-foreground">
             Dashboard de Ventas
           </h3>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Resumen en tiempo real desde mostrador
           </p>
         </div>
-        <div className="flex gap-1 rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
           {(["7d", "30d", "90d", "Año"] as MetricsRange[]).map((r) => (
             <button
               key={r}
@@ -122,7 +122,7 @@ export function DashboardModule() {
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 range === r
                   ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                  : "text-muted-foreground hover:bg-muted"
               }`}
             >
               {r}
@@ -168,7 +168,7 @@ export function DashboardModule() {
       </div>
 
       {!hasData && (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800/50 dark:text-gray-400">
+        <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
           No hay ventas en este período. Registrá tickets en Mostrador para ver métricas.
         </div>
       )}
@@ -176,10 +176,10 @@ export function DashboardModule() {
       {hasData && (
         <>
           {/* Gráfico principal */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-emerald-600" />
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+              <h4 className="font-semibold text-foreground">
                 Evolución de ventas
               </h4>
             </div>
@@ -222,10 +222,10 @@ export function DashboardModule() {
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {/* Empleados del día */}
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Users className="h-5 w-5 text-blue-600" />
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                <h4 className="font-semibold text-foreground">
                   Empleados del día
                 </h4>
                 <span className="ml-auto text-xs text-muted-foreground">
@@ -241,7 +241,7 @@ export function DashboardModule() {
                   {metrics.employeesToday.map((emp, idx) => (
                     <li
                       key={emp.id}
-                      className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40"
+                      className="flex items-center gap-3 rounded-xl border border-border bg-muted/80 p-3"
                     >
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
@@ -254,7 +254,7 @@ export function DashboardModule() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate font-medium text-gray-900 dark:text-gray-100">
+                          <p className="truncate font-medium text-foreground">
                             {emp.name}
                             {idx === 0 && (
                               <span className="ml-2 text-[10px] font-normal text-amber-600 dark:text-amber-400">
@@ -266,7 +266,7 @@ export function DashboardModule() {
                             {formatMoney(emp.totalVentas)}
                           </p>
                         </div>
-                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all"
                             style={{
@@ -285,10 +285,10 @@ export function DashboardModule() {
             </div>
 
             {/* Top por cocina — resumen */}
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Warehouse className="h-5 w-5 text-[#3d7a3d]" />
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                <h4 className="font-semibold text-foreground">
                   Ventas por cocina
                 </h4>
               </div>
@@ -334,11 +334,11 @@ export function DashboardModule() {
           </div>
 
           {/* Productos más vendidos por cocina */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-[#3d7a3d]" />
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                <h4 className="font-semibold text-foreground">
                   Productos más vendidos por cocina
                 </h4>
               </div>
@@ -352,7 +352,7 @@ export function DashboardModule() {
                       className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                         (activeKitchen ?? metrics.topProductsByKitchen[0]?.kitchen) === k.kitchen
                           ? "text-white shadow-sm"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                          : "bg-muted text-muted-foreground hover:bg-accent"
                       }`}
                       style={
                         (activeKitchen ?? metrics.topProductsByKitchen[0]?.kitchen) === k.kitchen
@@ -404,7 +404,7 @@ export function DashboardModule() {
                   {selectedKitchen.products.map((p, idx) => (
                     <li
                       key={p.id}
-                      className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5 dark:border-gray-700"
+                      className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"
                     >
                       <span
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
@@ -417,12 +417,12 @@ export function DashboardModule() {
                         {idx + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {p.name}
                         </p>
                         <p className="text-xs text-muted-foreground">{formatMoney(p.revenue)}</p>
                       </div>
-                      <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      <span className="shrink-0 text-sm font-semibold text-foreground">
                         {p.value} u.
                       </span>
                     </li>

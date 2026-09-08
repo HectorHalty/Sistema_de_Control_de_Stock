@@ -113,7 +113,7 @@ export function MetricasPanel() {
         <p className="text-sm text-muted-foreground">Cargando métricas...</p>
       ) : (
         <div className="space-y-5">
-          <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-[#161616] p-6 text-foreground shadow-lg">
+          <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-muted p-6 text-foreground shadow-lg">
             <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="mb-2 flex items-center gap-2 text-primary">
@@ -160,8 +160,8 @@ export function MetricasPanel() {
                     <AreaChart data={metrics.salesByDay}>
                       <defs>
                         <linearGradient id="onlineVentasGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6BFF9E" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#6BFF9E" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#3d7a3d" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#3d7a3d" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -171,7 +171,7 @@ export function MetricasPanel() {
                       <Area
                         type="monotone"
                         dataKey="ventas"
-                        stroke="#6BFF9E"
+                        stroke="#3d7a3d"
                         fill="url(#onlineVentasGradient)"
                         strokeWidth={2}
                       />
