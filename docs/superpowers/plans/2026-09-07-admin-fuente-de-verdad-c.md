@@ -145,10 +145,15 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
     fix, creación de producto (`updateProduct`/`createProduct`) reflejada al
     instante y persistida tras recargar la página, pantallas de Inventario
     y Ventas/POS cargan sin errores.
-  - **No se probó el checkout del POS con la red cortada** — la base de
-    desarrollo recién reseteada no tenía productos de venta con stock
-    cargados para armar un ticket real; queda pendiente de una verificación
-    manual con datos de demo antes de mergear.
+  - **Checkout online verificado en vivo** (con datos de demo sembrados):
+    agregar producto al carrito, "Vender sin imprimir" → ticket creado
+    (#1002), stock descontado correctamente (843→842), sin errores de
+    consola. El código que cambió esta tarea (lectura de `kitchens`/
+    `salesProducts`) no toca el POST de checkout ni el gate de
+    `apiAvailable` que decide el modo offline (viven en
+    `app/api/adapters.ts`, sin tocar) — riesgo residual bajo, pero **no se
+    simuló la red cortada explícitamente** en este entorno de verificación;
+    queda como último chequeo manual recomendado antes de mergear.
   - `npm test` 175/175, `npm run build` sin errores.
 
 - [ ] **Task 5: Limpieza — quitar el `useLocalStorage` de datos de servidor**
