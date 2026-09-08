@@ -39,9 +39,12 @@ export type FutbolTab =
   | 'equipos'
   | 'capitanes'
   | 'plantel'
+  | 'categorias'
   | 'fixture'
+  | 'horarios'
   | 'resultados'
   | 'posiciones'
+  | 'planillas'
   | 'reglamento'
   | 'suspendidos'
   | 'media';

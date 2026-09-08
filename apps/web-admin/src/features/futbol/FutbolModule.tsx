@@ -11,9 +11,12 @@ import { FutbolInicioPanel } from './panels/FutbolInicioPanel';
 import { EquiposPanel } from './panels/EquiposPanel';
 import { CapitanesPanel } from './panels/CapitanesPanel';
 import { PlantelPanel } from './panels/PlantelPanel';
+import { CategoriasPanel } from './panels/CategoriasPanel';
 import { FixturePanel } from './panels/FixturePanel';
+import { HorariosCanchasPanel } from './panels/HorariosCanchasPanel';
 import { ResultadosPanel } from './panels/ResultadosPanel';
 import { PosicionesPanel } from './panels/PosicionesPanel';
+import { PlanillasPanel } from './panels/PlanillasPanel';
 import { ReglamentoPanel } from './panels/ReglamentoPanel';
 import { SuspendidosPanel } from './panels/SuspendidosPanel';
 import { MediaPanel } from './panels/MediaPanel';
@@ -23,9 +26,12 @@ const VALID_TABS: FutbolTab[] = [
   'equipos',
   'capitanes',
   'plantel',
+  'categorias',
   'fixture',
+  'horarios',
   'resultados',
   'posiciones',
+  'planillas',
   'reglamento',
   'suspendidos',
   'media',
@@ -70,9 +76,12 @@ export function FutbolModule() {
       {tab === 'equipos' && <EquiposPanel />}
       {tab === 'capitanes' && <CapitanesPanel />}
       {tab === 'plantel' && <PlantelPanel />}
+      {tab === 'categorias' && <CategoriasPanel />}
       {tab === 'fixture' && <FixturePanel />}
+      {tab === 'horarios' && <HorariosCanchasPanel />}
       {tab === 'resultados' && <ResultadosPanel />}
       {tab === 'posiciones' && <PosicionesPanel />}
+      {tab === 'planillas' && <PlanillasPanel />}
       {tab === 'reglamento' && <ReglamentoPanel />}
       {tab === 'suspendidos' && <SuspendidosPanel />}
       {tab === 'media' && <MediaPanel />}
