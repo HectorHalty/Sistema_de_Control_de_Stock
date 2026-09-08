@@ -248,6 +248,16 @@ export class FootballService {
     return this.prisma.equipoFutbol.create({ data });
   }
 
+  async updateTeam(id: string, data: { name?: string; logo?: string }) {
+    const existing = await this.prisma.equipoFutbol.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Equipo ${id} no encontrado`);
+    if (data.name && data.name !== existing.name) {
+      const dup = await this.prisma.equipoFutbol.findUnique({ where: { name: data.name } });
+      if (dup) throw new ConflictException(`Ya existe un equipo llamado "${data.name}"`);
+    }
+    return this.prisma.equipoFutbol.update({ where: { id }, data });
+  }
+
   async listInscriptions(torneoId?: string) {
     const active = torneoId ? { torneoId } : await this.resolveTorneoId();
     return this.prisma.equipoInscripcion.findMany({

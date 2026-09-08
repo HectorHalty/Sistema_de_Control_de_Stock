@@ -136,6 +136,12 @@ export class FootballController {
     return this.footballService.createTeam(body);
   }
 
+  @Put('teams/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateTeam(@Param('id') id: string, @Body() body: { name?: string; logo?: string }) {
+    return this.footballService.updateTeam(id, body);
+  }
+
   @Get('inscriptions')
   @Roles(...FOOTBALL_READ_ROLES)
   listInscriptions(@Query('torneoId') torneoId?: string) {

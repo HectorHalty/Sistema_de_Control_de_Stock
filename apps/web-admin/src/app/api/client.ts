@@ -567,6 +567,8 @@ export const footballApi = {
     list: (token: string) => apiFetch<FootballTeam[]>('/football/teams', { token }),
     create: (data: { name: string; shortName?: string; logo?: string; color?: string }, token: string) =>
       apiFetch<FootballTeam>('/football/teams', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; logo?: string }, token: string) =>
+      apiFetch<FootballTeam>(`/football/teams/${id}`, { method: 'PUT', token, body: data }),
   },
   inscriptions: {
     list: (token: string, torneoId?: string) => {
