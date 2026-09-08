@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { migrateOrderStatuses } from './sort-orders';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import { stockApi, isApiError, settingsApi } from '@/app/api/client';
-import { clearApiReachabilityCache, isApiReachable } from '@/app/api/adapters';
+import { clearApiReachabilityCache } from '@/app/api/adapters';
 import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
@@ -47,33 +48,49 @@ function appendAudit(
 }
 
 export function useInventoryState() {
-  const [products, setProducts] = useLocalStorage<Product[]>(storageKeys.inventory.products, initialProducts);
-  const [warehouses, setWarehouses] = useLocalStorage<Warehouse[]>(storageKeys.inventory.warehouses, initialWarehouses);
-  const [orders, setOrders] = useLocalStorage<Order[]>(storageKeys.inventory.orders, initialOrders);
+  // Los 8 datasets que vienen del servidor (products, warehouses, orders,
+  // categories, suppliers, stockMovements, stockCountSessions,
+  // employeeConsumptionLogs) YA NO se inicializan de localStorage — ver
+  // Proyecto C, Task 2 (docs/superpowers/plans/2026-09-07-admin-fuente-de-
+  // verdad-c.md). React Query es la fuente de verdad de lectura; localStorage
+  // queda como caché de revalidación (Task 0, PersistQueryClientProvider),
+  // no como estado inicial leído a mano.
+  //
+  // auditLog y consumptionLogs SÍ siguen en localStorage puro: no vienen de
+  // ningún endpoint de lectura (auditLog se manda al servidor al crear vía
+  // addStockAudit, pero nunca se hidrata de vuelta) — no son parte del
+  // problema que resuelve este proyecto.
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>(initialWarehouses);
+  const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [auditLog, setAuditLog] = useLocalStorage<AuditEntry[]>(storageKeys.inventory.auditLog, initialAuditLog);
-  const [categories, setCategories] = useLocalStorage<Category[]>(storageKeys.inventory.categories, initialCategories);
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [consumptionLogs, setConsumptionLogs] = useLocalStorage<ConsumptionLog[]>(storageKeys.inventory.consumption, []);
-  const [employeeConsumptionLogs, setEmployeeConsumptionLogs] = useLocalStorage<EmployeeConsumptionEntry[]>(
-    storageKeys.inventory.employeeConsumption,
-    [],
-  );
-  const [suppliers, setSuppliers] = useLocalStorage<Supplier[]>(storageKeys.inventory.suppliers, initialSuppliers);
-  const [stockMovements, setStockMovements] = useLocalStorage<StockMovement[]>(storageKeys.inventory.movements, []);
-  const [stockCountSessions, setStockCountSessions] = useLocalStorage<StockCountSession[]>(storageKeys.inventory.countSessions, []);
+  const [employeeConsumptionLogs, setEmployeeConsumptionLogs] = useState<EmployeeConsumptionEntry[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [stockCountSessions, setStockCountSessions] = useState<StockCountSession[]>([]);
+
+  const queryClient = useQueryClient();
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   // En producción usamos API estricta (sin fallback silencioso) para evitar desincronización.
   const [inventoryApiAvailable, setInventoryApiAvailable] = useState<boolean | null>(true);
-  // Evita que una hidratación inicial en vuelo pise cambios hechos mientras carga.
-  const mountHydrationGen = useRef(0);
 
+  /**
+   * Antes (localStorage-first): bumpear un "mountGen" para que una
+   * hidratación inicial en vuelo no pisara cambios hechos mientras cargaba.
+   * Con React Query el mismo problema — una respuesta vieja resolviendo
+   * después de una más nueva — ya lo resuelve la librería (sólo la fetch más
+   * reciente de cada query commitea a `data`); lo único que hace falta acá
+   * es cancelar explícitamente cualquier fetch de inventario en vuelo para
+   * que no siga circulando de fondo. `invalidateInventoryHydration` se
+   * mantiene con el mismo nombre porque el POS (`VentasPosContext.tsx`) lo
+   * llama después de cada venta/anulación — no renombrar sin actualizar ahí.
+   */
   const invalidateMountHydration = useCallback(() => {
-    mountHydrationGen.current += 1;
-  }, []);
-
-  const applyHydration = useCallback((mountGen: number | undefined, apply: () => void) => {
-    if (mountGen === undefined || mountGen === mountHydrationGen.current) apply();
-  }, []);
+    void queryClient.cancelQueries({ queryKey: ['inventory'] });
+  }, [queryClient]);
 
   const markApiSynced = useCallback(() => {
     invalidateMountHydration();
@@ -87,117 +104,165 @@ export function useInventoryState() {
     });
   }, [setOrders]);
 
-  // ============ API-first: hidratación y CRUD del catálogo de stock ============
+  // ============ API-first: hidratación (React Query) y CRUD del catálogo ============
   // El catálogo (categorías, almacenes, productos + niveles de stock) vive en la
-  // API. Al montar, si la API responde, sobrescribimos el caché local con lo del
-  // servidor. Si la API no está disponible, seguimos operando contra localStorage.
+  // API. React Query trae cada dataset por separado (en paralelo, sin
+  // orquestar un Promise.all a mano); cuando cambia el resultado, se mergea
+  // con lo pendiente local exactamente igual que antes (Task 2 sólo cambia
+  // de dónde sale el dato, no la lógica de merge). Si la API no responde,
+  // seguimos mostrando la última página conocida (cache de React Query,
+  // persistida por Task 0) en vez de romper la pantalla.
 
-  const hydrateCategories = useCallback(async (mountGen?: number) => {
-    const cats = await stockApi.categories.list();
-    const server = cats.map(mapApiCategoryToLocal);
-    applyHydration(mountGen, () => setCategories(prev =>
-      mergeServerWithPendingLocal(server, prev, {
-        nameOf: c => c.name,
-        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
-      }),
-    ));
-  }, [setCategories, applyHydration]);
+  const categoriesQuery = useQuery({
+    queryKey: ['inventory', 'categories'],
+    queryFn: () => stockApi.categories.list().then(rows => rows.map(mapApiCategoryToLocal)),
+  });
+  const warehousesQuery = useQuery({
+    queryKey: ['inventory', 'warehouses'],
+    queryFn: () => stockApi.warehouses.list().then(rows => rows.map(mapApiWarehouseToLocal)),
+  });
+  const productsQuery = useQuery({
+    queryKey: ['inventory', 'products'],
+    queryFn: () => stockApi.products.list().then(rows => rows.map(mapApiProductToLocal)),
+  });
+  const movementsQuery = useQuery({
+    queryKey: ['inventory', 'movements'],
+    queryFn: () => stockApi.movements.list({ limit: 500 }).then(rows => rows.map(mapApiMovementToLocal)),
+  });
+  const employeeConsumptionsQuery = useQuery({
+    queryKey: ['inventory', 'employeeConsumptions'],
+    queryFn: () => stockApi.employeeConsumptions.list(200).then(rows => rows.map(mapApiEmployeeConsumptionToLocal)),
+  });
+  const countSessionsQuery = useQuery({
+    queryKey: ['inventory', 'countSessions'],
+    queryFn: () => stockApi.countSessions.list(100).then(rows => rows.map(mapApiCountSessionToLocal)),
+  });
+  const suppliersQuery = useQuery({
+    queryKey: ['inventory', 'suppliers'],
+    queryFn: () => stockApi.suppliers.list().then(rows => rows.map(mapApiSupplierToLocal)),
+  });
+  const ordersQuery = useQuery({
+    queryKey: ['inventory', 'orders'],
+    queryFn: () => stockApi.purchaseOrders.list().then(rows => rows.map(mapApiPurchaseOrderToLocal)),
+  });
 
-  const hydrateWarehouses = useCallback(async (mountGen?: number) => {
-    const whs = await stockApi.warehouses.list();
-    const server = whs.map(mapApiWarehouseToLocal);
-    applyHydration(mountGen, () => setWarehouses(prev =>
-      mergeServerWithPendingLocal(server, prev, {
-        nameOf: w => w.name,
-        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
-      }),
-    ));
-  }, [setWarehouses, applyHydration]);
+  // Cada `hydrateX` sigue existiendo con la misma firma que usan las 15+
+  // mutaciones de más abajo (`scheduleBackgroundHydrate(() => hydrateX())`),
+  // pero ahora sólo le pide a React Query que refetchee — el merge con lo
+  // pendiente local pasa una sola vez, en el `useEffect` reactivo de abajo
+  // que escucha `data`, no acá (evita mergear dos veces el mismo dato).
+  const hydrateCategories = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'categories'] }),
+    [queryClient],
+  );
+  const hydrateWarehouses = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'warehouses'] }),
+    [queryClient],
+  );
+  const hydrateProducts = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'products'] }),
+    [queryClient],
+  );
+  const hydrateMovements = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'movements'] }),
+    [queryClient],
+  );
+  const hydrateEmployeeConsumptions = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'employeeConsumptions'] }),
+    [queryClient],
+  );
+  const hydrateCountSessions = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'countSessions'] }),
+    [queryClient],
+  );
+  const hydrateSuppliers = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'suppliers'] }),
+    [queryClient],
+  );
+  const hydrateOrders = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['inventory', 'orders'] }),
+    [queryClient],
+  );
 
-  const hydrateProducts = useCallback(async (mountGen?: number) => {
-    const prods = await stockApi.products.list();
-    const server = prods.map(mapApiProductToLocal);
-    applyHydration(mountGen, () => setProducts(prev =>
-      reassignProductCodes(mergeServerWithPendingLocal(server, prev)),
-    ));
-    return server;
-  }, [setProducts, applyHydration]);
-
-  const hydrateMovements = useCallback(async (mountGen?: number) => {
-    const movs = await stockApi.movements.list({ limit: 500 });
-    applyHydration(mountGen, () => setStockMovements(movs.map(mapApiMovementToLocal)));
-  }, [setStockMovements, applyHydration]);
-
-  const hydrateEmployeeConsumptions = useCallback(async (mountGen?: number) => {
-    const rows = await stockApi.employeeConsumptions.list(200);
-    applyHydration(mountGen, () => setEmployeeConsumptionLogs(rows.map(mapApiEmployeeConsumptionToLocal)));
-  }, [setEmployeeConsumptionLogs, applyHydration]);
-
-  const hydrateCountSessions = useCallback(async (mountGen?: number) => {
-    const sessions = await stockApi.countSessions.list(100);
-    applyHydration(mountGen, () => setStockCountSessions(sessions.map(mapApiCountSessionToLocal)));
-  }, [setStockCountSessions, applyHydration]);
-
-  const hydrateSuppliers = useCallback(async (mountGen?: number) => {
-    const rows = await stockApi.suppliers.list();
-    const server = rows.map(mapApiSupplierToLocal);
-    applyHydration(mountGen, () => setSuppliers(prev =>
-      mergeServerWithPendingLocal(server, prev, {
-        nameOf: s => s.name,
-        sort: (a, b) => a.name.localeCompare(b.name, 'es'),
-      }),
-    ));
-  }, [setSuppliers, applyHydration]);
-
-  const hydrateOrders = useCallback(async (mountGen?: number) => {
-    const rows = await stockApi.purchaseOrders.list();
-    const server = rows.map(mapApiPurchaseOrderToLocal);
-    applyHydration(mountGen, () => setOrders(prev =>
-      mergeServerWithPendingLocal(server, prev, { keepPendingLocal: false }),
-    ));
-  }, [setOrders, applyHydration]);
+  // Cada vez que React Query trae un dataset (al montar, al invalidar tras una
+  // mutación, o al reconectar), se mergea con lo pendiente local — mismo
+  // merge de siempre, ahora disparado por `data` en vez de por un mount
+  // effect a mano.
+  useEffect(() => {
+    if (categoriesQuery.data === undefined) return;
+    const server = categoriesQuery.data;
+    setCategories(prev => mergeServerWithPendingLocal(server, prev, {
+      nameOf: c => c.name,
+      sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+    }));
+  }, [categoriesQuery.data]);
 
   useEffect(() => {
-    let cancelled = false;
-    const mountGen = mountHydrationGen.current;
-    isApiReachable().then(async ok => {
-      if (cancelled) return;
-      if (!ok) {
-        setInventoryApiAvailable(false);
-        return;
-      }
-      try {
-        await Promise.all([
-          hydrateCategories(mountGen),
-          hydrateWarehouses(mountGen),
-          hydrateProducts(mountGen),
-          hydrateMovements(mountGen),
-          hydrateEmployeeConsumptions(mountGen),
-          hydrateCountSessions(mountGen),
-          hydrateSuppliers(mountGen),
-          hydrateOrders(mountGen),
-        ]);
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setInventoryApiAvailable(true);
-        }
-      } catch {
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setInventoryApiAvailable(false);
-        }
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+    if (warehousesQuery.data === undefined) return;
+    const server = warehousesQuery.data;
+    setWarehouses(prev => mergeServerWithPendingLocal(server, prev, {
+      nameOf: w => w.name,
+      sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+    }));
+  }, [warehousesQuery.data]);
+
+  useEffect(() => {
+    if (productsQuery.data === undefined) return;
+    const server = productsQuery.data;
+    setProducts(prev => reassignProductCodes(mergeServerWithPendingLocal(server, prev)));
+  }, [productsQuery.data]);
+
+  useEffect(() => {
+    if (movementsQuery.data === undefined) return;
+    setStockMovements(movementsQuery.data);
+  }, [movementsQuery.data]);
+
+  useEffect(() => {
+    if (employeeConsumptionsQuery.data === undefined) return;
+    setEmployeeConsumptionLogs(employeeConsumptionsQuery.data);
+  }, [employeeConsumptionsQuery.data]);
+
+  useEffect(() => {
+    if (countSessionsQuery.data === undefined) return;
+    setStockCountSessions(countSessionsQuery.data);
+  }, [countSessionsQuery.data]);
+
+  useEffect(() => {
+    if (suppliersQuery.data === undefined) return;
+    const server = suppliersQuery.data;
+    setSuppliers(prev => mergeServerWithPendingLocal(server, prev, {
+      nameOf: s => s.name,
+      sort: (a, b) => a.name.localeCompare(b.name, 'es'),
+    }));
+  }, [suppliersQuery.data]);
+
+  useEffect(() => {
+    if (ordersQuery.data === undefined) return;
+    const server = ordersQuery.data;
+    setOrders(prev => mergeServerWithPendingLocal(server, prev, { keepPendingLocal: false }));
+  }, [ordersQuery.data]);
+
+  const hydrationQueries = [
+    categoriesQuery, warehousesQuery, productsQuery, movementsQuery,
+    employeeConsumptionsQuery, countSessionsQuery, suppliersQuery, ordersQuery,
+  ];
+
+  useEffect(() => {
+    if (hydrationQueries.some(q => q.isError)) {
+      setInventoryApiAvailable(false);
+      return;
+    }
+    if (hydrationQueries.every(q => q.isSuccess)) {
+      setInventoryApiAvailable(true);
+    }
+    // hydrationQueries se reconstruye en cada render — sólo nos importan sus
+    // banderas de estado, no la identidad del array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    hydrateCategories,
-    hydrateWarehouses,
-    hydrateProducts,
-    hydrateMovements,
-    hydrateEmployeeConsumptions,
-    hydrateCountSessions,
-    hydrateSuppliers,
-    hydrateOrders,
+    categoriesQuery.isError, warehousesQuery.isError, productsQuery.isError, movementsQuery.isError,
+    employeeConsumptionsQuery.isError, countSessionsQuery.isError, suppliersQuery.isError, ordersQuery.isError,
+    categoriesQuery.isSuccess, warehousesQuery.isSuccess, productsQuery.isSuccess, movementsQuery.isSuccess,
+    employeeConsumptionsQuery.isSuccess, countSessionsQuery.isSuccess, suppliersQuery.isSuccess, ordersQuery.isSuccess,
   ]);
 
   const persistCategoryId = useCallback(

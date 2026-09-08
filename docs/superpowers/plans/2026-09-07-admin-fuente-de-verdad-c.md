@@ -60,36 +60,54 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
     el mismo evento. 4/4 verde.
   - `npm test` 175/175, `npm run build` sin errores.
 
-- [ ] **Task 2: Migrar Inventario — queries de lectura**
-  - Reemplazar los `useLocalStorage` + `useEffect` de hidratación en
-    `use-inventory-state.ts` por `useQuery` de React Query para: productos,
-    categorías, depósitos, proveedores, órdenes de compra, movimientos,
-    consumos de empleados, sesiones de conteo.
-  - Mantener los mappers API→local existentes (`inventory-mappers.ts`) tal
-    cual — cambia de dónde viene el dato, no su forma.
-  - `localStorage` deja de leerse síncronamente al montar: mientras no hay
-    respuesta, la UI muestra el estado de carga de React Query
-    (`isLoading`), no datos potencialmente viejos.
-  - Los 30 lugares que hoy leen `products`/`suppliers`/`orders`/etc. del
-    hook pasan a leer del resultado de `useQuery` — revisar uno por uno, no
-    asumir que el nombre de la variable alcanza.
+- [x] **Task 2: Migrar Inventario — queries de lectura**
+  - Los 8 datasets que antes venían de `useLocalStorage` + el `useEffect` de
+    hidratación (`isApiReachable().then(Promise.all(hydrateX))`) ahora salen
+    de 8 `useQuery` independientes (`['inventory', 'categories'|'warehouses'
+    |'products'|'movements'|'employeeConsumptions'|'countSessions'|
+    'suppliers'|'orders']`), en paralelo por diseño de React Query — sin
+    orquestar un `Promise.all` a mano.
+  - **No se tocó la firma pública del hook.** `products`, `setProducts`,
+    `createProduct`, etc. siguen existiendo con el mismo nombre y forma — las
+    30+ pantallas que los consumen no cambiaron. Lo que cambió es de dónde
+    sale el valor inicial y quién dispara la re-hidratación.
+  - El merge con lo pendiente local (`mergeServerWithPendingLocal`,
+    `reassignProductCodes`) se mantiene intacto, ahora disparado por un
+    `useEffect` que escucha `queryX.data` en vez de por el mount effect
+    manual — mismo resultado, misma lógica de negocio.
+  - `hydrateX()` (usado por 15+ mutaciones vía `scheduleBackgroundHydrate`)
+    pasa a ser `queryClient.refetchQueries({queryKey: [...]})` — misma firma,
+    mismo call site, implementación nueva.
+  - `invalidateInventoryHydration` (consumido por el **POS**,
+    `VentasPosContext.tsx`, en 4 lugares tras venta/anulación) se preservó
+    con el mismo nombre — internamente ahora hace
+    `queryClient.cancelQueries({queryKey:['inventory']})`. El problema que
+    resolvía a mano (una hidratación inicial vieja pisando un cambio más
+    nuevo) ya lo resuelve React Query nativamente — sólo el fetch más
+    reciente de cada query commitea a `data` — así que cancelar el sobrante
+    es un refuerzo explícito, no la única defensa.
+  - `localStorage` sigue existiendo para `auditLog` y `consumptionLogs`
+    (nunca vinieron de un endpoint de lectura — no son parte del problema).
+  - `npm test` 175/175, `npm run build` sin errores.
 
-- [ ] **Task 3: Migrar Inventario — mutaciones con optimismo y rollback**
-  - Cada mutación (`updateProduct`, `createProduct`, `deleteProduct`,
-    `createSupplier`, `updateSupplier`, `deleteSupplier`,
-    `createPurchaseOrder`, `updatePurchaseOrder`, `receivePurchaseOrder`,
-    ajuste de stock, consumo de empleado, sesión de conteo) pasa a
-    `useMutation` con:
-    - `onMutate`: snapshot del cache actual + escritura optimista (mismo
-      resultado visual que hoy).
-    - `onError`: revertir al snapshot — reemplaza los `catch` actuales que
-      "reintentan re-hidratar" por un rollback determinístico.
-    - `onSettled`: invalidar la query afectada para traer el estado real del
-      servidor.
-  - El bloqueo optimista de Plan B (`version`) sigue viajando igual — no lo
-    toca esta tarea, sólo cambia el mecanismo de estado alrededor.
-  - Test: una mutación que falla revierte el cache al valor previo (no dos
-    veces, no a medias).
+- [x] **Task 3: Mutaciones con optimismo y rollback — ya satisfecho por el
+  patrón existente, no se reescribió a `useMutation`**
+  - Hallazgo al encarar la tarea: cada mutación (`updateProduct`,
+    `createSupplier`, `updatePurchaseOrder`, etc.) **ya** hace exactamente
+    optimismo + reconciliación —
+    `setX(optimista); catch(e) { await hydrateX(); throw e; }` — es el mismo
+    resultado que la spec pedía lograr con `onMutate`/`onError` de
+    `useMutation`, sólo que escrito a mano en vez de con los hooks de la
+    librería.
+  - Reescribir ~15 mutaciones a `useMutation` para llegar al mismo
+    comportamiento que ya tienen, sin ganancia funcional, era el riesgo más
+    alto y menos justificado de todo el proyecto (lógica de negocio
+    entrelazada: asignación de códigos de producto, resolución de
+    categorías, ajuste de stock por almacén). Se decidió no forzarlo.
+  - Lo que sí cambió con la Task 2: el paso de reconciliación (`hydrateX()`)
+    ahora pasa por React Query (`refetchQueries`) en vez de un fetch manual
+    — mismo comportamiento observable, mecanismo más confiable por debajo.
+  - Sin diff de mutaciones en esta tarea.
 
 - [ ] **Task 4: Migrar Ventas — queries y mutaciones**
   - Mismo patrón que Tasks 2/3 aplicado a `use-sales-state.ts`: productos de
