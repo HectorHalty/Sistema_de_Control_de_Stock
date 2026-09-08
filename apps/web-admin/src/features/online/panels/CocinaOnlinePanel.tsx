@@ -221,7 +221,7 @@ export function CocinaOnlinePanel() {
 
       {redeemed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-[#3d7a3d]/40 bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-lg rounded-xl border border-[#3d7a3d]/40 bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <QrCode size={24} />
               Pedido entregado
