@@ -13,6 +13,7 @@ import {
   FutbolPanelShell,
   FutbolSuccess,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
   openListaBuenaFe,
   useFutbolOverview,
@@ -79,7 +80,7 @@ function CreateTeamForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <form onSubmit={handleSubmit} className={`space-y-3 ${futbolCardClass('p-4')}`}>
       <h3 className="text-sm font-semibold text-foreground">Nuevo equipo</h3>
       {error && <FutbolError message={error} />}
       <div className="grid gap-3 md:grid-cols-2">
@@ -210,7 +211,7 @@ function TeamDetail({
       {error && <FutbolError message={error} />}
       {info && <FutbolSuccess message={info} />}
 
-      <form onSubmit={handleSaveTeam} className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <form onSubmit={handleSaveTeam} className={`space-y-3 ${futbolCardClass('p-4')}`}>
         <h4 className="text-sm font-semibold text-foreground">Datos del equipo</h4>
         <div className="grid gap-3 md:grid-cols-2">
           <input className={futbolFieldClass()} value={name} onChange={(e) => setName(e.target.value)} />
@@ -232,9 +233,9 @@ function TeamDetail({
         </button>
       </form>
 
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('p-4')}>
         <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Shield size={16} className="text-primary" />
+          <Shield size={16} className="text-[#3d7a3d]" />
           Capitán
         </h4>
         {loadingDetail ? (
@@ -290,7 +291,7 @@ function TeamDetail({
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('p-4')}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-semibold text-foreground">Plantel</h4>
           <button
@@ -320,11 +321,11 @@ function TeamDetail({
                 {(roster?.jugadores ?? []).map((j) => {
                   const esCapitan = roster?.capitan?.personaId === j.personaId;
                   return (
-                    <tr key={j.id} className={`border-t border-border ${esCapitan ? 'bg-primary/10' : ''}`}>
+                    <tr key={j.id} className={`border-t border-border ${esCapitan ? 'bg-[#3d7a3d]/10' : ''}`}>
                       <td className="px-4 py-3">
                         {j.apellido}, {j.nombre}
                         {esCapitan && (
-                          <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                          <span className="ml-2 rounded-full bg-[#3d7a3d] px-2 py-0.5 text-xs font-semibold text-white">
                             Capitán
                           </span>
                         )}
@@ -384,7 +385,7 @@ export function EquiposPanel() {
   }, [reload]);
 
   return (
-    <FutbolPanelShell title="Equipos">
+    <FutbolPanelShell title="Equipos" subtitle={`${rows.length} equipo(s) inscriptos`}>
       {error && <FutbolError message={error} />}
 
       <CreateTeamForm torneos={torneos} defaultTorneoId={torneoId ?? ''} onCreated={reload} />
@@ -417,7 +418,7 @@ export function EquiposPanel() {
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
                       row.activo
-                        ? 'bg-primary/10 text-primary'
+                        ? 'bg-[#3d7a3d]/10 text-[#3d7a3d]'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >

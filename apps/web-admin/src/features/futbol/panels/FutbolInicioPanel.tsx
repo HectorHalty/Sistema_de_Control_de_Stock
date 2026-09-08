@@ -6,6 +6,7 @@ import {
   FutbolError,
   FutbolPanelShell,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
   useFutbolOverview,
 } from '../futbol-shared';
@@ -54,14 +55,24 @@ export function FutbolInicioPanel() {
     }
   }
 
-  if (loading) return <FutbolPanelShell title="Torneo">Cargando...</FutbolPanelShell>;
-  if (error) return <FutbolPanelShell title="Torneo"><FutbolError message={error} /></FutbolPanelShell>;
+  if (loading)
+    return (
+      <FutbolPanelShell title="Torneo" subtitle="Configuración del torneo publicado en la web pública">
+        Cargando...
+      </FutbolPanelShell>
+    );
+  if (error)
+    return (
+      <FutbolPanelShell title="Torneo" subtitle="Configuración del torneo publicado en la web pública">
+        <FutbolError message={error} />
+      </FutbolPanelShell>
+    );
 
   const torneos = data?.torneos ?? [];
 
   if (!data?.torneo && !torneos.length) {
     return (
-      <FutbolPanelShell title="Torneo">
+      <FutbolPanelShell title="Torneo" subtitle="Configuración del torneo publicado en la web pública">
         <p className="text-sm text-muted-foreground">No hay torneos configurados.</p>
         <button
           type="button"
@@ -85,8 +96,8 @@ export function FutbolInicioPanel() {
   ];
 
   return (
-    <FutbolPanelShell title="Torneo activo">
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
+    <FutbolPanelShell title="Torneo activo" subtitle="Configuración del torneo publicado en la web pública">
+      <div className={`flex flex-wrap items-end gap-3 ${futbolCardClass('p-4')}`}>
         <div className="min-w-[200px] flex-1">
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Categoría / torneo
@@ -130,22 +141,22 @@ export function FutbolInicioPanel() {
       </div>
 
       {success && (
-        <p className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm text-primary">
+        <p className="rounded-lg border border-[#3d7a3d]/30 bg-[#3d7a3d]/10 px-4 py-2 text-sm text-[#3d7a3d]">
           {success}
         </p>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className={futbolCardClass('p-5')}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xl font-bold">{torneo?.nombre}</p>
+            <p className="text-lg font-semibold">{torneo?.nombre}</p>
             <p className="text-sm text-muted-foreground">
               {torneo?.categoria?.nombre} · {torneo?.campeonato?.nombre}
             </p>
             <p
               className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
                 torneo?.publicado
-                  ? 'bg-primary/15 text-primary'
+                  ? 'bg-[#3d7a3d]/15 text-[#3d7a3d]'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
@@ -181,7 +192,7 @@ export function FutbolInicioPanel() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-xl border border-border bg-card p-4">
+          <div key={c.label} className={futbolCardClass('p-4')}>
             <div className="mb-2 flex items-center gap-2 text-muted-foreground">
               <c.icon size={16} />
               <span className="text-xs uppercase tracking-wide">{c.label}</span>

@@ -49,9 +49,9 @@ export function TeamLogoUpload({ value, onChange, label }: Props) {
       {label && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
       <div className="flex flex-wrap items-center gap-3">
         {value ? (
-          <img src={value} alt="" className="h-14 w-14 rounded-xl border border-border object-cover" />
+          <img src={value} alt="" className="h-14 w-14 rounded-lg border border-border object-cover" />
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
             <Upload size={18} />
           </div>
         )}

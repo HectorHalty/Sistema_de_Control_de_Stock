@@ -11,6 +11,7 @@ import {
   FutbolPanelShell,
   FutbolSuccess,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
 } from '../futbol-shared';
 
@@ -195,14 +196,14 @@ export function CategoriasPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Categorías">
+    <FutbolPanelShell title="Categorías" subtitle="Categorías y torneos del campeonato">
       {error && <FutbolError message={error} />}
       {info && <FutbolSuccess message={info} />}
 
       {/* Alta / edición de categorías */}
       <form
         onSubmit={handleSubmit}
-        className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-6"
+        className={`grid gap-3 ${futbolCardClass('p-4')} md:grid-cols-6`}
       >
         <input
           className={futbolFieldClass()}
@@ -328,7 +329,7 @@ export function CategoriasPanel() {
       )}
 
       {/* Torneos existentes + bootstrap */}
-      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className={`space-y-3 ${futbolCardClass('p-4')}`}>
         <h3 className="text-sm font-semibold text-foreground">Torneos</h3>
         <p className="text-xs text-muted-foreground">
           No hay un endpoint para crear campeonatos (temporadas) desde este panel todavía —
@@ -386,7 +387,7 @@ export function CategoriasPanel() {
       </div>
 
       {/* Reasignar equipo a otro torneo/categoría */}
-      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className={`space-y-3 ${futbolCardClass('p-4')}`}>
         <h3 className="text-sm font-semibold text-foreground">Reasignar equipo a otro torneo</h3>
         <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
