@@ -9,6 +9,8 @@ import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 import { autoScheduleMatches } from './fixture-scheduler';
+import { buildRoundPairs, createMatchesForPairs, FixtureGeneratorService } from './fixture-generator.service';
+import { MatchSuspensionService } from './match-suspension.service';
 import { scheduleSaturdayMatches } from './saturday-scheduler';
 import { SuspensionSyncService } from './suspension-sync.service';
 
@@ -18,6 +20,8 @@ export class FootballService {
     private prisma: PrismaService,
     private reglamentoEngine: ReglamentoEngineService,
     private suspensionSync: SuspensionSyncService,
+    private fixtureGenerator: FixtureGeneratorService,
+    private matchSuspension: MatchSuspensionService,
   ) {}
 
   async getOverview(torneoId?: string) {
@@ -582,28 +586,25 @@ ${partidoBlock}
     }
 
     const roundIndex = Math.max(0, jornada.numero - 1);
-    const pairs = this.buildRoundPairs(inscripciones, roundIndex);
-    const created: Awaited<ReturnType<typeof this.prisma.partidoFutbol.create>>[] = [];
+    const { pairs, byeInscripcionId } = buildRoundPairs(inscripciones, roundIndex);
+    const matchDate = new Date(jornada.fecha);
 
-    for (const [home, away] of pairs) {
-      const matchDate = new Date(jornada.fecha);
-      const partido = await this.prisma.partidoFutbol.create({
-        data: {
-          torneoId: jornada.torneoId,
-          jornadaId: jornada.id,
-          homeTeamId: home.equipoId,
-          awayTeamId: away.equipoId,
-          homeInscripcionId: home.id,
-          awayInscripcionId: away.id,
-          date: matchDate,
-          status: 'pendiente',
-        },
-        include: this.matchInclude(),
-      });
-      created.push(partido);
-    }
+    const created = await createMatchesForPairs(
+      this.prisma,
+      { torneoId: jornada.torneoId, jornadaId: jornada.id, date: matchDate, pairs },
+      this.matchInclude(),
+    );
+
+    await this.prisma.jornada.update({
+      where: { id: jornadaId },
+      data: { equipoLibreId: byeInscripcionId },
+    });
 
     return { jornadaId, created: created.length, matches: created };
+  }
+
+  async generateFullSeasonFixture(torneoId: string, fechas: number, fechaInicio: string) {
+    return this.fixtureGenerator.generateFullSeason(torneoId, fechas, fechaInicio);
   }
 
   // Matches
@@ -821,6 +822,7 @@ ${partidoBlock}
         canchaNumero: m.cancha?.numero,
         categoria: m.torneo?.categoria.nombre,
         categoriaColor: m.torneo?.categoria.colorHex,
+        genero: m.torneo?.categoria.genero,
         local: m.homeTeam.name,
         visitante: m.awayTeam.name,
         bloqueadoManual: m.bloqueadoManual,
@@ -1007,67 +1009,15 @@ ${partidoBlock}
   }
 
   async suspendJornadaPorLluvia(jornadaId: string) {
-    const jornada = await this.prisma.jornada.findUnique({
-      where: { id: jornadaId },
-      include: { torneo: true },
-    });
-    if (!jornada) throw new NotFoundException('Jornada no encontrada');
-    if (jornada.suspendida) {
-      throw new ConflictException('La jornada ya está suspendida');
-    }
+    return this.matchSuspension.suspendJornadaPorLluvia(jornadaId);
+  }
 
-    const pendingMatches = await this.prisma.partidoFutbol.findMany({
-      where: { jornadaId, status: 'pendiente' },
-    });
+  async suspendMatch(matchId: string) {
+    return this.matchSuspension.suspendMatch(matchId);
+  }
 
-    const maxJornada = await this.prisma.jornada.findFirst({
-      where: { torneoId: jornada.torneoId },
-      orderBy: { numero: 'desc' },
-    });
-    const nextNumero = (maxJornada?.numero ?? jornada.numero) + 1;
-    const recoveryDate = new Date(jornada.fecha);
-    recoveryDate.setDate(recoveryDate.getDate() + 7);
-
-    const recovery = await this.prisma.$transaction(async (tx) => {
-      await tx.jornada.update({
-        where: { id: jornadaId },
-        data: { suspendida: true, publicada: false },
-      });
-
-      const nueva = await tx.jornada.create({
-        data: {
-          torneoId: jornada.torneoId,
-          numero: nextNumero,
-          fecha: recoveryDate,
-          esRecuperacion: true,
-          suspendida: false,
-          publicada: false,
-        },
-      });
-
-      for (const match of pendingMatches) {
-        await tx.partidoFutbol.update({
-          where: { id: match.id },
-          data: {
-            jornadaId: nueva.id,
-            date: recoveryDate,
-            ...(match.bloqueadoManual
-              ? {}
-              : { canchaId: null, horaInicio: null, venue: null }),
-          },
-        });
-      }
-
-      return nueva;
-    });
-
-    return {
-      suspendedJornadaId: jornadaId,
-      recoveryJornadaId: recovery.id,
-      recoveryNumero: recovery.numero,
-      recoveryFecha: recovery.fecha.toISOString(),
-      movedMatches: pendingMatches.length,
-    };
+  async suspendSaturday(fecha: string) {
+    return this.matchSuspension.suspendSaturday(fecha);
   }
 
   async publishJornada(jornadaId: string) {
@@ -1292,36 +1242,5 @@ ${partidoBlock}
     const torneo = await this.getActiveTorneo();
     if (!torneo) throw new BadRequestException('No hay torneo activo');
     return { torneoId: torneo.id };
-  }
-
-  private buildRoundPairs<T extends { id: string; equipoId: string }>(
-    teams: T[],
-    roundIndex: number,
-  ): [T, T][] {
-    const list = [...teams];
-    if (list.length < 2) return [];
-
-    if (list.length % 2 === 1) {
-      list.push({ id: '__bye__', equipoId: '__bye__' } as T);
-    }
-
-    const rotated = [...list];
-    for (let r = 0; r < roundIndex % (rotated.length - 1); r++) {
-      const fixed = rotated[0];
-      const tail = rotated.slice(1);
-      const last = tail.pop()!;
-      rotated.splice(0, rotated.length, fixed, last, ...tail);
-    }
-
-    const half = rotated.length / 2;
-    const pairs: [T, T][] = [];
-    for (let i = 0; i < half; i++) {
-      const home = rotated[i];
-      const away = rotated[rotated.length - 1 - i];
-      if (home.id !== '__bye__' && away.id !== '__bye__') {
-        pairs.push([home, away]);
-      }
-    }
-    return pairs;
   }
 }

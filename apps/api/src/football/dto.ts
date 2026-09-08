@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { GeneroCategoria, TipoEventoPartido } from '@prisma/client';
 
 export class UpdateInscriptionDto {
@@ -171,6 +171,26 @@ export class UpdateSuspensionDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+}
+
+export class GenerateFixtureDto {
+  @IsInt()
+  @IsPositive()
+  fechas: number;
+
+  @IsDateString()
+  fechaInicio: string;
+}
+
+export class SuspendMatchDto {
+  @IsOptional()
+  @IsString()
+  motivo?: string;
+}
+
+export class SuspendSaturdayDto {
+  @IsDateString()
+  fecha: string;
 }
 
 export class UpdateReglamentoArticuloDto {

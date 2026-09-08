@@ -18,6 +18,9 @@ import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
 import {
   CreateCategoriaDto,
+  GenerateFixtureDto,
+  SuspendMatchDto,
+  SuspendSaturdayDto,
   UpdateCaptainDto,
   UpdateCategoriaDto,
   UpdateInscriptionDto,
@@ -225,6 +228,12 @@ export class FootballController {
     return this.footballService.generateRoundRobin(id);
   }
 
+  @Post('torneos/:id/generate-fixture')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  generateFixture(@Param('id') id: string, @Body() body: GenerateFixtureDto) {
+    return this.footballService.generateFullSeasonFixture(id, body.fechas, body.fechaInicio);
+  }
+
   @Post('jornadas/:id/auto-schedule')
   @Roles(...FOOTBALL_MUTATION_ROLES)
   autoScheduleJornada(@Param('id') id: string) {
@@ -291,6 +300,18 @@ export class FootballController {
     },
   ) {
     return this.footballService.createMatch(body);
+  }
+
+  @Post('matches/:id/suspend')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendMatch(@Param('id') id: string, @Body() _body: SuspendMatchDto) {
+    return this.footballService.suspendMatch(id);
+  }
+
+  @Post('scheduling/suspend-saturday')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendSaturday(@Body() body: SuspendSaturdayDto) {
+    return this.footballService.suspendSaturday(body.fecha);
   }
 
   @Put('matches/:id/schedule')
