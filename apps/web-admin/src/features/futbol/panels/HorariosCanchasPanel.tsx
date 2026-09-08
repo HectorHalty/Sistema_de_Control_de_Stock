@@ -13,6 +13,7 @@ import {
   FutbolPanelShell,
   FutbolSuccess,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
 } from '../futbol-shared';
 
@@ -165,7 +166,7 @@ function GenderGrid({
                     ) : (
                       <button
                         type="button"
-                        className="flex w-full items-center justify-center rounded-lg border border-dashed border-border py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                        className="flex w-full items-center justify-center rounded-lg border border-dashed border-border py-2 text-xs text-muted-foreground hover:border-[#3d7a3d] hover:text-[#3d7a3d]"
                         onClick={() => {
                           setOpenCell(key);
                           setPickedMatch('');
@@ -349,14 +350,17 @@ export function HorariosCanchasPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Horarios y Canchas">
+    <FutbolPanelShell
+      title="Horarios y Canchas"
+      subtitle="Asigná horarios y canchas por jornada"
+    >
       <p className="text-sm text-muted-foreground">
         Elegí la fecha para administrar las grillas de hombres y mujeres: asigná partidos
         pendientes a una celda vacía, o suspendé por lluvia a nivel partido, categoría o sábado
         completo.
       </p>
 
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('flex flex-wrap items-end gap-2 p-4')}>
         <label className="space-y-1 text-xs text-muted-foreground">
           Fecha (sábado)
           <input
@@ -374,7 +378,7 @@ export function HorariosCanchasPanel() {
       {error && <FutbolError message={error} />}
       {success && <FutbolSuccess message={success} />}
 
-      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('space-y-3 p-4')}>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Ban size={16} className="text-red-600 dark:text-red-300" />
           Suspender por lluvia

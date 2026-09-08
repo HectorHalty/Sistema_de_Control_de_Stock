@@ -69,7 +69,7 @@ export function FutbolSettingsPanel() {
         <select
           value={defaultCategory}
           onChange={(e) => setDefaultCategory(e.target.value as typeof defaultCategory)}
-          className="px-3 py-1.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm"
+          className="px-3 py-1.5 rounded-lg bg-card border border-border focus:border-[#3d7a3d] outline-none text-sm"
         >
           {tournamentCategories.map((category) => (
             <option key={category} value={category}>

@@ -40,7 +40,10 @@ export function PosicionesPanel() {
   }, [reload]);
 
   return (
-    <FutbolPanelShell title="Tabla de posiciones">
+    <FutbolPanelShell
+      title="Tabla de posiciones"
+      subtitle="Tabla calculada a partir de los resultados"
+    >
       <p className="text-sm text-muted-foreground">
         Calculada desde resultados cargados en el torneo{' '}
         {overview?.torneo?.nombre ? `· ${overview.torneo.nombre}` : ''}.
@@ -84,7 +87,7 @@ export function PosicionesPanel() {
                     <td
                       className={`px-3 py-3 text-center font-semibold ${
                         dg > 0
-                          ? 'text-primary'
+                          ? 'text-[#3d7a3d]'
                           : dg < 0
                           ? 'text-red-600 dark:text-red-400'
                           : ''
@@ -92,7 +95,7 @@ export function PosicionesPanel() {
                     >
                       {difLabel(dg)}
                     </td>
-                    <td className="px-4 py-3 text-center font-bold text-primary">{row.points}</td>
+                    <td className="px-4 py-3 text-center font-bold text-[#3d7a3d]">{row.points}</td>
                   </tr>
                 );
               })}

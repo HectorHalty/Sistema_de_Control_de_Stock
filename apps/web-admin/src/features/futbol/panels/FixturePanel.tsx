@@ -14,6 +14,7 @@ import {
   FutbolPanelShell,
   FutbolSuccess,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
   useFutbolOverview,
 } from '../futbol-shared';
@@ -69,10 +70,10 @@ function TorneoFixtureWizard({
   return (
     <form
       onSubmit={generate}
-      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      className="space-y-3 rounded-xl border border-[#3d7a3d]/30 bg-[#3d7a3d]/5 p-4"
     >
       <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Calendar size={16} className="text-primary" />
+        <Calendar size={16} className="text-[#3d7a3d]" />
         Generar fixture completo del torneo
       </h3>
       <p className="text-xs text-muted-foreground">
@@ -180,7 +181,7 @@ function SaturdayMultiCatSection() {
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <div className={futbolCardClass('space-y-3 p-4')}>
       <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <Calendar size={16} className="text-muted-foreground" />
         Programación sábado (multi-categoría)
@@ -468,7 +469,10 @@ export function FixturePanel() {
   }
 
   return (
-    <FutbolPanelShell title="Fixture">
+    <FutbolPanelShell
+      title="Fixture"
+      subtitle="Generá y editá el fixture del torneo"
+    >
       <p className="text-sm text-muted-foreground">
         Creá jornadas, cargá preferencias de horario por equipo, generá cruces, auto-programá
         canchas/horarios y publicá en la web.
@@ -615,7 +619,7 @@ export function FixturePanel() {
           <div className="space-y-3">
             <h3 className="text-sm font-semibold">Partidos</h3>
             {matches.map((m) => (
-              <div key={m.id} className="rounded-xl border border-border bg-card p-4">
+              <div key={m.id} className={futbolCardClass('p-4')}>
                 <p className="font-medium">
                   {m.homeTeam?.name} vs {m.awayTeam?.name}
                 </p>

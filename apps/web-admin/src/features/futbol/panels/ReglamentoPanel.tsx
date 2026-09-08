@@ -52,7 +52,10 @@ export function ReglamentoPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Reglamento">
+    <FutbolPanelShell
+      title="Reglamento"
+      subtitle="Texto del reglamento publicado en la web"
+    >
       {error && <FutbolError message={error} />}
       {loading || !data ? (
         <p className="text-sm text-muted-foreground">Cargando reglamento...</p>

@@ -11,6 +11,7 @@ import {
   FutbolError,
   FutbolPanelShell,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
 } from '../futbol-shared';
 
@@ -358,10 +359,13 @@ export function PlanillasPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Planillas de cancha">
+    <FutbolPanelShell
+      title="Planillas de cancha"
+      subtitle="Descargá las planillas de cancha en PDF"
+    >
       {error && <FutbolError message={error} />}
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('flex flex-wrap items-end gap-3 p-4')}>
         <div>
           <label className="mb-1 block text-xs font-semibold text-muted-foreground">Fecha</label>
           <input
@@ -431,7 +435,7 @@ export function PlanillasPanel() {
           </div>
 
           {/* Selector individual */}
-          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
+          <div className={futbolCardClass('flex flex-wrap items-end gap-3 p-4')}>
             <div className="min-w-[260px] flex-1">
               <label className="mb-1 block text-xs font-semibold text-muted-foreground">
                 Equipo / partido

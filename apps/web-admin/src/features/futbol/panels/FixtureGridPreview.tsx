@@ -70,7 +70,7 @@ export function FixtureGridPreview({
                         className={`rounded-lg px-2 py-1.5 text-center text-xs font-medium ${
                           match.bloqueadoManual
                             ? 'border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
-                            : 'border border-primary/30 bg-primary/10 text-foreground'
+                            : 'border border-[#3d7a3d]/30 bg-[#3d7a3d]/10 text-foreground'
                         }`}
                         title={`${match.homeTeam?.name} vs ${match.awayTeam?.name}`}
                       >

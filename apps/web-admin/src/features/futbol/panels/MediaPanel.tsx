@@ -5,6 +5,7 @@ import {
   FutbolError,
   FutbolPanelShell,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
 } from '../futbol-shared';
 
@@ -103,13 +104,16 @@ export function MediaPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Media por fecha">
+    <FutbolPanelShell
+      title="Media por fecha"
+      subtitle="Fotos y videos por fecha para la web pública"
+    >
       <p className="text-sm text-muted-foreground">
         Fotos y videos vinculados a fechas de partido. Se almacenan en MinIO y pueden mostrarse en la web
         pública.
       </p>
 
-      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className={futbolCardClass('space-y-3 p-4')}>
         <p className="text-sm font-semibold">Subir archivo</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <input
@@ -194,7 +198,7 @@ export function MediaPanel() {
                     href={item.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-primary hover:underline"
+                    className="text-xs text-[#3d7a3d] hover:underline"
                   >
                     Abrir
                   </a>

@@ -12,6 +12,7 @@ import {
   FutbolError,
   FutbolPanelShell,
   futbolButtonClass,
+  futbolCardClass,
   futbolFieldClass,
   useFutbolOverview,
 } from '../futbol-shared';
@@ -291,7 +292,10 @@ export function ResultadosPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Resultados">
+    <FutbolPanelShell
+      title="Resultados"
+      subtitle="Cargá resultados y eventos de cada partido"
+    >
       <p className="text-sm text-muted-foreground">
         Cargá marcadores y eventos (goles, tarjetas). Los goles actualizan el marcador automáticamente
         y alimentan goleadores y suspendidos en la web pública.
@@ -304,7 +308,7 @@ export function ResultadosPanel() {
       ) : (
         <div className="space-y-3">
           {matches.map((m) => (
-            <div key={m.id} className="rounded-xl border border-border bg-card p-4">
+            <div key={m.id} className={futbolCardClass('p-4')}>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-[160px] flex-1 font-medium">{m.homeTeam?.name}</div>
                 <input
@@ -346,7 +350,7 @@ export function ResultadosPanel() {
                 {m.horaInicio ? ` · ${m.horaInicio}` : ''}
                 {m.cancha ? ` · Cancha ${m.cancha.numero}` : m.venue ? ` · ${m.venue}` : ''}
                 {' · '}
-                <span className={m.status === 'jugado' ? 'text-primary' : ''}>{m.status}</span>
+                <span className={m.status === 'jugado' ? 'text-[#3d7a3d]' : ''}>{m.status}</span>
               </p>
               <MatchEventsSection
                 match={m}

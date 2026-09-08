@@ -190,7 +190,10 @@ export function SuspendidosPanel() {
   }
 
   return (
-    <FutbolPanelShell title="Suspendidos">
+    <FutbolPanelShell
+      title="Suspendidos"
+      subtitle="Jugadores con sanción vigente"
+    >
       <p className="text-sm text-muted-foreground">
         Las sanciones se generan automáticamente al cargar tarjetas en Resultados (roja directa: a
         definir por el admin, doble amarilla: 1 fecha, 5 amarillas acumuladas: 1). Las fechas
