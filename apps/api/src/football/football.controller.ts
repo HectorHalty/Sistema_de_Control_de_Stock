@@ -380,6 +380,12 @@ export class FootballController {
     return this.footballService.syncSuspensions(torneoId);
   }
 
+  @Get('planillas')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getPlanillas(@Query('fecha') fecha: string) {
+    return this.footballService.getPlanillasForFecha(fecha);
+  }
+
   @Get('reglamento')
   @Roles(...FOOTBALL_READ_ROLES)
   listReglamento() {

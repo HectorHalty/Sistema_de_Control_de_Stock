@@ -7,9 +7,16 @@ export type SanctionDraft = {
 
 const RED_TYPES = new Set(['roja', 'expulsion_directa']);
 
-export function inferInitialFechas(motivo: string): number {
-  if (/roja|expulsión|expulsion/i.test(motivo)) return 2;
-  return 1;
+export type InferredFechas = {
+  fechasIniciales: number | null;
+  pendienteDefinir: boolean;
+};
+
+export function inferInitialFechas(motivo: string): InferredFechas {
+  if (/roja|expulsión|expulsion/i.test(motivo)) {
+    return { fechasIniciales: null, pendienteDefinir: true };
+  }
+  return { fechasIniciales: 1, pendienteDefinir: false };
 }
 
 export function remainingFechas(fechasIniciales: number, playedTeamMatchesAfterSanction: number): number {

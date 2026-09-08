@@ -78,21 +78,33 @@ export class SuspensionSyncService {
         },
       });
 
+      const inferred = inferInitialFechas(draft.motivo);
+
       if (existing) {
-        await this.prisma.suspension.update({
-          where: { id: existing.id },
-          data: {
-            activa: true,
-            fechasRestantes: draft.fechasIniciales,
-          },
-        });
+        if (existing.ajustadoManualmente) {
+          // El admin ya ajustó fechasRestantes/pendienteDefinir a mano: no pisarlo.
+          await this.prisma.suspension.update({
+            where: { id: existing.id },
+            data: { activa: true },
+          });
+        } else {
+          await this.prisma.suspension.update({
+            where: { id: existing.id },
+            data: {
+              activa: true,
+              fechasRestantes: inferred.fechasIniciales,
+              pendienteDefinir: inferred.pendienteDefinir,
+            },
+          });
+        }
       } else {
         await this.prisma.suspension.create({
           data: {
             personaId: draft.personaId,
             torneoId,
             motivo: draft.motivo,
-            fechasRestantes: draft.fechasIniciales,
+            fechasRestantes: inferred.fechasIniciales,
+            pendienteDefinir: inferred.pendienteDefinir,
             origenPartidoId: partidoId,
             activa: true,
           },
@@ -164,7 +176,10 @@ export class SuspensionSyncService {
           data: {
             origenPartidoId,
             activa: true,
-            fechasRestantes: existing.fechasRestantes > 0 ? existing.fechasRestantes : 1,
+            fechasRestantes:
+              existing.fechasRestantes != null && existing.fechasRestantes > 0
+                ? existing.fechasRestantes
+                : 1,
           },
         });
       } else {
@@ -198,7 +213,13 @@ export class SuspensionSyncService {
   async recalcRemainingForTorneo(torneoId: string): Promise<void> {
     const [suspensions, partidos, inscripciones] = await Promise.all([
       this.prisma.suspension.findMany({
-        where: { torneoId, activa: true, origenPartidoId: { not: null } },
+        where: {
+          torneoId,
+          activa: true,
+          origenPartidoId: { not: null },
+          // "A definir" (roja/expulsión sin completar) no tiene de dónde restar todavía.
+          pendienteDefinir: false,
+        },
       }),
       this.prisma.partidoFutbol.findMany({
         where: { torneoId, status: { in: ['jugado', 'wo'] } },
@@ -218,6 +239,8 @@ export class SuspensionSyncService {
 
     for (const susp of suspensions) {
       if (!susp.origenPartidoId) continue;
+      // Un ajuste manual del admin no se pisa al recalcular automáticamente.
+      if (susp.ajustadoManualmente) continue;
 
       const sanctionMatch = partidoById.get(susp.origenPartidoId)
         ?? (await this.prisma.partidoFutbol.findUnique({
@@ -238,8 +261,9 @@ export class SuspensionSyncService {
           (m.homeTeamId === teamId || m.awayTeamId === teamId),
       ).length;
 
-      const initial = inferInitialFechas(susp.motivo);
-      const remaining = remainingFechas(initial, playedAfter);
+      const { fechasIniciales } = inferInitialFechas(susp.motivo);
+      if (fechasIniciales == null) continue; // pendienteDefinir, ya filtrado arriba (defensivo)
+      const remaining = remainingFechas(fechasIniciales, playedAfter);
 
       await this.prisma.suspension.update({
         where: { id: susp.id },

@@ -1203,11 +1203,138 @@ ${partidoBlock}
   ) {
     const existing = await this.prisma.suspension.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Suspensión ${id} no encontrada`);
+
+    const updateData: typeof data & {
+      ajustadoManualmente?: boolean;
+      pendienteDefinir?: boolean;
+    } = { ...data };
+
+    if (data.fechasRestantes !== undefined) {
+      // El admin completa/ajusta el valor a mano: no debe pisarse en la próxima
+      // sincronización automática desde eventos.
+      updateData.ajustadoManualmente = true;
+      updateData.pendienteDefinir = false;
+    }
+
     return this.prisma.suspension.update({
       where: { id },
-      data,
+      data: updateData,
       include: { persona: true },
     });
+  }
+
+  async getPlanillasForFecha(fecha: string) {
+    const { dayStart, dayEnd } = this.dayRange(fecha);
+
+    const matches = await this.prisma.partidoFutbol.findMany({
+      where: {
+        jornada: { fecha: { gte: dayStart, lt: dayEnd } },
+        status: { not: 'suspendido' },
+      },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+        cancha: true,
+        torneo: { include: { categoria: true, campeonato: true } },
+        homeInscripcion: {
+          include: {
+            jugadores: {
+              where: { activa: true },
+              include: { persona: true },
+            },
+          },
+        },
+        awayInscripcion: {
+          include: {
+            jugadores: {
+              where: { activa: true },
+              include: { persona: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ horaInicio: 'asc' }],
+    });
+
+    type RosterInscripcion = (typeof matches)[number]['homeInscripcion'];
+
+    const buildRoster = (inscripcion: RosterInscripcion) =>
+      (inscripcion?.jugadores ?? []).map((j) => ({
+        personaId: j.persona.id,
+        nombre: j.persona.nombre,
+        apellido: j.persona.apellido,
+        dni: j.persona.dni,
+        fechaNacimiento: j.persona.fechaNacimiento?.toISOString().slice(0, 10) ?? null,
+        numeroCamiseta: j.numeroCamiseta,
+      }));
+
+    type PlanillaCategoria = {
+      categoriaId: string;
+      categoriaNombre: string;
+      genero: string;
+      torneoId: string;
+      campeonatoNombre: string;
+      matches: Array<{
+        matchId: string;
+        canchaNumero: number | null;
+        horaInicio: string | null;
+        home: {
+          inscripcionId: string;
+          equipoNombre: string;
+          abbr: string | null;
+          roster: ReturnType<typeof buildRoster>;
+        };
+        away: {
+          inscripcionId: string;
+          equipoNombre: string;
+          abbr: string | null;
+          roster: ReturnType<typeof buildRoster>;
+        };
+      }>;
+    };
+
+    const categoriasMap = new Map<string, PlanillaCategoria>();
+
+    for (const m of matches) {
+      if (!m.torneo) continue;
+      const categoria = m.torneo.categoria;
+
+      let entry = categoriasMap.get(categoria.id);
+      if (!entry) {
+        entry = {
+          categoriaId: categoria.id,
+          categoriaNombre: categoria.nombre,
+          genero: categoria.genero,
+          torneoId: m.torneo.id,
+          campeonatoNombre: m.torneo.campeonato.nombre,
+          matches: [],
+        };
+        categoriasMap.set(categoria.id, entry);
+      }
+
+      entry.matches.push({
+        matchId: m.id,
+        canchaNumero: m.cancha?.numero ?? null,
+        horaInicio: m.horaInicio,
+        home: {
+          inscripcionId: m.homeInscripcionId ?? '',
+          equipoNombre: m.homeTeam.name,
+          abbr: m.homeInscripcion?.abbr ?? null,
+          roster: buildRoster(m.homeInscripcion),
+        },
+        away: {
+          inscripcionId: m.awayInscripcionId ?? '',
+          equipoNombre: m.awayTeam.name,
+          abbr: m.awayInscripcion?.abbr ?? null,
+          roster: buildRoster(m.awayInscripcion),
+        },
+      });
+    }
+
+    return {
+      fecha,
+      categorias: [...categoriasMap.values()],
+    };
   }
 
   async listReglamento() {
