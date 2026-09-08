@@ -46,9 +46,11 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
   - `shared/components/GlobalToast.tsx`: único suscriptor en producción,
     montado una vez en `App.tsx` (dentro del `PersistQueryClientProvider`).
     Auto-descarta a los 6s.
-  - `app/queryClient.ts`: el `onError` de `QueryCache`/`MutationCache` ahora
-    llama `notifyError` directamente — reemplaza el placeholder de la
-    Task 0.
+  - `app/queryClient.ts`: el `onError` de `MutationCache` llama `notifyError`
+    directamente — reemplaza el placeholder de la Task 0. El de `QueryCache`
+    se reemplazó por `queryCache.subscribe(...)` en la Task 6, al encontrar
+    en vivo que el `onError` del constructor casi nunca disparaba (ver
+    detalle ahí).
   - No reemplaza los `try/catch` puntuales que ya muestran su propio mensaje
     en algunas pantallas — es la red de seguridad para lo que antes fallaba
     en silencio (la hidratación de los 6 `use-*-state.ts`, confirmado en el
@@ -173,16 +175,48 @@ todavía — mismo criterio que B tomó respecto de A: no esperar el merge).
     tiene).
   - `npm test` 175/175, `npm run build` sin errores.
 
-- [ ] **Task 6: Verificación completa y documentación**
-  - `npm test` y `npm run build` de `web-admin` en verde.
-  - Probar a mano (o documentar cómo probar) los 3 escenarios que motivaron
-    el proyecto: (a) abrir el admin con datos viejos en localStorage y la
-    API arriba — no debe mostrar el dato viejo como si fuera vigente; (b) la
-    API se cae y se recupera — el admin tiene que darse cuenta sin esperar
-    el TTL de 30s del reachability cache; (c) una mutación falla — el
-    operador tiene que verlo, siempre.
-  - `docs/RUNBOOK.md`: documentar el cambio de arquitectura (React Query +
-    persistencia, ya no localStorage-first a mano) para Inventario/Ventas.
+- [x] **Task 6: Verificación completa y documentación**
+  - Los 3 escenarios que motivaron el proyecto, probados en vivo (login
+    real, API real, DB de desarrollo reseteada a la baseline + datos de
+    referencia y demo):
+    - **(a) Datos viejos en localStorage no se muestran como vigentes:**
+      confirmado — el dataset inicial sale de React Query (con loading
+      state), no de una lectura síncrona de `localStorage` al montar.
+    - **(b) La API se cae y se recupera, sin esperar ningún TTL:** acá
+      aparecieron los **dos bugs reales** de abajo. Una vez corregidos,
+      confirmado: al caerse la API el admin muestra el toast "No se pudo
+      conectar con el servidor..." y sigue mostrando la última página
+      buena; al volver la API, la próxima query exitosa limpia el estado de
+      "ya avisado" sin acción del usuario.
+    - **(c) Una mutación fallida es visible:** confirmado en Task 4/8 de
+      Plan B — los `catch` de página siguen mostrando su propio mensaje;
+      además, cualquier `useMutation`/error de `MutationCache` pasa por el
+      mismo `notifyError`.
+  - **Bug 1 (Task 4):** loop infinito de requests — `useLocalStorage` sin
+    `useCallback`. Ver detalle en Task 4. Corregido.
+  - **Bug 2 (encontrado en esta tarea):** el toast global de la Task 1 casi
+    nunca se disparaba. Dos causas compuestas:
+    1. El `onError` del *constructor* de `QueryCache` sólo dispara cuando
+       una query pasa a `status: 'error'` — lo cual **no pasa** si la query
+       ya tenía datos de una carga anterior (React Query preserva el último
+       dato bueno en vez de pisarlo con el error). Con el persister de la
+       Task 0, casi siempre hay datos previos, así que el `onError` del
+       constructor casi nunca se ejecutaba.
+    2. Con la API totalmente caída, las queries quedaban en
+       `fetchStatus: 'paused'` esperando un evento `online` del navegador
+       que en este entorno de prueba nunca llegó — ni siquiera con
+       `networkMode: 'always'` (que en teoría evita ese pausado) la query
+       llegaba a `status: 'error'`.
+    - **Fix:** `queryClient.getQueryCache().subscribe(...)` en vez del
+      `onError` del constructor — escucha `action.type === 'error'` **y**
+      `'pause'`, con un `Set` para no repetir el aviso por la misma query
+      mientras siga caída. Verificado con instrumentación temporal
+      (`window.__qc2`, retirada antes de commitear) inspeccionando la
+      secuencia real de eventos del `QueryCache`, no sólo por inferencia.
+  - `docs/RUNBOOK.md` actualizado: arquitectura React Query + persistencia
+    para Inventario/Ventas, y el mecanismo de aviso de caída de API.
+  - `npm test` 175/175, `npm run build` sin errores (verificado de nuevo
+    después de cada fix, no sólo al final).
 
 ## Riesgos que el plan deja explícitos
 

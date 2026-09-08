@@ -382,10 +382,24 @@ sudo systemctl reload caddy
   `/stock/suppliers`, `/stock/purchase-orders`, `/kitchen/orders` y
   `/sales/tickets` — devuelve `{ items, nextCursor }`. Sin esos params cada
   endpoint sigue devolviendo el array completo (compatibilidad). El admin
-  todavía no la consume: su capa de hidratación trae el dataset completo a
-  estado local en cada pantalla (ver Proyecto C, fuera de alcance de
-  [2026-09-07-integridad-operacional-b.md](superpowers/plans/2026-09-07-integridad-operacional-b.md)).
-  Catálogos chicos (mesas, impresoras, configuración) siguen sin límite.
+  todavía no la consume: cada `useQuery` de Inventario/Ventas pide la lista
+  completa (ver
+  [2026-09-07-admin-fuente-de-verdad-c.md](superpowers/plans/2026-09-07-admin-fuente-de-verdad-c.md),
+  Task 9/10 de Plan B) — React Query maneja la caché y la revalidación, pero
+  no pagina. Catálogos chicos (mesas, impresoras, configuración) siguen sin
+  límite.
+- **Admin — fuente de lectura (Inventario y Ventas):** React Query
+  (`app/queryClient.ts`), no `localStorage`-first a mano. `localStorage`
+  sigue existiendo sólo como caché de revalidación (persister de
+  `@tanstack/react-query-persist-client`, clave `lch-admin-query-cache`) —
+  al montar, si hay caché persistida se muestra mientras revalida en
+  segundo plano; si no hay red, sigue mostrando la última página buena y un
+  toast avisa que no se pudo conectar. Fútbol/online/cocina/plataforma
+  siguen con el patrón viejo (`useLocalStorage` + hidratación manual) — ver
+  [2026-09-07-admin-fuente-de-verdad-c-design.md](superpowers/specs/2026-09-07-admin-fuente-de-verdad-c-design.md).
+  Mutaciones: optimismo a mano (no `useMutation`) con reconciliación vía
+  `queryClient.refetchQueries` si el servidor rechaza — no se reescribieron
+  porque ya hacían exactamente eso.
 - Bloqueo optimista (`version`) disponible en `Producto`, `ProductoVenta`,
   `OrdenCompra` y `Configuracion` — opcional en el DTO, 409 si no coincide.
   El admin ya lo manda en los 3 formularios de edición (Producto,
