@@ -28,7 +28,7 @@ export function OnlineKitchenTicket({ order, kitchen, highlight, onAdvance }: Pr
   return (
     <div
       className={`mx-auto w-full max-w-[280px] bg-white font-mono text-xs text-gray-900 shadow-md ${
-        highlight ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+        highlight ? 'ring-2 ring-[#3d7a3d] ring-offset-2 ring-offset-background' : ''
       }`}
       style={{ border: '1px dashed #ccc', padding: '12px' }}
     >

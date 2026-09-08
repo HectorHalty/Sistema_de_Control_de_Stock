@@ -5,7 +5,13 @@ import {
   SPONSOR_PLACEMENTS,
   placementOptionById,
 } from '../sponsor-placements';
-import { OnlineError, OnlinePanelShell, onlineButtonClass, onlineFieldClass } from '../online-shared';
+import {
+  OnlineError,
+  OnlinePanelShell,
+  onlineButtonClass,
+  onlineCardClass,
+  onlineFieldClass,
+} from '../online-shared';
 
 export function SponsorsPanel() {
   const [rows, setRows] = useState<Sponsor[]>([]);
@@ -117,9 +123,9 @@ export function SponsorsPanel() {
   }
 
   return (
-    <OnlinePanelShell title="Sponsors">
+    <OnlinePanelShell title="Sponsors" subtitle="Logos de sponsors en la web pública">
       {error && <OnlineError message={error} />}
-      <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <form onSubmit={handleCreate} className={`${onlineCardClass('p-4')} space-y-3`}>
         <p className="text-sm text-muted-foreground">
           Elegí qué banner estás modificando. El tamaño recomendado se aplica automáticamente a la web
           pública.
@@ -165,7 +171,7 @@ export function SponsorsPanel() {
             />
           </div>
         </div>
-        <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm">
+        <div className="rounded-lg border border-dashed border-[#3d7a3d]/40 bg-[#3d7a3d]/5 px-4 py-3 text-sm">
           <p className="font-semibold">{selectedPlacement.bannerLabel}</p>
           <p className="text-muted-foreground">
             Tamaño recomendado:{' '}
@@ -186,7 +192,7 @@ export function SponsorsPanel() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((row) => (
-            <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+            <div key={row.id} className={onlineCardClass('p-4')}>
               <div
                 className="mb-2 overflow-hidden rounded-lg bg-muted"
                 style={{
@@ -201,7 +207,7 @@ export function SponsorsPanel() {
                 )}
               </div>
               <p className="font-medium">{row.name}</p>
-              <p className="text-xs font-medium text-primary">
+              <p className="text-xs font-medium text-[#3d7a3d]">
                 {row.bannerLabel ?? row.placement}
               </p>
               <p className="text-xs text-muted-foreground">

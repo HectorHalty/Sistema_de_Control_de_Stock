@@ -13,7 +13,13 @@ import {
 import { ProductEmojiPicker } from '@/features/sales/components/ProductEmojiPicker';
 import { OnlineMediaUpload } from '../OnlineMediaUpload';
 import { SalesProductPicker } from '../SalesProductPicker';
-import { OnlineError, OnlinePanelShell, onlineButtonClass, onlineFieldClass } from '../online-shared';
+import {
+  OnlineError,
+  OnlinePanelShell,
+  onlineButtonClass,
+  onlineCardClass,
+  onlineFieldClass,
+} from '../online-shared';
 
 type Tab = 'productos' | 'categorias' | 'filtros';
 
@@ -229,7 +235,7 @@ export function MenuWebPanel() {
   ];
 
   return (
-    <OnlinePanelShell title="Menú web">
+    <OnlinePanelShell title="Menú web" subtitle="Productos y secciones visibles en la carta web">
       <p className="text-sm text-muted-foreground">
         Elegí productos ya creados en Ventas para publicarlos en la cantina. El precio se completa
         automáticamente y podés ajustarlo para promos web.
@@ -266,7 +272,7 @@ export function MenuWebPanel() {
           </form>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {categories.map((cat) => (
-              <div key={cat.id} className="rounded-xl border border-border bg-card p-3">
+              <div key={cat.id} className={onlineCardClass('p-3')}>
                 <input
                   className={`${onlineFieldClass()} mb-2 font-medium`}
                   defaultValue={cat.name}
@@ -308,7 +314,7 @@ export function MenuWebPanel() {
           </form>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {filters.map((f) => (
-              <div key={f.id} className="rounded-xl border border-border bg-card p-3">
+              <div key={f.id} className={onlineCardClass('p-3')}>
                 <input
                   className={`${onlineFieldClass()} mb-2 font-medium`}
                   defaultValue={f.label}
@@ -342,7 +348,7 @@ export function MenuWebPanel() {
           </button>
 
           {showCreate && (
-            <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
+            <form onSubmit={handleCreate} className={`${onlineCardClass('p-4')} grid gap-3 md:grid-cols-2`}>
               <SalesProductPicker
                 products={salesProducts}
                 alreadyOnWebIds={alreadyOnWebIds}
@@ -452,7 +458,7 @@ export function MenuWebPanel() {
             {rows.map((row) => {
               const filterIds = row.filtrosWeb?.map((f) => f.filtro.id) ?? [];
               return (
-                <div key={row.id} className="rounded-xl border border-border bg-card p-4">
+                <div key={row.id} className={onlineCardClass('p-4')}>
                   <div className="flex flex-wrap items-start gap-4">
                     {row.imagenWeb && (
                       <img src={row.imagenWeb} alt="" className="h-16 w-16 rounded-lg object-cover" />

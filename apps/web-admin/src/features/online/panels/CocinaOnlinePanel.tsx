@@ -16,6 +16,7 @@ import {
   OnlinePanelShell,
   STATUS_LABELS,
   onlineButtonClass,
+  onlineCardClass,
   onlineFieldClass,
 } from '../online-shared';
 
@@ -91,7 +92,7 @@ export function CocinaOnlinePanel() {
 
   return (
     <>
-      <OnlinePanelShell title="Cocina online">
+      <OnlinePanelShell title="Cocina online" subtitle="Pedidos web en preparación">
         <div className="sticky top-0 z-10 -mx-1 space-y-3 rounded-xl border border-border bg-background/95 p-3 backdrop-blur">
           <p className="text-sm text-muted-foreground">
             Pedidos online por cocina. El ticket más antiguo pendiente aparece listo para preparar.
@@ -124,7 +125,7 @@ export function CocinaOnlinePanel() {
           </p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <section className="rounded-xl border border-border bg-card p-4">
+            <section className={onlineCardClass('p-4')}>
               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
                 Productos pendientes · {activeKitchen?.name}
               </h3>
@@ -138,7 +139,7 @@ export function CocinaOnlinePanel() {
                       {item.emoji ? `${item.emoji} ` : ''}
                       {item.name}
                     </span>
-                    <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-black text-primary">
+                    <span className="rounded-full bg-[#3d7a3d]/15 px-2.5 py-0.5 text-xs font-black text-[#3d7a3d]">
                       {item.quantity} u.
                     </span>
                   </li>
@@ -170,7 +171,7 @@ export function CocinaOnlinePanel() {
                     En cola
                   </h3>
                   {otherOrders.map((order) => (
-                    <div key={order.id} className="rounded-xl border border-border bg-card p-3">
+                    <div key={order.id} className={onlineCardClass('p-3')}>
                       <div className="mb-2 flex items-center justify-between text-sm">
                         <span className="font-bold">#{String(order.ticketNumber).padStart(6, '0')}</span>
                         <span className="text-xs text-muted-foreground">
@@ -206,7 +207,7 @@ export function CocinaOnlinePanel() {
         type="button"
         onClick={() => setScanOpen(true)}
         aria-label="Escanear QR"
-        className="fixed bottom-8 left-1/2 z-40 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl transition hover:scale-105 active:scale-95"
+        className="fixed bottom-8 left-1/2 z-40 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-[#3d7a3d] text-white shadow-2xl transition hover:scale-105 active:scale-95"
       >
         <QrCode size={36} strokeWidth={2.2} />
       </button>
@@ -220,8 +221,8 @@ export function CocinaOnlinePanel() {
 
       {redeemed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-primary/40 bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center gap-2 text-xl font-bold text-primary">
+          <div className="w-full max-w-lg rounded-2xl border border-[#3d7a3d]/40 bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <QrCode size={24} />
               Pedido entregado
             </div>

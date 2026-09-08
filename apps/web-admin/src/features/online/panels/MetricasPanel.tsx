@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Warehouse } from 'lucide-react';
 import { onlineApi, getAccessToken, type OnlineMetrics, type OnlinePublicOrder } from '@/app/api/client';
-import { OnlineError, OnlinePanelShell } from '../online-shared';
+import { OnlineError, OnlinePanelShell, onlineCardClass } from '../online-shared';
 
 type MetricsRange = '7d' | '30d' | '90d' | 'Año';
 
@@ -36,7 +36,7 @@ function ChartTooltip({
   return (
     <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-lg">
       <p className="text-xs font-medium capitalize text-muted-foreground">{label}</p>
-      <p className="text-base font-semibold text-primary">{formatMoney(ventas)}</p>
+      <p className="text-base font-semibold text-[#3d7a3d]">{formatMoney(ventas)}</p>
       <p className="text-xs text-muted-foreground">{tickets} pedido{tickets !== 1 ? 's' : ''}</p>
     </div>
   );
@@ -84,7 +84,7 @@ export function MetricasPanel() {
   const hasData = (metrics?.totalPedidos ?? 0) > 0;
 
   return (
-    <OnlinePanelShell title="Métricas online">
+    <OnlinePanelShell title="Métricas online" subtitle="Indicadores de ventas online">
       {error && <OnlineError message={error} />}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -93,14 +93,14 @@ export function MetricasPanel() {
             Mismo estilo que ventas: recaudación, evolución diaria y top por cocina.
           </p>
         </div>
-        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+        <div className={`${onlineCardClass('p-1')} flex gap-1`}>
           {(['7d', '30d', '90d', 'Año'] as MetricsRange[]).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRange(r)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                range === r ? 'bg-[#3d7a3d] text-white' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               {r}
@@ -113,10 +113,10 @@ export function MetricasPanel() {
         <p className="text-sm text-muted-foreground">Cargando métricas...</p>
       ) : (
         <div className="space-y-5">
-          <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-muted p-6 text-foreground shadow-lg">
+          <div className="relative overflow-hidden rounded-2xl border border-[#3d7a3d]/30 bg-muted p-6 text-foreground shadow-lg">
             <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="mb-2 flex items-center gap-2 text-primary">
+                <div className="mb-2 flex items-center gap-2 text-[#3d7a3d]">
                   <TrendingUp className="h-5 w-5" />
                   <span className="text-sm font-medium uppercase tracking-wide">
                     Recaudación online · {range}
@@ -131,14 +131,14 @@ export function MetricasPanel() {
                 </p>
               </div>
               <div className="flex gap-3">
-                <div className="rounded-xl border border-border bg-card px-4 py-3">
+                <div className={onlineCardClass('p-4')}>
                   <p className="text-xs text-muted-foreground">Hoy</p>
-                  <p className="text-lg font-bold">{metrics.ticketsHoy}</p>
+                  <p className="text-2xl font-bold">{metrics.ticketsHoy}</p>
                   <p className="text-xs text-muted-foreground">pedidos</p>
                 </div>
-                <div className="rounded-xl border border-border bg-card px-4 py-3">
+                <div className={onlineCardClass('p-4')}>
                   <p className="text-xs text-muted-foreground">Promedio</p>
-                  <p className="text-lg font-bold">{formatMoney(metrics.ticketPromedio)}</p>
+                  <p className="text-2xl font-bold">{formatMoney(metrics.ticketPromedio)}</p>
                   <p className="text-xs text-muted-foreground">por pedido</p>
                 </div>
               </div>
@@ -196,7 +196,7 @@ export function MetricasPanel() {
                 {metrics.topProductsByKitchen.length > 0 && (
                   <div className="rounded-2xl border border-border bg-card p-5">
                     <div className="mb-3 flex items-center gap-2">
-                      <Warehouse className="h-5 w-5 text-primary" />
+                      <Warehouse className="h-5 w-5 text-[#3d7a3d]" />
                       <h4 className="font-semibold">Ventas por cocina</h4>
                     </div>
                     <div className="h-52">
@@ -268,7 +268,7 @@ export function MetricasPanel() {
                 </div>
               )}
 
-              <div className="rounded-xl border border-border bg-card p-4">
+              <div className={onlineCardClass('p-4')}>
                 <p className="mb-2 font-semibold">Top ítems (recaudación)</p>
                 <ul className="space-y-1 text-sm">
                   {metrics.topItems.map((item) => (
