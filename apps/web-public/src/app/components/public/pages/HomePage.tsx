@@ -8,6 +8,7 @@ import { IconCart, IconClock, IconFood, IconMapPin, IconVideo, RivalMark, StarBa
 import { SafeImage } from '../SafeImage';
 import { CANTEEN_HERO_IMG } from '../food-images';
 import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
+import { QueryError } from '../QueryError';
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -30,7 +31,7 @@ export function HomePage() {
   const { meContext, user, token } = usePublicAuth();
   const { count } = useCart();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['home-bundle'],
     queryFn: () => publicApi.homeBundle(),
     retry: false,
@@ -62,6 +63,15 @@ export function HomePage() {
   );
 
   if (isLoading) return <PageLoader />;
+
+  if (isError) {
+    return (
+      <QueryError
+        message={(error as Error)?.message ?? 'Error de red'}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
 
   const name = displayName(user);
   const myTeam = meContext?.equipo?.name;

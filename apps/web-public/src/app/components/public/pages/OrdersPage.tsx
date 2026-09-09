@@ -5,6 +5,7 @@ import { usePublicAuth } from '../auth/PublicAuthContext';
 import { AuthForm } from '../auth/AuthForm';
 import { formatPrice } from '../cart/CartContext';
 import { PageLoader } from '../../ui/PageLoader';
+import { QueryError } from '../QueryError';
 
 const STATUS_LABEL: Record<string, string> = {
   pendiente_pago: 'Pendiente de pago',
@@ -36,7 +37,7 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const { token, user } = usePublicAuth();
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['public-orders', token],
     queryFn: () => publicApi.orders.list(token!),
     enabled: !!token,
@@ -58,6 +59,21 @@ export function OrdersPage() {
   }
 
   if (isLoading) return <PageLoader />;
+
+  if (isError) {
+    return (
+      <div className="space-y-5 p-6" style={{ maxWidth: 780, margin: '0 auto' }}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-lch-accent">Cantina</p>
+          <h1 className="text-2xl font-black text-white">Mis Pedidos</h1>
+        </div>
+        <QueryError
+          message={(error as Error)?.message ?? 'Error de red'}
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 p-6" style={{ maxWidth: 780, margin: '0 auto' }}>

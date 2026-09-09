@@ -7,6 +7,7 @@ import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart, formatPrice } from '../cart/CartContext';
 import { Button } from '../../ui/Button';
 import { PageLoader } from '../../ui/PageLoader';
+import { QueryError } from '../QueryError';
 
 export function QrPage() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export function QrPage() {
   const { lastOrder, setLastOrder } = useCart();
   const [displayOrder, setDisplayOrder] = useState<PublicOrder | null>(lastOrder);
 
-  const { data: fetched, isLoading } = useQuery({
+  const { data: fetched, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['public-order-qr', orderId, token],
     queryFn: () => publicApi.orders.get(orderId!, token!),
     enabled: !!orderId && !!token,
@@ -32,6 +33,15 @@ export function QrPage() {
   }, [fetched, lastOrder, setLastOrder]);
 
   if (isLoading) return <PageLoader />;
+
+  if (isError && !displayOrder) {
+    return (
+      <QueryError
+        message={(error as Error)?.message ?? 'Error de red'}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
 
   if (!displayOrder?.qr) {
     return (
