@@ -5,6 +5,7 @@ import { usePublicAuth } from '../auth/PublicAuthContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { DEMO_TOP_SCORERS } from '../demo-torneo';
 import { mapStandingsFromApi, resolveRecentResults, resolveStandings } from '../torneo-mappers';
+import { USE_MOCK_FUTBOL } from '../../../mocks/futbol-identity';
 
 type Tab = 'posiciones' | 'goleadores' | 'tarjetas' | 'suspendidos' | 'fixture';
 
@@ -42,8 +43,15 @@ export function TorneoPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [seasonKey, setSeasonKey] = useState<string>('');
   const { meContext } = usePublicAuth();
-  const myTeam = meContext?.equipo?.name;
-  const myCategoria = meContext?.equipo?.categoria;
+  // Esta pantalla muestra datos REALES de `/public/torneo`, pero mientras
+  // `USE_MOCK_FUTBOL` sea true el `meContext` viene del adapter mock (equipo y
+  // categoría inventados). Cruzarlos resaltaría filas de la base real con un
+  // equipo de fixture, así que la personalización queda apagada: la vista es
+  // estrictamente genérica (spec §"vista de torneo", sin fila ni equipo "tuyo").
+  // Al hacer el swap de §7 esto vuelve a encenderse solo. Ver §7 del spec.
+  const personalizacionActiva = !USE_MOCK_FUTBOL;
+  const myTeam = personalizacionActiva ? meContext?.equipo?.name : undefined;
+  const myCategoria = personalizacionActiva ? meContext?.equipo?.categoria : undefined;
 
   const { data: torneosList = [] } = useQuery({
     queryKey: ['public-torneos'],
