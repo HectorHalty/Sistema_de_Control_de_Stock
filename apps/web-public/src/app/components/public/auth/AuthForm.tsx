@@ -1,6 +1,8 @@
 import { Loader2, LogIn, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { usePublicAuth } from './PublicAuthContext';
+import { GoogleSignInButton } from './GoogleSignInButton';
+import { googleEnabled } from './auth-helpers';
 
 type Mode = 'login' | 'register';
 
@@ -17,7 +19,6 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [nombre, setNombre] = useState('');
-  const [dni, setDni] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,10 +33,6 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
         setError('Las contraseñas no coinciden');
         return;
       }
-      if (dni.replace(/\D/g, '').length < 7) {
-        setError('Ingresá un DNI válido');
-        return;
-      }
     }
 
     setLoading(true);
@@ -43,7 +40,7 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
       if (mode === 'login') {
         await login(email, password);
       } else {
-        await register({ email, password, nombre, dni });
+        await register({ email, password, nombre });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error de autenticación');
@@ -54,6 +51,16 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
 
   return (
     <div className="space-y-4">
+      {googleEnabled(import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) && (
+        <>
+          <GoogleSignInButton />
+          <div className="flex items-center gap-3 text-xs text-gray-600">
+            <div className="h-px flex-1 bg-[#2a2a2a]" />
+            o
+            <div className="h-px flex-1 bg-[#2a2a2a]" />
+          </div>
+        </>
+      )}
       <div className="flex gap-2 rounded-xl border border-[#2a2a2a] bg-[#161616] p-1">
         <button
           type="button"
@@ -85,13 +92,6 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
               placeholder="Nombre completo"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              required
-            />
-            <input
-              className={inputClass}
-              placeholder="DNI (sin puntos)"
-              value={dni}
-              onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
               required
             />
           </>
