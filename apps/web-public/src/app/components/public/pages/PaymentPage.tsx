@@ -11,9 +11,10 @@ export function PaymentPage() {
   const { user, token } = usePublicAuth();
   const { items, total, clear, setLastOrder } = useCart();
   const [processing, setProcessing] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!items.length) {
+  if (!items.length && !confirmed) {
     navigate('/carrito', { replace: true });
     return null;
   }
@@ -28,9 +29,10 @@ export function PaymentPage() {
         token,
         `checkout-${Date.now()}`,
       );
+      setConfirmed(true);
       setLastOrder(order);
-      clear();
       navigate('/qr');
+      clear();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo confirmar el pedido');
     } finally {
