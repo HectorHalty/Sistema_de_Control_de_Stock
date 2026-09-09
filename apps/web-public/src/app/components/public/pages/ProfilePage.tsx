@@ -1,39 +1,10 @@
 import { useEffect, useState } from 'react';
-import {
-  Loader2,
-  LogOut,
-  Pencil,
-  Search,
-  Shield,
-  Star,
-  Trash2,
-  UserRound,
-  Users,
-} from 'lucide-react';
+import { Loader2, LogOut, Pencil, Search, Shield, Star, UserRound, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { publicApi, type PublicTeamOption } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { LoginPanel } from '../auth/LoginPanel';
 import { IconClock, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
-
-const CARDS_KEY = 'lch_public_saved_cards';
-
-interface SavedCard {
-  id: string;
-  brand: 'visa' | 'mastercard';
-  last4: string;
-  expiry: string;
-  default: boolean;
-}
-
-function loadCards(): SavedCard[] {
-  try {
-    const raw = localStorage.getItem(CARDS_KEY);
-    return raw ? (JSON.parse(raw) as SavedCard[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -52,11 +23,6 @@ export function ProfilePage() {
   const [search, setSearch] = useState('');
   const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cards, setCards] = useState<SavedCard[]>(() => loadCards());
-  const [addingCard, setAddingCard] = useState(false);
-  const [newLast4, setNewLast4] = useState('');
-  const [newExpiry, setNewExpiry] = useState('');
-  const [newBrand, setNewBrand] = useState<'visa' | 'mastercard'>('visa');
 
   useEffect(() => {
     if (!user?.puedeSeguirEquipo) return;
@@ -68,11 +34,6 @@ export function ProfilePage() {
     }, 250);
     return () => clearTimeout(t);
   }, [search, user?.puedeSeguirEquipo]);
-
-  function persistCards(next: SavedCard[]) {
-    setCards(next);
-    localStorage.setItem(CARDS_KEY, JSON.stringify(next));
-  }
 
   if (loading) {
     return (
@@ -267,119 +228,6 @@ export function ProfilePage() {
             <p className="mt-1 text-sm font-semibold text-white">{user.dniConfirmado ?? 'Pendiente'}</p>
           </div>
         </div>
-      </section>
-
-      <section style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">Medios de Pago</h3>
-          <button
-            type="button"
-            onClick={() => setAddingCard(true)}
-            className="text-xs font-black text-[#6BFF9E]"
-          >
-            + Agregar tarjeta
-          </button>
-        </div>
-        <p className="mb-4 text-xs text-gray-500">Tus tarjetas guardadas para pagar más rápido.</p>
-        <div className="space-y-2">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              style={{ background: '#161616', border: '1px solid #2a2a2a' }}
-              className="flex items-center gap-3 rounded-xl px-4 py-3"
-            >
-              <div className="w-12 text-[10px] font-black uppercase text-white">
-                {card.brand === 'visa' ? 'VISA' : 'MC'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-white">•••• •••• •••• {card.last4}</p>
-                <p className="text-[10px] text-gray-500">Vence {card.expiry}</p>
-              </div>
-              {card.default ? (
-                <span className="rounded-full bg-[#6BFF9E22] px-2 py-0.5 text-[10px] font-black text-[#6BFF9E]">
-                  Predeterminada
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="text-[10px] text-gray-400"
-                  onClick={() =>
-                    persistCards(cards.map((c) => ({ ...c, default: c.id === card.id })))
-                  }
-                >
-                  Usar por defecto
-                </button>
-              )}
-              <button
-                type="button"
-                className="text-gray-500 hover:text-red-400"
-                onClick={() => persistCards(cards.filter((c) => c.id !== card.id))}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-          {!cards.length && !addingCard && (
-            <p className="text-sm text-gray-500">Todavía no hay tarjetas guardadas (solo en este dispositivo).</p>
-          )}
-        </div>
-        {addingCard && (
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <select
-              value={newBrand}
-              onChange={(e) => setNewBrand(e.target.value as 'visa' | 'mastercard')}
-              className="rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm"
-            >
-              <option value="visa">Visa</option>
-              <option value="mastercard">Mastercard</option>
-            </select>
-            <input
-              value={newLast4}
-              onChange={(e) => setNewLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              placeholder="Últimos 4"
-              className="rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm"
-            />
-            <input
-              value={newExpiry}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                setNewExpiry(v.length > 2 ? `${v.slice(0, 2)}/${v.slice(2)}` : v);
-              }}
-              placeholder="MM/AA"
-              className="rounded-lg border border-[#2a2a2a] bg-[#161616] px-3 py-2 text-sm"
-            />
-            <div className="flex gap-2 sm:col-span-3">
-              <button
-                type="button"
-                className="rounded-lg bg-[#6BFF9E] px-4 py-2 text-xs font-black text-[#0e0e0e]"
-                onClick={() => {
-                  if (newLast4.length !== 4 || newExpiry.length < 5) return;
-                  persistCards([
-                    ...cards.map((c) => ({ ...c, default: false })),
-                    {
-                      id: crypto.randomUUID(),
-                      brand: newBrand,
-                      last4: newLast4,
-                      expiry: newExpiry,
-                      default: cards.length === 0,
-                    },
-                  ]);
-                  setAddingCard(false);
-                  setNewLast4('');
-                  setNewExpiry('');
-                }}
-              >
-                Guardar
-              </button>
-              <button type="button" className="text-xs text-gray-400" onClick={() => setAddingCard(false)}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-        <p className="mt-4 text-[11px] text-gray-600">
-          Los datos se guardan solo en este dispositivo. No se envían a un procesador de pagos.
-        </p>
       </section>
 
       {user.rol === 'capitan' && (

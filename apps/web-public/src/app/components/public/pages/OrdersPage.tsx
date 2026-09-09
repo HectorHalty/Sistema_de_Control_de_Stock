@@ -8,18 +8,21 @@ import { PageLoader } from '../../ui/PageLoader';
 import { QueryError } from '../QueryError';
 
 const STATUS_LABEL: Record<string, string> = {
-  pendiente_pago: 'Pendiente de pago',
-  pagado: 'Pagado',
-  en_cocina: 'En preparacion',
-  listo: 'Listo para retirar',
+  pendiente_pago: 'Para retirar',
+  pagado: 'Para retirar',
+  en_cocina: 'Para retirar',
+  listo: 'Para retirar',
   retirado: 'Retirado',
   cancelado: 'Cancelado',
 };
 
 const STATUS_COLOR: Record<string, string> = {
   listo: '#6BFF9E',
-  en_cocina: '#fbbf24',
+  pendiente_pago: '#6BFF9E',
+  pagado: '#6BFF9E',
+  en_cocina: '#6BFF9E',
   retirado: '#9ca3af',
+  cancelado: '#9ca3af',
 };
 
 function formatWhen(iso: string) {
