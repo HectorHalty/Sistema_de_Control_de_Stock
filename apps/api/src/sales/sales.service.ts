@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, EstadoTicket } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
+import { pickEnumValue } from '../common/enum-filter';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
@@ -788,9 +789,13 @@ export class SalesService {
   // ============ Tickets ============
 
   async findAllTickets(status?: string, operatorId?: string) {
+    const validStatus = pickEnumValue(status, EstadoTicket);
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !validStatus) return [];
     return this.prisma.ticketVenta.findMany({
       where: {
-        ...(status ? { status: status as EstadoTicket } : {}),
+        ...(validStatus ? { status: validStatus } : {}),
         ...(operatorId ? { operatorId } : {}),
       },
       include: { items: true, operator: { select: { username: true } } },

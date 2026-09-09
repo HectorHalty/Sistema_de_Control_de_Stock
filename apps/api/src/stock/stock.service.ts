@@ -9,9 +9,7 @@ import { CreateProductDto, UpdateProductDto, AdjustStockDto,
 } from './dto';
 import { StockMovementsService } from './stock-movements.service';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
-
-/** Valores del enum, para descartar filtros inválidos sin consultar la base. */
-const ESTADOS_ORDEN_VALIDOS = new Set<string>(Object.values(EstadoOrdenCompra));
+import { pickEnumValue } from '../common/enum-filter';
 
 @Injectable()
 export class StockService {
@@ -334,11 +332,12 @@ export class StockService {
   // ============ Purchase orders ============
 
   async findAllPurchaseOrders(status?: string) {
+    const validStatus = pickEnumValue(status, EstadoOrdenCompra);
     // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
     // de dejar que Prisma rechace el valor.
-    if (status && !ESTADOS_ORDEN_VALIDOS.has(status)) return [];
+    if (status && !validStatus) return [];
     return this.prisma.ordenCompra.findMany({
-      where: status ? { status: status as EstadoOrdenCompra } : undefined,
+      where: validStatus ? { status: validStatus } : undefined,
       include: { items: true },
       orderBy: { createdAt: 'desc' },
     });

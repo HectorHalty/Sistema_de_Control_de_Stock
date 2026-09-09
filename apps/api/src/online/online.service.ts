@@ -3,6 +3,7 @@ import { EstadoPedidoPublico, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SalesService } from '../sales/sales.service';
 import { normalizeQrToken } from './qr-token.util';
+import { pickEnumValue } from '../common/enum-filter';
 
 const WEB_MENU_INCLUDE = {
   kitchen: { select: { id: true, name: true, emoji: true } },
@@ -255,8 +256,12 @@ export class OnlineService {
   }
 
   async listOrders(status?: string, limit = 50) {
+    const validStatus = pickEnumValue(status, EstadoPedidoPublico);
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !validStatus) return [];
     return this.prisma.pedidoPublico.findMany({
-      where: status ? { status: status as EstadoPedidoPublico } : undefined,
+      where: validStatus ? { status: validStatus } : undefined,
       include: {
         items: true,
         tokenRetiro: { select: { token: true, usadoEn: true } },

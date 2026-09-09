@@ -5,6 +5,7 @@ import { EstadoOrdenCocina } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { SseService } from '../sse/sse.service';
 import { KitchenOrderStatus } from './dto';
+import { pickEnumValue } from '../common/enum-filter';
 
 // Valid state transitions
 const VALID_TRANSITIONS: Record<KitchenOrderStatus, KitchenOrderStatus[]> = {
@@ -22,10 +23,14 @@ export class KitchenService {
   ) {}
 
   async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean) {
+    const validStatus = pickEnumValue(status, EstadoOrdenCocina);
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !validStatus) return [];
     return this.prisma.ordenCocina.findMany({
       where: {
         ...(kitchenId ? { kitchenId } : {}),
-        ...(status ? { status: status as EstadoOrdenCocina } : {}),
+        ...(validStatus ? { status: validStatus } : {}),
         ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
       },
       include: {
