@@ -255,7 +255,7 @@ export function PublicLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header
           style={{ background: '#111111', borderBottom: '1px solid #1e1e1e' }}
-          className="flex items-center justify-between px-4 py-3 md:hidden"
+          className="safe-top flex items-center justify-between px-4 py-3 md:hidden"
         >
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6BFF9E]">
@@ -296,7 +296,7 @@ export function PublicLayout() {
           </button>
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', background: '#111111' }} className="min-h-0 pb-20 md:pb-0">
+        <main style={{ flex: 1, overflowY: 'auto', background: '#111111' }} className="min-h-0 pb-24 md:pb-0">
           <Outlet />
         </main>
 
@@ -306,7 +306,7 @@ export function PublicLayout() {
         {!hideMobileNav && (
           <nav
             style={{ background: '#0e0e0e', borderTop: '1px solid #1e1e1e' }}
-            className="fixed bottom-0 left-0 right-0 z-30 md:hidden"
+            className="nav-safe-bottom fixed bottom-0 left-0 right-0 z-40 md:hidden"
           >
             <div className="grid grid-cols-5 gap-1 px-1 py-2">
               {[

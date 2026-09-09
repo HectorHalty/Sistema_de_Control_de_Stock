@@ -25,7 +25,7 @@ export function DniModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+    <div className="safe-top safe-bottom fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
       <div className="w-full max-w-md rounded-2xl border border-[#2a2a2a] bg-lch-card p-6 shadow-xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
