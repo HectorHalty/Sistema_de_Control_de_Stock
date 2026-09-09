@@ -2,7 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePublicAuth } from './auth/PublicAuthContext';
-import { DniModal } from './auth/DniModal';
+import { OnboardingGate } from './auth/OnboardingGate';
 import { useCart } from './cart/CartContext';
 import { publicApi } from '../../api/public-api';
 import {
@@ -328,7 +328,7 @@ export function PublicLayout() {
         )}
       </div>
 
-      <DniModal />
+      <OnboardingGate />
     </div>
   );
 }
