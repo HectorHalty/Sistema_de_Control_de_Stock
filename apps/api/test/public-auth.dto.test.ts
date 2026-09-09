@@ -9,7 +9,6 @@ describe('Public auth DTOs', () => {
       email: 'jugador@lachacra.test',
       password: 'jugador123',
       nombre: 'Juan Pérez',
-      dni: '30123456',
     });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
@@ -20,7 +19,6 @@ describe('Public auth DTOs', () => {
       email: 'a@b.com',
       password: '123',
       nombre: 'Test',
-      dni: '30123456',
     });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'password')).toBe(true);
@@ -31,7 +29,6 @@ describe('Public auth DTOs', () => {
       email: 'not-an-email',
       password: 'secret12',
       nombre: 'Test',
-      dni: '30123456',
     });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'email')).toBe(true);

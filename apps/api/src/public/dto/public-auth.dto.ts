@@ -37,10 +37,6 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   nombre!: string;
-
-  @IsString()
-  @MinLength(7)
-  dni!: string;
 }
 
 export class LoginDto {

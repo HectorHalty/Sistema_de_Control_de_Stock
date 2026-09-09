@@ -32,10 +32,6 @@ export class PublicAuthService {
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
-    const normalizedDni = dto.dni.replace(/\D/g, '');
-    if (normalizedDni.length < 7) {
-      throw new BadRequestException('DNI inválido');
-    }
 
     const existing = await this.prisma.cuentaPublica.findUnique({ where: { email } });
     if (existing) {
@@ -43,35 +39,16 @@ export class PublicAuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    const { nombre, apellido } = this.splitNombre(dto.nombre.trim());
-
-    const persona = await this.prisma.persona.upsert({
-      where: { dni: normalizedDni },
-      update: {
-        nombre,
-        apellido,
-        email,
-      },
-      create: {
-        dni: normalizedDni,
-        nombre,
-        apellido,
-        email,
-      },
-    });
 
     const cuenta = await this.prisma.cuentaPublica.create({
       data: {
         email,
         passwordHash,
         nombre: dto.nombre.trim(),
-        dniConfirmado: normalizedDni,
-        personaId: persona.id,
         rol: 'usuario',
       },
     });
 
-    await this.resolveAndUpdateRole(cuenta.id);
     const session = await this.buildSessionUser(cuenta.id);
     const accessToken = await this.signToken(cuenta.id);
     return { accessToken, user: session };
@@ -122,6 +99,9 @@ export class PublicAuthService {
     const payload = ticket.getPayload();
     if (!payload?.sub || !payload.email) {
       throw new UnauthorizedException('Token de Google inválido');
+    }
+    if (payload.email_verified !== true) {
+      throw new UnauthorizedException('Tu email de Google no está verificado.');
     }
     return {
       googleId: payload.sub,
@@ -319,17 +299,6 @@ export class PublicAuthService {
       needsDni: !cuenta.dniConfirmado,
       puedeSeguirEquipo: cuenta.rol !== 'jugador' && cuenta.rol !== 'capitan',
       puedeSerCapitan,
-    };
-  }
-
-  private splitNombre(full: string) {
-    const parts = full.trim().split(/\s+/);
-    if (parts.length <= 1) {
-      return { nombre: parts[0] ?? full, apellido: '' };
-    }
-    return {
-      nombre: parts[0] ?? full,
-      apellido: parts.slice(1).join(' '),
     };
   }
 
