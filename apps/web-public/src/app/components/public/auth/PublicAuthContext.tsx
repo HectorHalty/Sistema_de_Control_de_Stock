@@ -14,16 +14,44 @@ import {
   type MeContext,
   type PublicSessionUser,
 } from '../../../api/public-api';
+import { USE_MOCK_FUTBOL, resolveMockRole, resolveMockContext } from '../../../mocks/futbol-identity';
+
+const ONBOARDING_KEY = 'lch_onboarding_done';
+
+function readDismissed(): boolean {
+  try { return localStorage.getItem(ONBOARDING_KEY) === '1'; } catch { return false; }
+}
+
+/**
+ * Deriva el estado efectivo (rol, contexto) desde el `PublicSessionUser` crudo
+ * que devuelve el backend. En fase mock todo sale del adapter; el branch real
+ * se completa en el spec de reestructuración (§7).
+ */
+function applyMock(u: PublicSessionUser): {
+  user: PublicSessionUser;
+  meContext: MeContext | null;
+  dniEnPlantelOtroEmail?: string;
+} {
+  if (!USE_MOCK_FUTBOL) return { user: u, meContext: null };
+  const { rol, dniEnPlantelOtroEmail } = resolveMockRole(u);
+  const effUser = { ...u, rol };
+  return {
+    user: effUser,
+    meContext: resolveMockContext(u),
+    dniEnPlantelOtroEmail,
+  };
+}
 
 interface PublicAuthContextValue {
   user: PublicSessionUser | null;
   meContext: MeContext | null;
   token: string | null;
   loading: boolean;
-  showDniModal: boolean;
-  setShowDniModal: (open: boolean) => void;
+  dniEnPlantelOtroEmail?: string;
+  onboardingDismissed: boolean;
+  dismissOnboarding: () => void;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; nombre: string; dni: string }) => Promise<void>;
+  register: (data: { email: string; password: string; nombre: string }) => Promise<void>;
   loginDev: (email: string, name: string) => Promise<void>;
   loginGoogle: (idToken: string) => Promise<void>;
   completeDni: (dni: string) => Promise<void>;
@@ -36,30 +64,33 @@ const PublicAuthContext = createContext<PublicAuthContextValue | null>(null);
 
 export function PublicAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => publicAuthStorage.getToken());
-  const [user, setUser] = useState<PublicSessionUser | null>(null);
-  const [meContext, setMeContext] = useState<MeContext | null>(null);
+  const [rawUser, setRawUser] = useState<PublicSessionUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showDniModal, setShowDniModal] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => readDismissed());
+
+  const derived = useMemo(
+    () => (rawUser ? applyMock(rawUser) : null),
+    [rawUser, onboardingDismissed],
+  );
+  const user = derived?.user ?? null;
+  const meContext = derived?.meContext ?? null;
+  const dniEnPlantelOtroEmail = derived?.dniEnPlantelOtroEmail;
 
   const applyAuthResponse = useCallback(async (res: AuthResponse) => {
     publicAuthStorage.setToken(res.accessToken);
     setToken(res.accessToken);
-    setUser(res.user);
-    if (res.user.needsDni) {
-      setShowDniModal(true);
-      setMeContext(null);
+    if (USE_MOCK_FUTBOL) {
+      setRawUser(res.user);
       return;
     }
     const ctx = await publicApi.me.context(res.accessToken);
-    setMeContext(ctx);
-    setUser(ctx.user);
+    setRawUser(ctx.user);
   }, []);
 
   const refreshContext = useCallback(async () => {
     if (!token) return;
     const ctx = await publicApi.me.context(token);
-    setMeContext(ctx);
-    setUser(ctx.user);
+    setRawUser(ctx.user);
   }, [token]);
 
   useEffect(() => {
@@ -72,16 +103,13 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       try {
         const ctx = await publicApi.me.context(token);
         if (!cancelled) {
-          setMeContext(ctx);
-          setUser(ctx.user);
-          if (ctx.user.needsDni) setShowDniModal(true);
+          setRawUser(ctx.user);
         }
       } catch {
         if (!cancelled) {
           publicAuthStorage.setToken(null);
           setToken(null);
-          setUser(null);
-          setMeContext(null);
+          setRawUser(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -101,7 +129,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (data: { email: string; password: string; nombre: string; dni: string }) => {
+    async (data: { email: string; password: string; nombre: string }) => {
       const res = await publicApi.auth.register(data);
       await applyAuthResponse(res);
     },
@@ -130,11 +158,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       const res = await publicApi.auth.completeDni(dni, token);
       publicAuthStorage.setToken(res.accessToken);
       setToken(res.accessToken);
-      setUser(res.user);
-      setShowDniModal(false);
-      const ctx = await publicApi.me.context(res.accessToken);
-      setMeContext(ctx);
-      setUser(ctx.user);
+      setRawUser(res.user);
     },
     [token],
   );
@@ -142,9 +166,14 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     publicAuthStorage.setToken(null);
     setToken(null);
-    setUser(null);
-    setMeContext(null);
-    setShowDniModal(false);
+    setRawUser(null);
+    try { localStorage.removeItem(ONBOARDING_KEY); } catch { /* noop */ }
+    setOnboardingDismissed(false);
+  }, []);
+
+  const dismissOnboarding = useCallback(() => {
+    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* noop */ }
+    setOnboardingDismissed(true);
   }, []);
 
   const value = useMemo(
@@ -153,8 +182,9 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       meContext,
       token,
       loading,
-      showDniModal,
-      setShowDniModal,
+      dniEnPlantelOtroEmail,
+      onboardingDismissed,
+      dismissOnboarding,
       login,
       register,
       loginDev,
@@ -169,7 +199,9 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       meContext,
       token,
       loading,
-      showDniModal,
+      dniEnPlantelOtroEmail,
+      onboardingDismissed,
+      dismissOnboarding,
       login,
       register,
       loginDev,

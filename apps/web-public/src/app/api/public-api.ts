@@ -340,7 +340,7 @@ export const publicApi = {
   sponsors: () => publicFetch<PublicSponsor[]>('/public/sponsors'),
 
   auth: {
-    register: (data: { email: string; password: string; nombre: string; dni: string }) =>
+    register: (data: { email: string; password: string; nombre: string }) =>
       publicFetch<AuthResponse>('/public/auth/register', { method: 'POST', body: data }),
     login: (email: string, password: string) =>
       publicFetch<AuthResponse>('/public/auth/login', { method: 'POST', body: { email, password } }),
