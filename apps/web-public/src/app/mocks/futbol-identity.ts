@@ -3,11 +3,34 @@ import type {
   PublicSessionUser, PublicStandingRow, PublicTeamOption, RosterPlayer,
 } from '../api/public-api';
 
-export const USE_MOCK_FUTBOL = true;
+/**
+ * Bandera del adapter mock de torneo. Tipada como `boolean` (y no como el
+ * literal `true`) a propósito: así los dos branches del swap de §7 —el mock y
+ * el real— siguen siendo código vivo para TypeScript en vez de ramas muertas.
+ */
+export const USE_MOCK_FUTBOL: boolean = true;
 
 const FOLLOW_KEY = 'lch_mock_followed_team';
 
 // ---------- Fixtures ----------
+
+/** Resultado ya jugado del torneo mock. */
+export interface TorneoResultado {
+  id: string;
+  local: string;
+  visitante: string;
+  golesLocal: number;
+  golesVisitante: number;
+  fecha: string;
+}
+
+/** Vista pública del torneo que expone el adapter (`torneoPublico()`). */
+export interface TorneoPublico {
+  torneo: { id: string; nombre: string; categoria: string };
+  standings: PublicStandingRow[];
+  proximosPartidos: PublicMatchPreview[];
+  resultados: TorneoResultado[];
+}
 
 const TORNEO = { id: 'trn-apertura', nombre: 'Torneo Apertura', categoria: 'Libre A' };
 
@@ -44,7 +67,7 @@ const PROXIMOS: PublicMatchPreview[] = [
     visitante: { id: 'ei-tromba', name: 'La Tromba', shortName: 'TRB' } },
 ];
 
-const RESULTADOS = [
+const RESULTADOS: TorneoResultado[] = [
   { id: 'r1', local: 'Los Halcones', visitante: 'Real Potrero', golesLocal: 3, golesVisitante: 1, fecha: iso(-4) },
   { id: 'r2', local: 'Depredadores FC', visitante: 'Los Halcones', golesLocal: 2, golesVisitante: 2, fecha: iso(-11) },
   { id: 'r3', local: 'La Tromba', visitante: 'Truenos del Sur', golesLocal: 0, golesVisitante: 1, fecha: iso(-11) },
@@ -172,6 +195,13 @@ export function mockUnfollowTeam(user: PublicSessionUser): MeContext {
   return resolveMockContext(user);
 }
 
-export function mockTorneoPublico() {
-  return { torneo: TORNEO, standings: STANDINGS, proximosPartidos: PROXIMOS, resultados: RESULTADOS };
+export function mockTorneoPublico(): TorneoPublico {
+  // Copias superficiales: un consumidor que ordene in place no puede corromper
+  // el fixture del módulo para el resto de la sesión.
+  return {
+    torneo: { ...TORNEO },
+    standings: [...STANDINGS],
+    proximosPartidos: [...PROXIMOS],
+    resultados: [...RESULTADOS],
+  };
 }
