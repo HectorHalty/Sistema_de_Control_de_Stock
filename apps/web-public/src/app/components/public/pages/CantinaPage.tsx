@@ -3,10 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { publicApi, type PublicMenuItem, type PublicOrder, type PublicSponsor } from '../../../api/public-api';
 import { useCart, formatPrice, type CartLine } from '../cart/CartContext';
+import { reconcileCart } from '../cart/reconcile-cart';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconMinus, IconPlus, IconStar } from '../figma-icons';
 import { CANTEEN_HERO_IMG, foodImageFor } from '../food-images';
+import { SafeImage } from '../SafeImage';
 
 export function CantinaPage() {
   const navigate = useNavigate();
@@ -33,6 +35,17 @@ export function CantinaPage() {
     queryFn: () => publicApi.orders.list(token!),
     enabled: !!token,
   });
+
+  useEffect(() => {
+    if (!data || cart.length === 0) return;
+    const ids = new Set(data.items.map((i) => i.id));
+    const { kept, removedNames } = reconcileCart(cart, ids);
+    if (removedNames.length) {
+      replaceItems(kept);
+      window.alert('Se quitaron productos que ya no están disponibles.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   useEffect(() => {
     if (!user || cart.length > 0) return;
@@ -524,7 +537,7 @@ function MenuCard({
       className="flex flex-col overflow-hidden rounded-xl"
     >
       <div className="relative h-36 shrink-0 overflow-hidden">
-        <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" />
+        <SafeImage src={imgSrc} alt={item.name} className="h-full w-full" fallbackLabel={item.name} />
         {popular && (
           <div
             style={{ background: '#6BFF9E', color: '#0e0e0e' }}
@@ -543,9 +556,11 @@ function MenuCard({
         )}
       </div>
       <div className="flex flex-1 flex-col p-3">
-        <p className="text-sm font-bold text-white">{item.name}</p>
+        <p className="line-clamp-2 text-sm font-bold text-white">{item.name}</p>
         {item.description && (
-          <p className="mt-0.5 flex-1 text-xs leading-relaxed text-gray-500">{item.description}</p>
+          <p className="mt-0.5 line-clamp-2 flex-1 text-xs leading-relaxed text-gray-500">
+            {item.description}
+          </p>
         )}
         <div className="mt-3 flex items-center justify-between">
           <span className="text-lg font-black text-white">
