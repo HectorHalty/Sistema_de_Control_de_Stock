@@ -32,6 +32,7 @@ export class SponsorsService {
     widthPx?: number;
     heightPx?: number;
     sortOrder?: number;
+    durationSeconds?: number;
   }) {
     return this.prisma.patrocinador.create({
       data: {
@@ -44,6 +45,7 @@ export class SponsorsService {
         widthPx: data.widthPx,
         heightPx: data.heightPx,
         sortOrder: data.sortOrder ?? 0,
+        durationSeconds: data.durationSeconds ?? 5,
         active: true,
       },
     });
@@ -62,6 +64,7 @@ export class SponsorsService {
       widthPx?: number;
       heightPx?: number;
       sortOrder?: number;
+      durationSeconds?: number;
     },
   ) {
     await this.findById(id);

@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { SponsorsService } from './sponsors.service';
+import { CreateSponsorDto, UpdateSponsorDto } from './dto/sponsor.dto';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES, ONLINE_MUTATION_ROLES, ONLINE_READ_ROLES } from '../common/roles';
 
 const SPONSOR_READ_ROLES = [...new Set([...FOOTBALL_READ_ROLES, ...ONLINE_READ_ROLES])];
@@ -30,41 +31,13 @@ export class SponsorsController {
 
   @Post()
   @Roles(...SPONSOR_MUTATION_ROLES)
-  create(
-    @Body()
-    body: {
-      name: string;
-      imageUrl: string;
-      placement?: string;
-      linkUrl?: string;
-      bannerLabel?: string;
-      mediaType?: string;
-      widthPx?: number;
-      heightPx?: number;
-      sortOrder?: number;
-    },
-  ) {
+  create(@Body() body: CreateSponsorDto) {
     return this.sponsorsService.create(body);
   }
 
   @Put(':id')
   @Roles(...SPONSOR_MUTATION_ROLES)
-  update(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      imageUrl?: string;
-      placement?: string;
-      active?: boolean;
-      linkUrl?: string;
-      bannerLabel?: string;
-      mediaType?: string;
-      widthPx?: number;
-      heightPx?: number;
-      sortOrder?: number;
-    },
-  ) {
+  update(@Param('id') id: string, @Body() body: UpdateSponsorDto) {
     return this.sponsorsService.update(id, body);
   }
 

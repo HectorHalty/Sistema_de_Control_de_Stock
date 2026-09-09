@@ -425,8 +425,8 @@ export class PublicService {
 
   async listSponsors() {
     return this.prisma.patrocinador.findMany({
-      where: { active: true },
-      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      where: { active: true, placement: { in: ['home', 'cantina'] } },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
       select: {
         id: true,
         name: true,
@@ -437,6 +437,7 @@ export class PublicService {
         widthPx: true,
         heightPx: true,
         linkUrl: true,
+        durationSeconds: true,
       },
     });
   }
