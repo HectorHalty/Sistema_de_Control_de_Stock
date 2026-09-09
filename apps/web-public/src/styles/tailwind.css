@@ -60,3 +60,11 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+.nav-safe-bottom {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.fab-above-nav {
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
