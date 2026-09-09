@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { publicApi, type PublicMenuItem, type PublicOrder, type PublicSponsor } from '../../../api/public-api';
+import { publicApi, type PublicMenuItem, type PublicOrder } from '../../../api/public-api';
 import { useCart, formatPrice, type CartLine } from '../cart/CartContext';
 import { reconcileCart } from '../cart/reconcile-cart';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconMinus, IconPlus, IconStar } from '../figma-icons';
-import { CANTEEN_HERO_IMG, foodImageFor } from '../food-images';
+import { foodImageFor } from '../food-images';
 import { SafeImage } from '../SafeImage';
+import { SponsorCarousel } from '../sponsors/SponsorCarousel';
 
 export function CantinaPage() {
   const navigate = useNavigate();
@@ -54,14 +55,6 @@ export function CantinaPage() {
     const candidate = lastOrder ?? orders.find((o) => o.items?.length);
     if (candidate?.items?.length) setRepeatOrder(candidate);
   }, [user, cart.length, lastOrder, orders]);
-
-  const cantinaBanner = useMemo((): PublicSponsor | null => {
-    return (
-      sponsors.find((s) => s.bannerLabel?.includes('Cantina')) ??
-      sponsors.find((s) => s.placement === 'banner' && s.bannerLabel?.toLowerCase().includes('cantina')) ??
-      null
-    );
-  }, [sponsors]);
 
   const menu = data?.items ?? [];
   const webFilters = data?.filters ?? [];
@@ -305,7 +298,7 @@ export function CantinaPage() {
           ))}
         </div>
 
-        <CantinaPromoBanner banner={cantinaBanner} />
+        <SponsorCarousel slot="cantina" sponsors={sponsors} />
 
         {!search && filter === 'todas' && !activeQuickFilter && popular.length > 0 && (
           <div>
@@ -466,54 +459,6 @@ function RepeatOrderModal({
       </div>
     </div>
   );
-}
-
-function CantinaPromoBanner({ banner }: { banner: PublicSponsor | null }) {
-  const height = banner?.heightPx ?? 112;
-  const mediaUrl = banner?.imageUrl ?? CANTEEN_HERO_IMG;
-  const title = banner?.name ?? 'El tercer tiempo es acá';
-  const subtitle = banner?.bannerLabel ?? 'Pedí online, retirá en cantina';
-
-  const inner = (
-    <div
-      style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', height, maxHeight: 140 }}
-      className="relative overflow-hidden rounded-2xl"
-    >
-      {banner?.mediaType === 'video' ? (
-        <video
-          src={mediaUrl}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <img src={mediaUrl} alt={title} className="h-full w-full object-cover" />
-      )}
-      <div
-        className="absolute inset-0"
-        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 40%, transparent)' }}
-      />
-      <div className="absolute inset-0 flex flex-col justify-center px-5">
-        <span style={{ color: '#6BFF9E' }} className="text-[9px] font-black uppercase tracking-widest">
-          Promo del día
-        </span>
-        <p className="text-base font-black leading-tight text-white">{title}</p>
-        <p className="text-[11px] text-gray-400">{subtitle}</p>
-      </div>
-    </div>
-  );
-
-  if (banner?.linkUrl) {
-    return (
-      <a href={banner.linkUrl} target="_blank" rel="noreferrer" className="block">
-        {inner}
-      </a>
-    );
-  }
-
-  return inner;
 }
 
 function MenuCard({

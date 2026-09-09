@@ -190,6 +190,7 @@ export interface PublicSponsor {
   widthPx?: number | null;
   heightPx?: number | null;
   linkUrl?: string | null;
+  durationSeconds?: number;
 }
 
 export interface PublicMenuCategory {

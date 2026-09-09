@@ -8,6 +8,7 @@ import { IconCart, IconClock, IconFood, IconMapPin, IconVideo, RivalMark, StarBa
 import { SafeImage } from '../SafeImage';
 import { CANTEEN_HERO_IMG } from '../food-images';
 import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
+import { SponsorCarousel } from '../sponsors/SponsorCarousel';
 import { QueryError } from '../QueryError';
 
 function formatMatchDate(iso: string) {
@@ -241,13 +242,7 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {!!data?.sponsors.length && (
-        <SponsorBanner
-          sponsor={
-            data.sponsors.find((s) => s.bannerLabel?.includes('Home')) ?? data.sponsors[0]
-          }
-        />
-      )}
+      <SponsorCarousel slot="home" sponsors={data?.sponsors ?? []} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -534,110 +529,4 @@ export function HomePage() {
       </div>
     </div>
   );
-}
-
-function SponsorBanner({
-  sponsor,
-}: {
-  sponsor: {
-    name: string;
-    imageUrl?: string;
-    linkUrl?: string | null;
-    bannerLabel?: string | null;
-    mediaType?: string;
-    widthPx?: number | null;
-    heightPx?: number | null;
-  };
-}) {
-  const height = sponsor.heightPx ?? 86;
-  const inner = (
-    <div
-      style={{
-        borderRadius: 14,
-        overflow: 'hidden',
-        position: 'relative',
-        height,
-        border: '1px solid #2a2a2a',
-      }}
-    >
-      {sponsor.imageUrl ? (
-        sponsor.mediaType === 'video' ? (
-          <video
-            src={sponsor.imageUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-          />
-        ) : (
-          <img
-            src={sponsor.imageUrl}
-            alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-          />
-        )
-      ) : (
-        <div className="h-full w-full bg-[#161616]" />
-      )}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(to right, rgba(14,14,14,0.92) 40%, rgba(14,14,14,0.25))',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 20px',
-        }}
-      >
-        <div>
-          <span
-            style={{
-              color: '#6BFF9E',
-              fontSize: 9,
-              fontWeight: 900,
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              display: 'block',
-            }}
-          >
-            Sponsor oficial
-          </span>
-          <span
-            style={{ color: 'white', fontSize: 17, fontWeight: 900, lineHeight: 1.2, display: 'block' }}
-          >
-            {sponsor.name}
-          </span>
-        </div>
-        <div
-          style={{
-            background: '#6BFF9E',
-            color: '#0e0e0e',
-            padding: '6px 16px',
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 900,
-            flexShrink: 0,
-          }}
-        >
-          Ver más
-        </div>
-      </div>
-    </div>
-  );
-  if (sponsor.linkUrl) {
-    return (
-      <a href={sponsor.linkUrl} target="_blank" rel="noreferrer">
-        {inner}
-      </a>
-    );
-  }
-  return inner;
 }
