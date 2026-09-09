@@ -80,22 +80,6 @@ function toApiSalesProductBody(input: SalesProduct) {
   };
 }
 
-/**
- * Resuelve el id real de una categoría de venta a partir de su nombre
- * (la UI todavía elige categorías por nombre vía SalesCategorySelect).
- * Si la lista remota no está disponible, cae al id ya conocido del producto.
- */
-async function resolveCategoriaVentaId(categoryName: string, fallbackId?: string): Promise<string> {
-  try {
-    const rows = await settingsApi.salesCategories.list();
-    const found = rows.find(r => r.name.toLowerCase() === categoryName.trim().toLowerCase());
-    if (found) return found.id;
-  } catch {
-    // sin conexión: seguimos con el id ya conocido (si lo hay)
-  }
-  return fallbackId ?? '';
-}
-
 export function useSalesState() {
   const [salesCategories, setSalesCategories] = useLocalStorage<string[]>(
     storageKeys.sales.categories,
@@ -107,6 +91,13 @@ export function useSalesState() {
   );
   const salesCategoriesRef = useRef(salesCategories);
   salesCategoriesRef.current = salesCategories;
+  // Mapa nombre (lowercase) -> id real de CategoriaVenta. La UI todavía elige
+  // categorías por nombre vía SalesCategorySelect, pero el id se resuelve acá
+  // (sincrónicamente, al seleccionar) en vez de con un round-trip a la API al guardar.
+  const salesCategoryIdsRef = useRef<Record<string, string>>({});
+  const getCategoriaVentaId = useCallback((categoryName: string): string | undefined => {
+    return salesCategoryIdsRef.current[categoryName.trim().toLowerCase()];
+  }, []);
   const [kitchens, setKitchens] = useLocalStorage<Kitchen[]>(storageKeys.sales.kitchens, initialKitchens);
   const [salesProducts, setSalesProducts] = useLocalStorage<SalesProduct[]>(storageKeys.sales.products, initialSalesProducts);
   const [salesTickets, setSalesTickets] = useLocalStorage<SalesTicket[]>(storageKeys.sales.tickets, []);
@@ -245,8 +236,13 @@ export function useSalesState() {
       if (!rows.length) return;
       setSalesCategories(rows.map(r => r.name));
       const emojis: Record<string, string> = {};
-      for (const row of rows) emojis[row.name] = row.emoji;
+      const ids: Record<string, string> = {};
+      for (const row of rows) {
+        emojis[row.name] = row.emoji;
+        ids[row.name.toLowerCase()] = row.id;
+      }
       setSalesCategoryEmojis(emojis);
+      salesCategoryIdsRef.current = { ...salesCategoryIdsRef.current, ...ids };
     }).catch(() => undefined);
     void settingsApi.printers.list().then(rows => {
       setSalesPrinters(rows.map(p => ({
@@ -291,13 +287,11 @@ export function useSalesState() {
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
       const product: SalesProduct = {
         kind: 'simple',
         bundle: [],
         recipe: [],
         ...input,
-        categoriaVentaId,
         id: input.id || `p${Date.now()}`,
       };
       try {
@@ -316,14 +310,12 @@ export function useSalesState() {
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
       try {
-        const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
-        const resolved: SalesProduct = { ...input, categoriaVentaId };
-        const body = { ...toApiSalesProductBody(resolved), active: resolved.active };
-        if (isLocalOnlyId(resolved.id)) {
-          const created = await salesApi.products.create(toApiSalesProductBody(resolved), '');
+        const body = { ...toApiSalesProductBody(input), active: input.active };
+        if (isLocalOnlyId(input.id)) {
+          const created = await salesApi.products.create(toApiSalesProductBody(input), '');
           upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(created));
         } else {
-          const updated = await salesApi.products.update(resolved.id, body, '');
+          const updated = await salesApi.products.update(input.id, body, '');
           upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(updated));
         }
         markApiSynced();
@@ -422,7 +414,7 @@ export function useSalesState() {
     }, '').catch(() => undefined);
   }, [setSalesAuditLog]);
 
-  const addSalesCategory = useCallback((name: string, emoji = '🍽️'): string | null => {
+  const addSalesCategory = useCallback(async (name: string, emoji = '🍽️'): Promise<string | null> => {
     const normalized = normalizeCategoryName(name);
     if (!normalized) return null;
 
@@ -432,15 +424,25 @@ export function useSalesState() {
 
     if (!existing) {
       setSalesCategories(current => [...current, normalized]);
-      void settingsApi.salesCategories.create({ name: normalized, emoji: emoji || DEFAULT_SALES_EMOJI }, '')
-        .catch(error => reportMutationError(error, 'No se pudo guardar la categoría de venta'));
+      try {
+        const row = await settingsApi.salesCategories.create({ name: normalized, emoji: emoji || DEFAULT_SALES_EMOJI }, '');
+        salesCategoryIdsRef.current = { ...salesCategoryIdsRef.current, [key.toLowerCase()]: row.id };
+      } catch (error) {
+        reportMutationError(error, 'No se pudo guardar la categoría de venta');
+      }
     }
     setSalesCategoryEmojis(current => ({ ...current, [key]: emoji || DEFAULT_SALES_EMOJI }));
     if (existing) {
-      void settingsApi.salesCategories.list().then(rows => {
+      try {
+        const rows = await settingsApi.salesCategories.list();
         const row = rows.find(r => r.name.toLowerCase() === key.toLowerCase());
-        if (row) void settingsApi.salesCategories.update(row.id, { emoji: emoji || DEFAULT_SALES_EMOJI }, '');
-      }).catch(() => undefined);
+        if (row) {
+          salesCategoryIdsRef.current = { ...salesCategoryIdsRef.current, [key.toLowerCase()]: row.id };
+          void settingsApi.salesCategories.update(row.id, { emoji: emoji || DEFAULT_SALES_EMOJI }, '');
+        }
+      } catch {
+        // sin conexión: la categoría existente sigue con su id ya conocido (si lo hay)
+      }
     }
 
     return key;
@@ -623,6 +625,7 @@ export function useSalesState() {
     salesCategoryEmojis,
     setSalesCategoryEmojis,
     addSalesCategory,
+    getCategoriaVentaId,
     kitchens,
     setKitchens,
     createKitchen,

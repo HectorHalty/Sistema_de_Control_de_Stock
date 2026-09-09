@@ -60,6 +60,8 @@ export type PosProduct = {
   name: string;
   price: number;
   category: string;
+  /** FK real contra CategoriaVenta — lo que efectivamente viaja al backend. */
+  categoriaVentaId: string;
   station: Station;
   stock: number;
   emoji: string;
@@ -101,7 +103,8 @@ type VentasPosStore = {
   printReturn: (items: OrderItem[]) => Promise<PosTicket | null>;
   salesCategories: string[];
   salesCategoryEmojis: Record<string, string>;
-  addSalesCategory: (name: string, emoji?: string) => string | null;
+  addSalesCategory: (name: string, emoji?: string) => Promise<string | null>;
+  getCategoriaVentaId: (categoryName: string) => string | undefined;
   saveProduct: (p: PosProduct) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   createKitchen: (input: { name: string; emoji?: string }) => Promise<void>;
@@ -229,6 +232,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
             name: sp.name,
             price: sp.price,
             category: mapCategory(sp.category),
+            categoriaVentaId: sp.categoriaVentaId,
             station: stationFromKitchen(kitchen),
             stock: getMaxSellableUnits(sp, ctx.products, ctx.salesProducts),
             emoji: sp.emoji,
@@ -727,6 +731,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
         id: p.id,
         name: p.name,
         category: p.category,
+        categoriaVentaId: p.categoriaVentaId,
         kitchenId: kitchen?.id || ctx.kitchens[0]?.id || '',
         price: p.price,
         emoji: p.emoji || '🍽️',
@@ -922,6 +927,7 @@ export function VentasPosProvider({ children }: { children: ReactNode }) {
     salesCategories: ctx.salesCategories,
     salesCategoryEmojis: ctx.salesCategoryEmojis,
     addSalesCategory: ctx.addSalesCategory,
+    getCategoriaVentaId: ctx.getCategoriaVentaId,
     saveProduct,
     deleteProduct,
     createKitchen: ctx.createKitchen,

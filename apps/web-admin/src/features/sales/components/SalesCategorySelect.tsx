@@ -8,7 +8,7 @@ type SalesCategorySelectProps = {
   categories: string[];
   categoryEmojis?: Record<string, string>;
   onChange: (category: string, emoji?: string) => void;
-  onAddCategory: (name: string, emoji: string) => string | null;
+  onAddCategory: (name: string, emoji: string) => Promise<string | null>;
 };
 
 export function SalesCategorySelect({
@@ -51,8 +51,8 @@ export function SalesCategorySelect({
     setError('');
   };
 
-  const handleCreateCategory = () => {
-    const created = onAddCategory(newCategoryName, newCategoryEmoji);
+  const handleCreateCategory = async () => {
+    const created = await onAddCategory(newCategoryName, newCategoryEmoji);
     if (!created) {
       setError('Ingresá un nombre válido o usá una categoría existente.');
       return;
@@ -106,7 +106,7 @@ export function SalesCategorySelect({
                     <ProductEmojiPicker
                       value={emojiFor(category)}
                       onChange={(emoji) => {
-                        onAddCategory(category, emoji);
+                        void onAddCategory(category, emoji);
                       }}
                     />
                   </div>
@@ -155,7 +155,7 @@ export function SalesCategorySelect({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  handleCreateCategory();
+                  void handleCreateCategory();
                 }
               }}
             />

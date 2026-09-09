@@ -49,6 +49,7 @@ export function ProductsModule() {
     name: "",
     price: 0,
     category: "",
+    categoriaVentaId: "",
     station: kitchens[0]?.name ?? "",
     stock: 0,
     emoji: "🍽️",
@@ -100,7 +101,7 @@ export function ProductsModule() {
               <div className="flex items-center gap-2 mb-2">
                 <ProductEmojiPicker
                   value={getSalesCategoryEmoji(cat, salesCategoryEmojis)}
-                  onChange={(emoji) => addSalesCategory(cat, emoji)}
+                  onChange={(emoji) => void addSalesCategory(cat, emoji)}
                 />
                 <h4 className="text-foreground">{cat}</h4>
                 <span className="text-xs text-muted-foreground">({list.length})</span>
@@ -352,7 +353,7 @@ function ProductEditor({
   onSave: (p: Product) => Promise<void>;
   onClose: () => void;
 }) {
-  const { addSalesCategory, salesCategoryEmojis, ingredients, kitchens, products: menuProducts } = useStore();
+  const { addSalesCategory, getCategoriaVentaId, salesCategoryEmojis, ingredients, kitchens, products: menuProducts } = useStore();
   const [draft, setDraft] = useState<Product>({
     ...product,
     kind: product.kind ?? 'simple',
@@ -479,6 +480,7 @@ function ProductEditor({
                 setDraft((prev) => ({
                   ...prev,
                   category,
+                  categoriaVentaId: getCategoriaVentaId(category) ?? prev.categoriaVentaId,
                   emoji: emojiOverride ?? getSalesCategoryEmoji(category, salesCategoryEmojis),
                 }));
               }}
@@ -577,7 +579,7 @@ function ProductEditor({
                 setSaveError('Ingresá un nombre para el producto.');
                 return;
               }
-              if (!draft.category.trim()) {
+              if (!draft.category.trim() || !draft.categoriaVentaId) {
                 setSaveError('Seleccioná o creá una categoría.');
                 return;
               }
