@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  isAuthError,
   publicApi,
   publicAuthStorage,
   type AuthResponse,
@@ -50,6 +51,9 @@ interface PublicAuthContextValue {
   dniEnPlantelOtroEmail?: string;
   onboardingDismissed: boolean;
   dismissOnboarding: () => void;
+  /** Fuerza re-derivar el rol/contexto efectivo tras seguir o dejar de seguir
+   *  un equipo (el adapter mock guarda ese vínculo fuera de React). */
+  bumpFollowVersion: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; nombre: string }) => Promise<void>;
   loginDev: (email: string, name: string) => Promise<void>;
@@ -67,10 +71,18 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
   const [rawUser, setRawUser] = useState<PublicSessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => readDismissed());
+  const [followVersion, setFollowVersion] = useState(0);
 
+  const bumpFollowVersion = useCallback(() => setFollowVersion((v) => v + 1), []);
+
+  // `followVersion` es una dependencia real, aunque no aparezca en la firma de
+  // `applyMock`: el equipo seguido vive en localStorage (adapter mock), fuera del
+  // estado de React, y `resolveMockRole`/`resolveMockContext` lo leen en cada
+  // llamada. Sin este contador, seguir o dejar de seguir un equipo no re-derivaría
+  // el rol efectivo hasta recargar la página.
   const derived = useMemo(
     () => (rawUser ? applyMock(rawUser) : null),
-    [rawUser, onboardingDismissed],
+    [rawUser, followVersion],
   );
   const user = derived?.user ?? null;
   const meContext = derived?.meContext ?? null;
@@ -100,13 +112,30 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
+      // Un login recién aplicado ya dejó `rawUser` cargado desde la respuesta de
+      // auth. En fase mock el contexto no sale de `/public/me/context`, así que
+      // volver a pedirlo sólo agregaba un punto de falla que deslogueaba en
+      // silencio. El efecto sigue siendo necesario para el arranque en frío
+      // (token en localStorage y `rawUser` todavía null): NO borrar.
+      // Nota: `rawUser` no va en las deps a propósito — el efecto se recrea con
+      // el cambio de `token` y ya captura el `rawUser` de ese render; ponerlo en
+      // las deps re-dispararía el fetch en loop en el branch real.
+      if (USE_MOCK_FUTBOL && rawUser) {
+        setLoading(false);
+        return;
+      }
       try {
         const ctx = await publicApi.me.context(token);
         if (!cancelled) {
           setRawUser(ctx.user);
         }
-      } catch {
-        if (!cancelled) {
+      } catch (err) {
+        // Sólo cerramos sesión si el backend rechazó las credenciales (401/403).
+        // Un error de red o un 5xx transitorio no debe convertir un login exitoso
+        // en un logout silencioso: conservamos el token y dejamos que
+        // `refreshContext` reintente más tarde.
+        // TODO(§7): al conectar el torneo real, agregar reintento/aviso visible.
+        if (!cancelled && isAuthError(err)) {
           publicAuthStorage.setToken(null);
           setToken(null);
           setRawUser(null);
@@ -185,6 +214,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       dniEnPlantelOtroEmail,
       onboardingDismissed,
       dismissOnboarding,
+      bumpFollowVersion,
       login,
       register,
       loginDev,
@@ -202,6 +232,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       dniEnPlantelOtroEmail,
       onboardingDismissed,
       dismissOnboarding,
+      bumpFollowVersion,
       login,
       register,
       loginDev,

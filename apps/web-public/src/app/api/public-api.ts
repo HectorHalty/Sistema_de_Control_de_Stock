@@ -2,6 +2,25 @@ import { resolveApiBaseUrl } from './resolve-api-base-url';
 
 const TOKEN_KEY = 'lch_public_token';
 
+/** Error de la API pública que conserva el código HTTP para poder distinguir
+ *  un fallo de autenticación (401/403) de un fallo de red o de servidor. */
+export class PublicApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'PublicApiError';
+  }
+}
+
+/** `true` sólo si el error es un rechazo de credenciales (401/403). Un error de
+ *  red (fetch rechazado, sin `status`) devuelve `false` a propósito. */
+export function isAuthError(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return status === 401 || status === 403;
+}
+
 async function publicFetch<T>(
   path: string,
   init?: Omit<RequestInit, 'body'> & { token?: string; body?: unknown },
@@ -21,7 +40,7 @@ async function publicFetch<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message || `API ${path} → ${res.status}`);
+    throw new PublicApiError(err.message || `API ${path} → ${res.status}`, res.status);
   }
 
   const contentType = res.headers.get('content-type') ?? '';
@@ -81,7 +100,7 @@ export interface MeContext {
     visitante: string;
     esLocal: boolean;
   } | null;
-  standingsPosition: unknown;
+  standingsPosition: PublicStandingRow | null;
   personalStats: {
     goles: number;
     amarillas: number;
