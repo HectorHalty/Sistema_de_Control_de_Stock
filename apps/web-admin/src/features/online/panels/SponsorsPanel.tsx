@@ -21,12 +21,14 @@ export function SponsorsPanel() {
   const [imageUrl, setImageUrl] = useState('');
   const [placementId, setPlacementId] = useState(SPONSOR_PLACEMENTS[0].id);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [durationSeconds, setDurationSeconds] = useState(5);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editImageUrl, setEditImageUrl] = useState('');
   const [editPlacementId, setEditPlacementId] = useState(SPONSOR_PLACEMENTS[0].id);
   const [editMediaType, setEditMediaType] = useState<'image' | 'video'>('image');
+  const [editDuration, setEditDuration] = useState(5);
 
   const selectedPlacement = useMemo(() => placementOptionById(placementId), [placementId]);
 
@@ -61,11 +63,13 @@ export function SponsorsPanel() {
           mediaType,
           widthPx: selectedPlacement.widthPx,
           heightPx: selectedPlacement.heightPx,
+          durationSeconds,
         },
         token,
       );
       setName('');
       setImageUrl('');
+      setDurationSeconds(5);
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear');
@@ -86,10 +90,9 @@ export function SponsorsPanel() {
     setEditName(row.name);
     setEditImageUrl(row.imageUrl);
     setEditMediaType((row.mediaType as 'image' | 'video') ?? 'image');
+    setEditDuration(row.durationSeconds ?? 5);
     const match =
-      SPONSOR_PLACEMENTS.find((p) => p.bannerLabel === row.bannerLabel) ??
-      SPONSOR_PLACEMENTS.find((p) => p.placement === row.placement) ??
-      SPONSOR_PLACEMENTS[0];
+      SPONSOR_PLACEMENTS.find((p) => p.placement === row.placement) ?? SPONSOR_PLACEMENTS[0];
     setEditPlacementId(match.id);
   }
 
@@ -110,6 +113,7 @@ export function SponsorsPanel() {
           mediaType: editMediaType,
           widthPx: placement.widthPx,
           heightPx: placement.heightPx,
+          durationSeconds: editDuration,
         },
         token,
       );
@@ -155,6 +159,19 @@ export function SponsorsPanel() {
               <option value="image">Imagen</option>
               <option value="video">Video</option>
             </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Segundos por banner (2–60)
+            </label>
+            <input
+              type="number"
+              min={2}
+              max={60}
+              className={onlineFieldClass()}
+              value={durationSeconds}
+              onChange={(e) => setDurationSeconds(Number(e.target.value))}
+            />
           </div>
           <input
             className={onlineFieldClass()}
@@ -213,6 +230,7 @@ export function SponsorsPanel() {
               <p className="text-xs text-muted-foreground">
                 {row.widthPx ?? '—'} × {row.heightPx ?? '—'} px · {row.mediaType ?? 'image'}
               </p>
+              <p className="text-xs text-muted-foreground">{row.durationSeconds ?? 5}s por rotación</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className={onlineButtonClass('ghost')} onClick={() => startEdit(row)}>
                   Editar
@@ -242,6 +260,14 @@ export function SponsorsPanel() {
                     <option value="image">Imagen</option>
                     <option value="video">Video</option>
                   </select>
+                  <input
+                    type="number"
+                    min={2}
+                    max={60}
+                    className={onlineFieldClass()}
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(Number(e.target.value))}
+                  />
                   <input className={onlineFieldClass()} value={editName} onChange={(e) => setEditName(e.target.value)} />
                   <OnlineMediaUpload
                     mediaType={editMediaType}

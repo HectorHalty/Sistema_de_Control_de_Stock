@@ -4,9 +4,12 @@ import { publicApi } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart } from '../cart/CartContext';
 import { PageLoader } from '../../ui/PageLoader';
-import { IconCart, IconClock, IconFood, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
+import { IconCart, IconClock, IconFood, IconMapPin, IconVideo, RivalMark, StarBadge } from '../figma-icons';
+import { SafeImage } from '../SafeImage';
 import { CANTEEN_HERO_IMG } from '../food-images';
 import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
+import { SponsorCarousel } from '../sponsors/SponsorCarousel';
+import { QueryError } from '../QueryError';
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -29,7 +32,7 @@ export function HomePage() {
   const { meContext, user, token } = usePublicAuth();
   const { count } = useCart();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['home-bundle'],
     queryFn: () => publicApi.homeBundle(),
     retry: false,
@@ -61,6 +64,15 @@ export function HomePage() {
   );
 
   if (isLoading) return <PageLoader />;
+
+  if (isError) {
+    return (
+      <QueryError
+        message={(error as Error)?.message ?? 'Error de red'}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
 
   const name = displayName(user);
   const myTeam = meContext?.equipo?.name;
@@ -230,13 +242,7 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {!!data?.sponsors.length && (
-        <SponsorBanner
-          sponsor={
-            data.sponsors.find((s) => s.bannerLabel?.includes('Home')) ?? data.sponsors[0]
-          }
-        />
-      )}
+      <SponsorCarousel slot="home" sponsors={data?.sponsors ?? []} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -496,7 +502,20 @@ export function HomePage() {
                   onClick={() => navigate('/fotos')}
                   className="relative aspect-square overflow-hidden rounded-xl"
                 >
-                  <img src={item.url} alt={item.title} className="h-full w-full object-cover" />
+                  {'type' in item && (item as { type?: string }).type === 'video' ? (
+                    <div className="flex h-full w-full items-center justify-center bg-[#161616]">
+                      <span style={{ color: '#6BFF9E' }}>
+                        <IconVideo />
+                      </span>
+                    </div>
+                  ) : (
+                    <SafeImage
+                      src={item.url}
+                      alt={item.title}
+                      className="h-full w-full"
+                      fallbackLabel={item.title}
+                    />
+                  )}
                   {idx === 2 && mediaItems.length > 3 && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-black text-white">
                       +{mediaItems.length - 2}
@@ -510,110 +529,4 @@ export function HomePage() {
       </div>
     </div>
   );
-}
-
-function SponsorBanner({
-  sponsor,
-}: {
-  sponsor: {
-    name: string;
-    imageUrl?: string;
-    linkUrl?: string | null;
-    bannerLabel?: string | null;
-    mediaType?: string;
-    widthPx?: number | null;
-    heightPx?: number | null;
-  };
-}) {
-  const height = sponsor.heightPx ?? 86;
-  const inner = (
-    <div
-      style={{
-        borderRadius: 14,
-        overflow: 'hidden',
-        position: 'relative',
-        height,
-        border: '1px solid #2a2a2a',
-      }}
-    >
-      {sponsor.imageUrl ? (
-        sponsor.mediaType === 'video' ? (
-          <video
-            src={sponsor.imageUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-          />
-        ) : (
-          <img
-            src={sponsor.imageUrl}
-            alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-          />
-        )
-      ) : (
-        <div className="h-full w-full bg-[#161616]" />
-      )}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(to right, rgba(14,14,14,0.92) 40%, rgba(14,14,14,0.25))',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 20px',
-        }}
-      >
-        <div>
-          <span
-            style={{
-              color: '#6BFF9E',
-              fontSize: 9,
-              fontWeight: 900,
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              display: 'block',
-            }}
-          >
-            Sponsor oficial
-          </span>
-          <span
-            style={{ color: 'white', fontSize: 17, fontWeight: 900, lineHeight: 1.2, display: 'block' }}
-          >
-            {sponsor.name}
-          </span>
-        </div>
-        <div
-          style={{
-            background: '#6BFF9E',
-            color: '#0e0e0e',
-            padding: '6px 16px',
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 900,
-            flexShrink: 0,
-          }}
-        >
-          Ver más
-        </div>
-      </div>
-    </div>
-  );
-  if (sponsor.linkUrl) {
-    return (
-      <a href={sponsor.linkUrl} target="_blank" rel="noreferrer">
-        {inner}
-      </a>
-    );
-  }
-  return inner;
 }

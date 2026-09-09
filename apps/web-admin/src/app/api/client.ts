@@ -1253,6 +1253,7 @@ export interface Sponsor {
   widthPx?: number | null;
   heightPx?: number | null;
   sortOrder?: number;
+  durationSeconds?: number;
   active: boolean;
   linkUrl?: string | null;
 }
@@ -1666,6 +1667,7 @@ export interface CreateSponsorPayload {
   widthPx?: number;
   heightPx?: number;
   sortOrder?: number;
+  durationSeconds?: number;
 }
 
 export interface UpdateSponsorPayload {
@@ -1679,4 +1681,5 @@ export interface UpdateSponsorPayload {
   widthPx?: number;
   heightPx?: number;
   sortOrder?: number;
+  durationSeconds?: number;
 }

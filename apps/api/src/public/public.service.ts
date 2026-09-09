@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { TipoEventoPartido } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
+import { loadSalesProductsForStock } from '../sales/sales-stock';
+import { menuItemHasStock } from './menu-availability';
 
 function slugifyCategory(text: string): string {
   return text
@@ -385,8 +387,25 @@ export class PublicService {
       }),
     ]);
 
+    const spMap = await loadSalesProductsForStock(
+      this.prisma,
+      items.map((i) => i.id),
+    );
+
+    const levels = await this.prisma.nivelStock.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true },
+    });
+    const availableByStockProduct = new Map<string, number>(
+      levels.map((l) => [l.productId, Number(l._sum.quantity ?? 0)]),
+    );
+
+    const availableItems = items.filter((item) =>
+      menuItemHasStock(item.id, spMap, availableByStockProduct),
+    );
+
     return {
-      items: items.map((item) => ({
+      items: availableItems.map((item) => ({
         id: item.id,
         name: item.name,
         category: item.webCategory?.name ?? item.categoriaVenta.name,
@@ -406,8 +425,8 @@ export class PublicService {
 
   async listSponsors() {
     return this.prisma.patrocinador.findMany({
-      where: { active: true },
-      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      where: { active: true, placement: { in: ['home', 'cantina'] } },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
       select: {
         id: true,
         name: true,
@@ -418,6 +437,7 @@ export class PublicService {
         widthPx: true,
         heightPx: true,
         linkUrl: true,
+        durationSeconds: true,
       },
     });
   }

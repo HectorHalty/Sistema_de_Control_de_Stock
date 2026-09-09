@@ -8,6 +8,8 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { SalesService } from '../sales/sales.service';
 import { SseService } from '../sse/sse.service';
+import { loadSalesProductsForStock } from '../sales/sales-stock';
+import { translateStockConflict } from './public-order-errors';
 import type { PublicCheckoutDto } from './dto/public-orders.dto';
 
 @Injectable()
@@ -28,12 +30,45 @@ export class PublicOrdersService {
     const operatorId = await this.getOnlineOperatorId();
     const ticketKey = dto.idempotencyKey ?? `public-${cuentaId}-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
-    const checkoutResult = await this.sales.checkout({
-      items: dto.items,
-      operatorId,
-      idempotencyKey: `ticket-${ticketKey}`,
-      note: dto.nota ?? 'Pedido web cantina',
+    const salesProductIds = [...new Set(dto.items.map((i) => i.salesProductId))];
+    const productos = await this.prisma.productoVenta.findMany({
+      where: { id: { in: salesProductIds } },
+      select: { id: true, name: true, active: true, visibleWeb: true },
     });
+    const byId = new Map(productos.map((p) => [p.id, p]));
+    const noVendibles = salesProductIds.filter((id) => {
+      const p = byId.get(id);
+      return !p || !p.active || !p.visibleWeb;
+    });
+    if (noVendibles.length) {
+      const nombres = noVendibles.map((id) => byId.get(id)?.name ?? id).join(', ');
+      throw new BadRequestException(`Estos productos ya no están disponibles: ${nombres}`);
+    }
+
+    let checkoutResult;
+    try {
+      checkoutResult = await this.sales.checkout({
+        items: dto.items,
+        operatorId,
+        idempotencyKey: `ticket-${ticketKey}`,
+        note: dto.nota ?? 'Pedido web cantina',
+      });
+    } catch (err) {
+      if (
+        err instanceof ConflictException &&
+        typeof err.getResponse() === 'object' &&
+        Array.isArray((err.getResponse() as { missing?: unknown }).missing)
+      ) {
+        const missing = (err.getResponse() as { missing: Array<{ stockProductId: string }> }).missing;
+        const spMap = await loadSalesProductsForStock(this.prisma, salesProductIds);
+        const lines = dto.items.map((i) => ({
+          salesProductId: i.salesProductId,
+          name: byId.get(i.salesProductId)?.name ?? i.salesProductId,
+        }));
+        throw new ConflictException(translateStockConflict(missing, lines, spMap));
+      }
+      throw err;
+    }
 
     const ticket = checkoutResult.ticket;
 
@@ -56,7 +91,7 @@ export class PublicOrdersService {
       const created = await tx.pedidoPublico.create({
         data: {
           cuentaPublicaId: cuentaId,
-          status: 'en_cocina',
+          status: 'listo',
           total: ticket.total,
           ticketVentaId: ticket.id,
           nota: dto.nota,

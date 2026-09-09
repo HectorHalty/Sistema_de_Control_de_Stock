@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { publicApi, type PublicMenuItem, type PublicOrder, type PublicSponsor } from '../../../api/public-api';
+import { publicApi, type PublicMenuItem, type PublicOrder } from '../../../api/public-api';
 import { useCart, formatPrice, type CartLine } from '../cart/CartContext';
+import { reconcileCart } from '../cart/reconcile-cart';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconMinus, IconPlus, IconStar } from '../figma-icons';
-import { CANTEEN_HERO_IMG, foodImageFor } from '../food-images';
+import { foodImageFor } from '../food-images';
+import { SafeImage } from '../SafeImage';
+import { SponsorCarousel } from '../sponsors/SponsorCarousel';
 
 export function CantinaPage() {
   const navigate = useNavigate();
@@ -35,20 +38,23 @@ export function CantinaPage() {
   });
 
   useEffect(() => {
+    if (!data || cart.length === 0) return;
+    const ids = new Set(data.items.map((i) => i.id));
+    const { kept, removedNames } = reconcileCart(cart, ids);
+    if (removedNames.length) {
+      replaceItems(kept);
+      window.alert('Se quitaron productos que ya no están disponibles.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  useEffect(() => {
     if (!user || cart.length > 0) return;
     const dismissed = sessionStorage.getItem('lch_repeat_order_dismissed');
     if (dismissed === '1') return;
     const candidate = lastOrder ?? orders.find((o) => o.items?.length);
     if (candidate?.items?.length) setRepeatOrder(candidate);
   }, [user, cart.length, lastOrder, orders]);
-
-  const cantinaBanner = useMemo((): PublicSponsor | null => {
-    return (
-      sponsors.find((s) => s.bannerLabel?.includes('Cantina')) ??
-      sponsors.find((s) => s.placement === 'banner' && s.bannerLabel?.toLowerCase().includes('cantina')) ??
-      null
-    );
-  }, [sponsors]);
 
   const menu = data?.items ?? [];
   const webFilters = data?.filters ?? [];
@@ -292,7 +298,7 @@ export function CantinaPage() {
           ))}
         </div>
 
-        <CantinaPromoBanner banner={cantinaBanner} />
+        <SponsorCarousel slot="cantina" sponsors={sponsors} />
 
         {!search && filter === 'todas' && !activeQuickFilter && popular.length > 0 && (
           <div>
@@ -335,7 +341,7 @@ export function CantinaPage() {
       </div>
 
       {count > 0 && (
-        <div className="fixed bottom-6 right-6 z-30">
+        <div className="fab-above-nav fixed right-6 z-40">
           <button
             type="button"
             onClick={() => navigate('/carrito')}
@@ -455,54 +461,6 @@ function RepeatOrderModal({
   );
 }
 
-function CantinaPromoBanner({ banner }: { banner: PublicSponsor | null }) {
-  const height = banner?.heightPx ?? 112;
-  const mediaUrl = banner?.imageUrl ?? CANTEEN_HERO_IMG;
-  const title = banner?.name ?? 'El tercer tiempo es acá';
-  const subtitle = banner?.bannerLabel ?? 'Pedí online, retirá en cantina';
-
-  const inner = (
-    <div
-      style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', height, maxHeight: 140 }}
-      className="relative overflow-hidden rounded-2xl"
-    >
-      {banner?.mediaType === 'video' ? (
-        <video
-          src={mediaUrl}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <img src={mediaUrl} alt={title} className="h-full w-full object-cover" />
-      )}
-      <div
-        className="absolute inset-0"
-        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 40%, transparent)' }}
-      />
-      <div className="absolute inset-0 flex flex-col justify-center px-5">
-        <span style={{ color: '#6BFF9E' }} className="text-[9px] font-black uppercase tracking-widest">
-          Promo del día
-        </span>
-        <p className="text-base font-black leading-tight text-white">{title}</p>
-        <p className="text-[11px] text-gray-400">{subtitle}</p>
-      </div>
-    </div>
-  );
-
-  if (banner?.linkUrl) {
-    return (
-      <a href={banner.linkUrl} target="_blank" rel="noreferrer" className="block">
-        {inner}
-      </a>
-    );
-  }
-
-  return inner;
-}
-
 function MenuCard({
   item,
   qty,
@@ -524,7 +482,7 @@ function MenuCard({
       className="flex flex-col overflow-hidden rounded-xl"
     >
       <div className="relative h-36 shrink-0 overflow-hidden">
-        <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" />
+        <SafeImage src={imgSrc} alt={item.name} className="h-full w-full" fallbackLabel={item.name} />
         {popular && (
           <div
             style={{ background: '#6BFF9E', color: '#0e0e0e' }}
@@ -543,9 +501,11 @@ function MenuCard({
         )}
       </div>
       <div className="flex flex-1 flex-col p-3">
-        <p className="text-sm font-bold text-white">{item.name}</p>
+        <p className="line-clamp-2 text-sm font-bold text-white">{item.name}</p>
         {item.description && (
-          <p className="mt-0.5 flex-1 text-xs leading-relaxed text-gray-500">{item.description}</p>
+          <p className="mt-0.5 line-clamp-2 flex-1 text-xs leading-relaxed text-gray-500">
+            {item.description}
+          </p>
         )}
         <div className="mt-3 flex items-center justify-between">
           <span className="text-lg font-black text-white">

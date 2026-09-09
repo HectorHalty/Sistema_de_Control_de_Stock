@@ -6,12 +6,6 @@ import { DniModal } from './auth/DniModal';
 import { useCart } from './cart/CartContext';
 import { publicApi } from '../../api/public-api';
 import {
-  FooterSponsors,
-  MobileFooterSponsors,
-  SidebarSponsors,
-  usePublicSponsors,
-} from './SponsorPlacements';
-import {
   IconBookOpen,
   IconCamera,
   IconCart,
@@ -49,12 +43,10 @@ function Sidebar({
   path,
   cartCount,
   orderCount,
-  sponsors,
 }: {
   path: string;
   cartCount: number;
   orderCount: number;
-  sponsors: import('../../api/public-api').PublicSponsor[];
 }) {
   const navigate = useNavigate();
   const { user } = usePublicAuth();
@@ -146,8 +138,6 @@ function Sidebar({
           </button>
         </div>
       )}
-
-      <SidebarSponsors sponsors={sponsors} />
 
       <div className="px-3 pb-3">
         <button
@@ -243,19 +233,18 @@ export function PublicLayout() {
     enabled: !!token,
   });
   const orderCount = orders.filter((o) => o.status !== 'retirado' && o.status !== 'cancelado').length;
-  const { data: sponsors = [] } = usePublicSponsors();
 
   return (
     <div
       style={{ background: '#111111', display: 'flex', height: '100vh', overflow: 'hidden' }}
       className="text-white"
     >
-      <Sidebar path={path} cartCount={count} orderCount={orderCount} sponsors={sponsors} />
+      <Sidebar path={path} cartCount={count} orderCount={orderCount} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
           style={{ background: '#111111', borderBottom: '1px solid #1e1e1e' }}
-          className="flex items-center justify-between px-4 py-3 md:hidden"
+          className="safe-top flex items-center justify-between px-4 py-3 md:hidden"
         >
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6BFF9E]">
@@ -296,17 +285,14 @@ export function PublicLayout() {
           </button>
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', background: '#111111' }} className="min-h-0 pb-20 md:pb-0">
+        <main style={{ flex: 1, overflowY: 'auto', background: '#111111' }} className="min-h-0 pb-24 md:pb-0">
           <Outlet />
         </main>
-
-        <FooterSponsors sponsors={sponsors} />
-        {!hideMobileNav && <MobileFooterSponsors sponsors={sponsors} />}
 
         {!hideMobileNav && (
           <nav
             style={{ background: '#0e0e0e', borderTop: '1px solid #1e1e1e' }}
-            className="fixed bottom-0 left-0 right-0 z-30 md:hidden"
+            className="nav-safe-bottom fixed bottom-0 left-0 right-0 z-40 md:hidden"
           >
             <div className="grid grid-cols-5 gap-1 px-1 py-2">
               {[
