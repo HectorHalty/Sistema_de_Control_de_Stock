@@ -54,7 +54,7 @@ export function PaymentPage() {
       {!user ? (
         <div className="rounded-xl border border-[#2a2a2a] bg-lch-card p-5">
           <p className="mb-4 text-sm text-gray-400">
-            Iniciá sesión o registrate para confirmar el pedido y obtener tu código QR de retiro.
+            Necesitás una cuenta para confirmar el pedido y recibir tu código QR de retiro. Podés armar el carrito sin registrarte.
           </p>
           <AuthForm />
         </div>
