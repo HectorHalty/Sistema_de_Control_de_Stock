@@ -12,6 +12,13 @@ function knownError(code: string, meta?: Record<string, unknown>) {
   });
 }
 
+function checkViolationError(constraintName: string) {
+  return new Prisma.PrismaClientUnknownRequestError(
+    `\nInvalid \`prisma.nivelStock.create()\` invocation:\n\n\nError occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "23514", message: "new row for relation \\"niveles_stock\\" violates check constraint \\"${constraintName}\\"", severity: "ERROR", detail: None, column: None, hint: None }), transient: false })`,
+    { clientVersion: '5.22.0' },
+  );
+}
+
 function mockHost() {
   const json = vi.fn();
   const status = vi.fn().mockReturnValue({ json });
@@ -44,11 +51,12 @@ describe('PrismaExceptionFilter', () => {
     expect(err.code).toBe('P2002');
   });
 
-  it('@Catch registra PrismaClientKnownRequestError y PrismaClientValidationError para que Nest despache el filtro', () => {
+  it('@Catch registra PrismaClientKnownRequestError, PrismaClientValidationError y PrismaClientUnknownRequestError para que Nest despache el filtro', () => {
     const caught = Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS, PrismaExceptionFilter);
     expect(caught).toEqual([
       Prisma.PrismaClientKnownRequestError,
       Prisma.PrismaClientValidationError,
+      Prisma.PrismaClientUnknownRequestError,
     ]);
   });
 
@@ -138,5 +146,45 @@ describe('PrismaExceptionFilter', () => {
     expect(JSON.stringify(body)).not.toContain('EstadoPedidoPublico');
     expect(JSON.stringify(body)).not.toContain('bogus');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bogus'));
+  });
+
+  it('mapea una violación de CHECK constraint (SQLSTATE 23514) a 400 Bad Request', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, status, json } = mockHost();
+    filter.catch(checkViolationError('niveles_stock_quantity_no_negativa'), host);
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.BAD_REQUEST,
+      message: 'Parámetro o dato inválido.',
+    });
+  });
+
+  it('no filtra el nombre de la restricción CHECK violada al cliente, pero sí lo registra en el log', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, json } = mockHost();
+    filter.catch(checkViolationError('niveles_stock_quantity_no_negativa'), host);
+
+    const body = json.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(body)).not.toContain('niveles_stock_quantity_no_negativa');
+    expect(JSON.stringify(body)).not.toContain('violates check constraint');
+    expect(JSON.stringify(body)).not.toContain('23514');
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('niveles_stock_quantity_no_negativa'),
+    );
+  });
+
+  it('mapea un PrismaClientUnknownRequestError que no es un CHECK constraint a 500', () => {
+    const filter = new PrismaExceptionFilter();
+    const { host, status, json } = mockHost();
+    const err = new Prisma.PrismaClientUnknownRequestError('algo raro pasó en el motor', {
+      clientVersion: '5.22.0',
+    });
+    filter.catch(err, host);
+    expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'Error interno de base de datos.',
+    });
   });
 });
