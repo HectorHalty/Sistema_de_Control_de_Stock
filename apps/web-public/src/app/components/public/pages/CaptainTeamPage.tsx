@@ -8,6 +8,13 @@ import { useFutbolIdentity } from '../auth/useFutbolIdentity';
 // torneo real: se muestra el plantel actual en modo lectura.
 const MUT_DISABLED_TITLE = 'Disponible cuando se conecte el torneo';
 
+/** `rolPlantel` llega como token (`capitan`/`jugador`); en pantalla va la etiqueta. */
+function rolPlantelLabel(rolPlantel: string): string {
+  if (rolPlantel === 'capitan') return 'Capitán';
+  if (rolPlantel === 'jugador') return 'Jugador';
+  return rolPlantel;
+}
+
 export function CaptainTeamPage() {
   const navigate = useNavigate();
   const { role, getCaptainTeam } = useFutbolIdentity();
@@ -84,7 +91,7 @@ export function CaptainTeamPage() {
                       {p.numeroCamiseta != null ? ` · #${p.numeroCamiseta}` : ''}
                     </p>
                     <p className="text-xs text-gray-500">
-                      DNI {p.dni} · {p.rolPlantel}
+                      DNI {p.dni} · {rolPlantelLabel(p.rolPlantel)}
                       {p.email ? ` · ${p.email}` : ''}
                     </p>
                   </div>

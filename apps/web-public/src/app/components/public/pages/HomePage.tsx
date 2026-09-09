@@ -82,7 +82,9 @@ export function HomePage() {
           hora: meContext.proximoPartido.hora,
           cancha: meContext.proximoPartido.cancha,
           jornada: null as number | null,
-          esLocal: meContext.proximoPartido.esLocal as boolean | null,
+          esLocal: sections.showLocalBadge
+            ? (meContext.proximoPartido.esLocal as boolean | null)
+            : null,
           mine: true,
         }
       : null;
@@ -206,8 +208,12 @@ export function HomePage() {
             className="flex items-center justify-between px-5 pb-2.5 pt-3"
           >
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white">
-              {nextMatch?.mine ? 'Mi Próximo Partido' : 'Próximo partido'}
-              {nextMatch?.mine && nextMatch.esLocal != null && (
+              {nextMatch?.mine
+                ? sections.showLocalBadge
+                  ? 'Mi Próximo Partido'
+                  : `Próximo partido de ${myTeam ?? 'tu equipo'}`
+                : 'Próximo partido'}
+              {nextMatch?.mine && sections.showLocalBadge && nextMatch.esLocal != null && (
                 <span
                   style={{ background: '#ffffff10', color: '#9ca3af' }}
                   className="rounded px-1.5 py-0.5 text-[9px] font-black tracking-normal"

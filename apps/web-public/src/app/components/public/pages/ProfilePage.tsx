@@ -1,11 +1,30 @@
+import { useState } from 'react';
 import { Loader2, LogOut, Pencil, Shield, UserRound, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import type { PublicRol } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useFutbolIdentity } from '../auth/useFutbolIdentity';
 import { OnboardingBody } from '../auth/OnboardingGate';
+import { JugadorDniStep } from '../auth/JugadorDniStep';
 import { TeamPicker } from '../auth/TeamPicker';
 import { LoginPanel } from '../auth/LoginPanel';
 import { IconClock, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
+
+/** Etiqueta del rol. `usuario` es un estado de larga vida (el DNI no es
+ *  obligatorio y "Más tarde" es de primera clase), y todavía no sigue a ningún
+ *  equipo: no puede mostrarse como "Seguidor". */
+function rolLabel(rol: PublicRol): string {
+  switch (rol) {
+    case 'capitan':
+      return 'Capitán';
+    case 'jugador':
+      return 'Jugador';
+    case 'seguidor':
+      return 'Seguidor';
+    default:
+      return 'Sin vincular';
+  }
+}
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -19,7 +38,8 @@ function formatMatchDate(iso: string) {
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user, token, loading, logout } = usePublicAuth();
-  const { role, meContext, followTeam, unfollowTeam } = useFutbolIdentity();
+  const { role, meContext, followTeam, unfollowTeam, torneoPublico } = useFutbolIdentity();
+  const [mostrarPasoJugador, setMostrarPasoJugador] = useState(false);
 
   if (loading) {
     return (
@@ -74,7 +94,7 @@ export function ProfilePage() {
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span className="rounded-full bg-[#161616] px-2 py-0.5 text-[10px] font-bold text-gray-400">
-                {user.rol === 'capitan' ? 'Capitán' : user.rol === 'jugador' ? 'Jugador' : 'Seguidor'}
+                {rolLabel(user.rol)}
               </span>
               {ctx?.equipo?.categoria && (
                 <span className="rounded-full bg-[#161616] px-2 py-0.5 text-[10px] font-bold text-gray-400">
@@ -181,14 +201,19 @@ export function ProfilePage() {
             ))}
           </div>
           {(() => {
-            const st = meContext.standingsPosition as
-              | { teamName?: string; played?: number; points?: number }
-              | null;
-            return st ? (
+            const st = meContext.standingsPosition;
+            if (!st) return null;
+            const torneo = torneoPublico();
+            // Posición = índice en la tabla + 1. `findIndex` devuelve -1 si el
+            // equipo no está en la tabla; en ese caso omitimos el "Nº en …".
+            const puesto =
+              torneo.standings.findIndex((s) => s.inscripcionId === st.inscripcionId) + 1;
+            return (
               <p className="mt-3 text-xs text-gray-400">
-                {meContext.equipo?.name}: {st.played} PJ · {st.points} pts en el Apertura
+                {meContext.equipo?.name}: {st.played} PJ · {st.points} pts
+                {puesto > 0 ? ` · ${puesto}º en ${torneo.torneo.nombre}` : ''}
               </p>
-            ) : null;
+            );
           })()}
         </section>
       )}
@@ -239,10 +264,39 @@ export function ProfilePage() {
             <p className="text-sm text-gray-300">
               Seguís a <span className="font-bold text-lch-accent">{meContext?.equipo?.name}</span>.
             </p>
-            <button type="button" onClick={() => { unfollowTeam(); }} className="text-sm text-red-300 underline">
-              Dejar de seguir
-            </button>
-            <TeamPicker onPick={(id) => { followTeam(id); }} />
+            <div className="flex flex-wrap items-center gap-4">
+              <button type="button" onClick={() => { unfollowTeam(); }} className="text-sm text-red-300 underline">
+                Dejar de seguir
+              </button>
+              {!mostrarPasoJugador && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarPasoJugador(true)}
+                  className="text-sm text-lch-accent underline"
+                >
+                  Soy jugador
+                </button>
+              )}
+            </div>
+            {mostrarPasoJugador ? (
+              <div className="rounded-xl border border-[#2a2a2a] bg-[#161616] p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-black text-white">Confirmá tu DNI</h4>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPasoJugador(false)}
+                    className="text-xs text-gray-500 hover:text-gray-300"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                {/* Al confirmar, `completeDni` refresca la sesión y el rol efectivo
+                    se re-deriva solo: no hace falta cerrar nada a mano. */}
+                <JugadorDniStep onDone={() => {}} />
+              </div>
+            ) : (
+              <TeamPicker onPick={(id) => { followTeam(id); }} />
+            )}
           </div>
         ) : (
           <OnboardingBody onClose={() => {}} showDismiss={false} />
