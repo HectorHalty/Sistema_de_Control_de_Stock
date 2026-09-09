@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Loader2, LogOut, Pencil, Search, Shield, Star, UserRound, Users } from 'lucide-react';
+import { Loader2, LogOut, Pencil, Shield, UserRound, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { publicApi, type PublicTeamOption } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
+import { useFutbolIdentity } from '../auth/useFutbolIdentity';
+import { OnboardingBody } from '../auth/OnboardingGate';
+import { TeamPicker } from '../auth/TeamPicker';
 import { LoginPanel } from '../auth/LoginPanel';
 import { IconClock, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
 
@@ -17,23 +18,8 @@ function formatMatchDate(iso: string) {
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user, meContext, token, loading, logout, refreshContext, applyAuthResponse } =
-    usePublicAuth();
-  const [teams, setTeams] = useState<PublicTeamOption[]>([]);
-  const [search, setSearch] = useState('');
-  const [followLoading, setFollowLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user?.puedeSeguirEquipo) return;
-    const t = setTimeout(() => {
-      publicApi
-        .teams(search || undefined)
-        .then(setTeams)
-        .catch(() => setTeams([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [search, user?.puedeSeguirEquipo]);
+  const { user, token, loading, logout } = usePublicAuth();
+  const { role, meContext, followTeam, unfollowTeam } = useFutbolIdentity();
 
   if (loading) {
     return (
@@ -56,35 +42,6 @@ export function ProfilePage() {
         <LoginPanel />
       </div>
     );
-  }
-
-  async function handleFollow(equipoInscripcionId: string) {
-    if (!token) return;
-    setFollowLoading(true);
-    setError(null);
-    try {
-      const res = await publicApi.me.followTeam(equipoInscripcionId, token);
-      await applyAuthResponse(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo seguir el equipo');
-    } finally {
-      setFollowLoading(false);
-    }
-  }
-
-  async function handleUnfollow() {
-    if (!token) return;
-    setFollowLoading(true);
-    setError(null);
-    try {
-      const res = await publicApi.me.unfollowTeam(token);
-      await applyAuthResponse(res);
-      await refreshContext();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo dejar de seguir');
-    } finally {
-      setFollowLoading(false);
-    }
   }
 
   const ctx = meContext;
@@ -208,6 +165,34 @@ export function ProfilePage() {
         </div>
       )}
 
+      {role.rol === 'jugador' && meContext?.personalStats && (
+        <section style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
+          <h3 className="mb-4 text-sm font-bold text-white">Mi rendimiento</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              ['Goles', meContext.personalStats.goles],
+              ['Amarillas', meContext.personalStats.amarillas],
+              ['Rojas', meContext.personalStats.rojas],
+            ].map(([label, n]) => (
+              <div key={label} className="rounded-xl bg-[#161616] p-3 text-center">
+                <p className="text-2xl font-black text-white">{n}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
+              </div>
+            ))}
+          </div>
+          {(() => {
+            const st = meContext.standingsPosition as
+              | { teamName?: string; played?: number; points?: number }
+              | null;
+            return st ? (
+              <p className="mt-3 text-xs text-gray-400">
+                {meContext.equipo?.name}: {st.played} PJ · {st.points} pts en el Apertura
+              </p>
+            ) : null;
+          })()}
+        </section>
+      )}
+
       <section style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
         <h3 className="mb-4 text-sm font-bold text-white">Datos Personales</h3>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -241,57 +226,28 @@ export function ProfilePage() {
         </button>
       )}
 
-      {user.puedeSeguirEquipo && (
-        <section className="rounded-2xl border border-[#2a2a2a] bg-lch-card p-5">
-          <div className="mb-3 flex items-center gap-2 text-lch-accent">
-            <Star size={18} />
-            <h3 className="font-semibold">Seguir un equipo</h3>
-          </div>
-          {ctx?.equipo && user.rol === 'seguidor' && (
-            <button
-              type="button"
-              disabled={followLoading}
-              onClick={handleUnfollow}
-              className="mb-3 text-sm text-red-300 underline"
-            >
-              Dejar de seguir {ctx.equipo.name}
-            </button>
-          )}
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar equipo..."
-              className="w-full rounded-xl border border-[#2a2a2a] bg-[#161616] py-2.5 pl-10 pr-4 text-sm outline-none focus:border-lch-accent"
-            />
-          </div>
-          <div className="max-h-56 space-y-2 overflow-y-auto">
-            {teams.map((t) => (
-              <button
-                key={t.equipoInscripcionId}
-                type="button"
-                disabled={followLoading}
-                onClick={() => handleFollow(t.equipoInscripcionId)}
-                className="flex w-full items-center justify-between rounded-xl border border-[#2a2a2a] bg-[#161616] px-4 py-3 text-left text-sm hover:border-lch-accent/40"
-              >
-                <span>
-                  <span className="font-medium">{t.name}</span>
-                  <span className="ml-2 text-gray-500">{t.categoria}</span>
-                </span>
-                <Star size={16} className="text-lch-accent" />
-              </button>
-            ))}
-            {!teams.length && (
-              <p className="py-4 text-center text-sm text-gray-500">Sin equipos</p>
-            )}
-          </div>
-        </section>
-      )}
+      <section style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
+        <h3 className="mb-3 text-sm font-bold text-white">Mi vínculo con el torneo</h3>
 
-      {error && (
-        <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
-      )}
+        {role.rol === 'jugador' || role.rol === 'capitan' ? (
+          <p className="text-sm text-gray-300">
+            Estás vinculado como {role.rol === 'capitan' ? 'capitán' : 'jugador'} de{' '}
+            <span className="font-bold text-lch-accent">{meContext?.equipo?.name ?? 'tu equipo'}</span>.
+          </p>
+        ) : role.rol === 'seguidor' ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-300">
+              Seguís a <span className="font-bold text-lch-accent">{meContext?.equipo?.name}</span>.
+            </p>
+            <button type="button" onClick={() => { unfollowTeam(); }} className="text-sm text-red-300 underline">
+              Dejar de seguir
+            </button>
+            <TeamPicker onPick={(id) => { followTeam(id); }} />
+          </div>
+        ) : (
+          <OnboardingBody onClose={() => {}} showDismiss={false} />
+        )}
+      </section>
     </div>
   );
 }
