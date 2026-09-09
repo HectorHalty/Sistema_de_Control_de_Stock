@@ -526,7 +526,9 @@ Cuando la reestructuración del admin exponga los endpoints reales de torneo:
 1. `USE_MOCK_FUTBOL = false` en `futbol-identity.ts`.
 2. `useFutbolIdentity()` pasa a llamar `publicApi.me.context` / `publicApi.captain.getTeam`
    / `publicApi.me.followTeam` y el Home genérico a `publicApi.homeBundle` / `publicApi.torneo`
-   (el branch real ya está escrito, sólo desactivado).
+   (el branch real **todavía no está escrito**: hoy `useFutbolIdentity()` lanza un error
+   ruidoso si se invierte la bandera antes del swap, y hay que implementarlo como parte
+   de la reestructuración, respetando la interfaz `FutbolIdentity`).
 3. La regla email+DNI (`resolveMockRole`) se traslada a `resolveAndUpdateRole` en el
    backend (`apps/api/src/public/public-auth.service.ts`), y el paso "jugador" del
    onboarding empieza a confiar en el `rol` que devuelve `completeDni`.
