@@ -4,8 +4,10 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { PublicRouter } from './components/public/PublicRouter';
 import { PublicAuthProvider } from './components/public/auth/PublicAuthContext';
+import { googleEnabled } from './components/public/auth/auth-helpers';
 import { CartProvider } from './components/public/cart/CartContext';
 
 const queryClient = new QueryClient({
@@ -37,7 +39,9 @@ function PublicAppShell() {
     };
   }, []);
 
-  return (
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  const tree = (
     <QueryClientProvider client={queryClient}>
       <PublicAuthProvider>
         <CartProvider>
@@ -46,6 +50,10 @@ function PublicAppShell() {
       </PublicAuthProvider>
     </QueryClientProvider>
   );
+
+  return googleEnabled(googleClientId)
+    ? <GoogleOAuthProvider clientId={googleClientId!}>{tree}</GoogleOAuthProvider>
+    : tree;
 }
 
 export default function App() {
