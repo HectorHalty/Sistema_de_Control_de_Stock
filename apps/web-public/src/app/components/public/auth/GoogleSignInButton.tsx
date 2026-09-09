@@ -34,7 +34,6 @@ export function GoogleSignInButton() {
         <GoogleLogin
           theme="filled_black"
           text="continue_with"
-          locale="es"
           width="100%"
           onSuccess={(cred) => void handle(cred.credential)}
           onError={() => setError('No se pudo iniciar sesión con Google')}

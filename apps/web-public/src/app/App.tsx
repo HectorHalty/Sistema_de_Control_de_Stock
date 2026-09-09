@@ -52,7 +52,7 @@ function PublicAppShell() {
   );
 
   return googleEnabled(googleClientId)
-    ? <GoogleOAuthProvider clientId={googleClientId!}>{tree}</GoogleOAuthProvider>
+    ? <GoogleOAuthProvider clientId={googleClientId!} locale="es">{tree}</GoogleOAuthProvider>
     : tree;
 }
 
