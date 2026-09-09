@@ -14,13 +14,15 @@ suspensiones, próximo partido, posición en la tabla). Lo que falta es:
 - No hay botón de "Continuar con Google" en la web pública, aunque `loginGoogle` está
   cableado en el `PublicAuthContext`, `publicApi.auth.loginGoogle` existe, y
   `@react-oauth/google` ya es dependencia de `apps/web-public`.
-- El DNI es opcional: el `DniModal` se cierra con la X o clic afuera. El acuerdo de
-  Proyecto B es DNI **obligatorio**.
+- No hay onboarding: después de registrarse, la persona cae directo en la app sin que
+  se le pregunte si es jugador o hincha. El `DniModal` aparece suelto y se puede cerrar.
 - Cualquiera que tipee un DNI que figure en un plantel obtiene el rol `jugador` y ve
   las estadísticas de esa persona. No hay verificación de que el DNI sea tuyo.
 - La experiencia "soy jugador, veo lo mío" está a medias: el Home intenta mostrar "mi
   próximo partido" y "mi equipo" pero no lo completa; el Perfil sólo muestra la
   suspensión activa, no el resto de las stats.
+- El Home muestra datos de un torneo demo aun para quien no tiene equipo, con lógica de
+  resaltado de "tu equipo" que sólo aplica a jugadores.
 
 Además, **el lado admin del torneo se va a reestructurar**. Construir las vistas de
 jugador/capitán contra `PublicMeService.getMeContext` y `PublicCaptainService` reales
@@ -31,11 +33,12 @@ motor de reglamento) sería construir sobre un blanco móvil.
 
 | Área | Tratamiento |
 |---|---|
-| Login con Google (web), login email/contraseña, registro | **Real y definitivo.** |
+| Login con Google (web), login email/contraseña, registro (email + contraseña + nombre) | **Real y definitivo.** |
 | Sesión: JWT en `localStorage`, `PublicAuthContext`, Bearer token | **Real y definitivo.** |
-| DNI obligatorio (gate), creación de `CuentaPublica` / `Persona`, `completeDni` | **Real y definitivo.** |
+| Creación de `CuentaPublica` / `Persona`, `completeDni` (paso jugador del onboarding) | **Real y definitivo.** |
 | Chequeo `email_verified` del ID token de Google | **Real** (único cambio de backend). |
-| Rol efectivo jugador/capitán, regla email+DNI | **Mock en el front** (fase actual). |
+| Onboarding "¿jugador o hincha?" (pantalla + persistencia de la elección) | **Front.** |
+| Rol efectivo jugador/capitán/seguidor, regla email+DNI | **Mock en el front** (fase actual). |
 | Mi equipo, mi próximo partido, tabla de posiciones, mi fila | **Mock en el front.** |
 | Stats del jugador (goles/amarillas/rojas/suspensiones) | **Mock en el front.** |
 | Plantel del capitán (ver) | **Mock en el front** (read-only en esta fase). |
@@ -44,7 +47,21 @@ motor de reglamento) sería construir sobre un blanco móvil.
 
 **Constraint global:** este build **no es apto para producción del lado torneo** hasta
 que el adapter mock se reemplace por llamadas reales (ver §7). El login, la sesión y el
-DNI sí son de producción.
+DNI (`completeDni`) sí son de producción.
+
+## Roles y qué puede hacer cada uno
+
+| Estado | Puede | No puede |
+|---|---|---|
+| **Anónimo** (sin login) | Ver torneo, cantina, fotos, reglamento. Armar carrito. | Confirmar pedido. Seguir un equipo. Ver stats. |
+| **`usuario`** (registrado, sin elegir en el onboarding o eligió "más tarde") | Todo lo anterior + confirmar pedidos de cantina. | Seguir un equipo (hasta elegir "hincha"). Ver stats. |
+| **`seguidor`** (eligió "hincha" + sigue un equipo) | Todo lo de `usuario` + ver el equipo que sigue destacado en su Home/Perfil. | Ver estadísticas de jugador. |
+| **`jugador`** (eligió "jugador" + DNI matchea el plantel por email+DNI) | Todo + Home personalizado + bloque "Mi rendimiento". | Seguir equipos (ya tiene el suyo). Editar el plantel. |
+| **`capitan`** (email+DNI matchea `CapitanAutorizado`) | Todo lo de `jugador` + panel "Administrar equipo" (ver plantel; editar deshabilitado en fase mock). | — |
+
+La **vista del torneo es genérica para anónimo y `usuario`**: tabla de posiciones,
+próximos partidos y resultados, pero **sin ninguna fila ni equipo resaltado como
+"tuyo"** y sin "mi próximo partido".
 
 ## Fuera de alcance (explícito)
 
@@ -64,9 +81,15 @@ DNI sí son de producción.
 | Tema | Decisión |
 |---|---|
 | Plataformas del login Google | Solo web. GSI (`gsi/client` vía `@react-oauth/google`). |
-| Verificación de que el DNI es tuyo | Match `cuenta.email` == `persona.email` de la inscripción (y el DNI). Sin match → `usuario` + mensaje "avisá al capitán". |
-| DNI obligatorio | Siempre, desde la creación de la cuenta. Gate bloqueante, única salida: cerrar sesión. |
-| Email de Google no coincide con el plantel | La cuenta **no** se vincula. Mensaje: "Tu DNI figura en el plantel de <equipo> con otro email. Pedile al capitán que actualice tu email." El capitán ya puede editar ese email desde su panel (post-reestructuración). Cero UI de admin nueva. |
+| Registro | email + contraseña + nombre. **Sin DNI.** |
+| Onboarding | Después de registrarse (o de un primer login con Google), pantalla "¿Sos jugador o hincha?". Se puede posponer ("Más tarde" → `usuario`); la elección queda siempre disponible desde el Perfil. |
+| Camino "jugador" | Pide **sólo el DNI**. Match por DNI + email de login contra el plantel. Sin tipear otro email. |
+| Camino "hincha" | Elegir un equipo de los cargados → `seguidor`. Sin DNI, sin stats. |
+| Verificación de que el DNI es tuyo | Match `cuenta.email` (login) == `persona.email` de la inscripción **y** el DNI. Sin match → `usuario` + mensaje "avisá al capitán". |
+| DNI | **No obligatorio.** Sólo se pide en el camino "jugador" del onboarding. No hay gate bloqueante. |
+| Pedir en la cantina | Requiere estar **registrado** (cualquier rol, incluido `usuario`). No requiere DNI. Anónimo puede armar carrito pero no confirmar. |
+| Email de Google/login no coincide con el plantel | La cuenta **no** se vincula como jugador. Queda `usuario`. Mensaje: "Tu DNI figura en el plantel de <equipo> con otro email. Pedile al capitán que actualice tu email." Cero UI de admin nueva. |
+| Vista genérica (anónimo / `usuario`) | Torneo completo (tabla, próximos partidos, resultados) **sin nada resaltado**, sin "mi próximo partido". |
 | Vista del jugador | Home personalizado (mi próximo partido, mi equipo, mini-tira de stats, mi fila en la tabla) + bloque "Mi rendimiento" en el Perfil. Sin ruta nueva. |
 | Vista del capitán | `CaptainTeamPage` ya está completa. Se conecta al adapter; mutaciones deshabilitadas en fase mock. |
 | One Tap | No se usa. |
@@ -83,15 +106,22 @@ Login (real)
   <GoogleLogin> → credential (ID token JWT)
     POST /public/auth/google → verifyGoogleToken (firma + iss + aud + exp + email_verified)
       → upsertAndSign → { accessToken, user }
-  AuthForm (email/pass) → POST /public/auth/login | /register  [sin cambios]
+  AuthForm (email/pass + nombre) → POST /public/auth/login | /register  [register: sin campo DNI]
 
-DNI gate (real)
-  user.needsDni → DniGate a pantalla completa (no cerrable) → completeDni → needsDni=false
+Onboarding (front, una vez, cuando rol === 'usuario' y no se eligió antes)
+  "¿Sos jugador o hincha?"
+    jugador → form DNI → completeDni (real) → adapter resuelve rol (jugador | usuario+aviso)
+    hincha  → elegir equipo → mockFollowTeam → seguidor
+    más tarde → queda usuario; re-accesible desde el Perfil
 
 Contexto de fútbol (mock en esta fase)
   useFutbolIdentity()
     USE_MOCK_FUTBOL=true  → adapter mocks/futbol-identity.ts (fixtures)
     USE_MOCK_FUTBOL=false → publicApi.me.context / publicApi.captain.getTeam  [branch ya escrito, desactivado]
+
+Pedidos de cantina
+  anónimo → arma carrito, NO confirma (AuthForm en /pago)
+  registrado (cualquier rol) → confirma
 ```
 
 ### Unidades
@@ -101,18 +131,24 @@ Contexto de fútbol (mock en esta fase)
 | `verifyGoogleToken` (editado) | Valida el ID token; ahora exige `email_verified === true` | `PublicAuthService.loginWithGoogle` | `google-auth-library`, `GOOGLE_CLIENT_ID` |
 | `googleEnabled(clientId?)` | `true` sólo con string no vacío | root del front, `GoogleSignInButton` | — |
 | `GoogleSignInButton` | Renderiza `<GoogleLogin>`; `onSuccess` → `loginGoogle(credential)`; `null` sin provider | `AuthForm` | `@react-oauth/google`, `PublicAuthContext` |
-| `needsDniGate(user)` | `!!user && !user.dniConfirmado` | `PublicLayout` | — |
-| `DniGate` (refactor de `DniModal`) | Bloquea toda la app hasta que haya DNI | `PublicLayout` | `PublicAuthContext` |
+| `OnboardingGate` | Si `rol === 'usuario'` y no se decidió, muestra "¿jugador o hincha?" sobre la app | `PublicLayout` | `PublicAuthContext`, `onboardingState` |
+| `onboardingState` (helper) | `shouldShowOnboarding(user, dismissed): boolean`; persiste elección en `localStorage` | `OnboardingGate`, Perfil | — |
+| `JugadorDniStep` (refactor de `DniModal`) | Form de DNI dentro del onboarding jugador; llama `completeDni` | `OnboardingGate`, Perfil | `PublicAuthContext` |
 | `futbol-identity.ts` (adapter mock) | Resuelve rol + contexto + plantel desde fixtures | `useFutbolIdentity`, `PublicAuthContext` | tipos `MeContext` / `CaptainTeamData` |
 | `useFutbolIdentity()` | Único punto de integración: mock o `publicApi` según el flag | Home, Perfil, CaptainTeamPage, PublicRouter | `futbol-identity.ts`, `publicApi` |
 | `playerHomeSections(ctx)` | Qué secciones muestra el Home del jugador | `HomePage` | — |
 
-## 1. Backend (mínimo)
+## 1. Backend (acotado)
 
-### `verifyGoogleToken` — exigir email verificado
+Dos cambios, ambos en `apps/api/src/public/`. Sin cambios de esquema Prisma.
+`resolveAndUpdateRole`, `getMeContext`, `PublicCaptainService` quedan igual. El `rol`
+que devuelven `login` / `register` / `completeDni` **se ignora en el front durante la
+fase mock**.
 
-En `apps/api/src/public/public-auth.service.ts`, dentro de `verifyGoogleToken`, después
-de validar `payload?.sub` y `payload.email`:
+### 1a. `verifyGoogleToken` — exigir email verificado
+
+En `public-auth.service.ts`, dentro de `verifyGoogleToken`, después de validar
+`payload?.sub` y `payload.email`:
 
 ```ts
 if (payload.email_verified !== true) {
@@ -120,9 +156,25 @@ if (payload.email_verified !== true) {
 }
 ```
 
-Nada más cambia en el backend. `resolveAndUpdateRole`, `getMeContext`,
-`PublicCaptainService`, DTOs y esquema quedan igual. El `rol` que devuelven
-`login` / `register` / `completeDni` **se ignora en el front durante la fase mock**.
+### 1b. `register` — sin DNI
+
+Hoy `register()` exige `dto.dni` (7+ dígitos), crea una `Persona` y la vincula. El
+registro pasa a ser sólo cuenta:
+
+- `RegisterDto` (`dto/public-auth.dto.ts`): **quitar** el campo `dni` (era
+  `@IsString @IsNotEmpty`).
+- `PublicAuthService.register`: quitar la normalización/validación de DNI, el
+  `persona.upsert` y `personaId` / `dniConfirmado` del `create`. Queda:
+  ```ts
+  const cuenta = await this.prisma.cuentaPublica.create({
+    data: { email, passwordHash, nombre: dto.nombre.trim(), rol: 'usuario' },
+  });
+  ```
+- El DNI se carga después, en el paso "jugador" del onboarding, vía `completeDni`
+  (que ya existe y ya hace el `persona.upsert` + set `personaId` / `dniConfirmado`).
+- `completeDni` **no cambia**.
+- Tests de backend afectados: cualquiera que llame `register` con `dni`. Ajustar los
+  fixtures.
 
 ### Config de entorno
 
@@ -180,8 +232,13 @@ Arriba del toggle Ingresar/Registrarse:
 Aparece en modo `login` y `register`. Si `GoogleSignInButton` devuelve `null`, el
 divisor también se oculta (renderizar ambos condicionalmente a `googleEnabled`).
 
-Tras `loginGoogle` exitoso: `PublicAuthContext` ya llama a `applyAuthResponse`; si
-`user.needsDni`, el `DniGate` de §3 toma el control. Sin lógica extra en `AuthForm`.
+**Registro sin DNI:** quitar de `AuthForm` (modo `register`) el input de DNI, su estado
+y su validación. El registro queda: nombre + email + contraseña + confirmar. El contrato
+de `RegisterDto` / `PublicAuthService.register` se ajusta en §1b, y `publicApi.auth.register`
+deja de mandar `dni`.
+
+Tras `loginGoogle` / `register` exitoso: el `OnboardingGate` de §3 evalúa si mostrar
+la pantalla "¿jugador o hincha?". Sin lógica extra en `AuthForm`.
 
 ### Seguridad (registrada)
 
@@ -205,31 +262,59 @@ Tras `loginGoogle` exitoso: `PublicAuthContext` ya llama a `applyAuthResponse`; 
 - `<GoogleLogin>` usa el botón nativo de Google (sin CSS custom).
 - Scopear el provider al montaje del `AuthForm` queda anotado como mejora futura (YAGNI).
 
-## 3. DNI obligatorio (gate)
+## 3. Onboarding: "¿Sos jugador o hincha?"
 
-### Comportamiento
+### Cuándo se muestra
 
-`DniModal` deja de ser un modal cerrable y pasa a `DniGate` bloqueante:
+`OnboardingGate`, montado en `PublicLayout` por encima del `<Outlet />` (pero **no**
+bloquea navegación: es un overlay que se puede posponer).
 
-- `PublicAuthContext`: exponer `dniRequired = !!user && !user.dniConfirmado` (helper
-  `needsDniGate(user)`). Eliminar `showDniModal` / `setShowDniModal` y la lógica de
-  "mostrar el modal" — el gate es derivado del estado del usuario, no un flag imperativo.
-- `PublicLayout`: si `dniRequired`, renderizar **sólo** `<DniGate />` a pantalla
-  completa. Nada de sidebar, header, nav, ni `<Outlet />`.
-- `DniGate` (renombrar/refactor de `DniModal`):
-  - Reusa el form actual (input DNI numérico, `completeDni`).
-  - **Sin** botón X, sin `Escape`, sin cerrar al clic afuera.
-  - Copy: "Necesitamos tu DNI para vincularte con el torneo y la cantina. Es
-    obligatorio para usar tu cuenta."
-  - Única salida: botón "Cerrar sesión" → `logout()`.
-  - `completeDni` exitoso → `dniConfirmado` se setea → `dniRequired` pasa a `false` →
-    el gate desaparece y aparece la app.
-- Registro email/password: ya exige DNI en el form, no cambia.
-- Login Google de una cuenta que **ya** tiene `dniConfirmado`: entra directo, sin gate.
+`shouldShowOnboarding(user, dismissed)`:
+- `true` si `user` existe **y** su `rol` efectivo (del adapter) es `'usuario'` **y**
+  no hay flag `lch_onboarding_done` en `localStorage`.
+- `false` para anónimo, para roles `seguidor`/`jugador`/`capitan` (ya eligieron), o si
+  se pospuso.
 
-### Helper + test
+La elección persiste en `localStorage` (`lch_onboarding_done = '1'`). Se limpia en
+`logout`. Siempre re-accesible desde el Perfil (sección "Mi vínculo con el torneo").
 
-`needsDniGate(user: PublicSessionUser | null): boolean` → `!!user && !user.dniConfirmado`.
+### La pantalla
+
+Overlay a pantalla (con fondo semitransparente), dos opciones grandes:
+
+- **"Soy jugador"** → paso `JugadorDniStep`:
+  - Form con un input DNI numérico + botón "Confirmar".
+  - `completeDni(dni)` (real). Al volver, el adapter (`resolveMockRole`) decide:
+    - DNI + email de login matchean el plantel → `rol: 'jugador'`, se cierra el
+      onboarding, aparece el Home personalizado.
+    - DNI matchea pero el email no → `rol: 'usuario'` + `dniEnPlantelOtroEmail`. Se
+      cierra el onboarding y se muestra el aviso "pedile al capitán que actualice tu
+      email" en el Home (§5a).
+    - DNI no está en ningún plantel → `rol: 'usuario'`. Mensaje: "No encontramos tu DNI
+      en ningún plantel. Si creés que es un error, hablá con tu capitán." Se cierra el
+      onboarding.
+  - Link "Volver" al paso anterior.
+- **"Soy hincha"** → paso team picker:
+  - Lista de equipos (`listMockTeams`, con buscador). Elegir uno → `mockFollowTeam` →
+    `rol: 'seguidor'`. Se cierra el onboarding.
+  - Este picker es el mismo componente que ya usa el Perfil para "Seguir un equipo";
+    se extrae a un componente reutilizable.
+- **"Más tarde"** (link discreto) → setea el flag, cierra el onboarding, queda
+  `usuario`.
+
+### `JugadorDniStep` (refactor de `DniModal`)
+
+`DniModal` se convierte en `JugadorDniStep` — el mismo form de DNI, pero:
+- Sin comportamiento de modal suelto (no se auto-monta desde el context).
+- Se usa dentro de `OnboardingGate` y desde el Perfil.
+- Se **elimina** de `PublicAuthContext`: `showDniModal`, `setShowDniModal`, y el
+  `if (ctx.user.needsDni) setShowDniModal(true)`. El `needsDni` del backend deja de
+  gatillar UI automática.
+
+### Helpers + tests
+
+- `shouldShowOnboarding(user, dismissed): boolean`.
+- (Sin gate de DNI: se elimina el concepto.)
 
 ## 4. Adapter mock de identidad de fútbol
 
@@ -271,6 +356,14 @@ export function resolveMockCaptainTeam(user: PublicSessionUser): CaptainTeamData
 export function listMockTeams(search?: string): PublicTeamOption[];
 export function mockFollowTeam(user: PublicSessionUser, equipoInscripcionId: string): MeContext;
 export function mockUnfollowTeam(user: PublicSessionUser): MeContext;
+
+// Torneo genérico, sin usuario: para el Home de anónimo y `usuario`.
+export function mockTorneoPublico(): {
+  torneo: { id: string; nombre: string; categoria: string };
+  standings: PublicStandingRow[];
+  proximosPartidos: PublicMatchPreview[];
+  resultados: { id: string; local: string; visitante: string; golesLocal: number; golesVisitante: number; fecha: string }[];
+};
 ```
 
 **Regla de `resolveMockRole`:**
@@ -311,6 +404,12 @@ export function useFutbolIdentity() {
 }
 ```
 
+**Anónimo (sin `user`):** `meContext` = `null`, `role.rol` = `'usuario'`. Las vistas
+tratan a `meContext === null` y a `rol === 'usuario'` igual → vista genérica del torneo.
+El torneo genérico (tabla + próximos partidos + resultados) sale de un fixture aparte
+del adapter, `mockTorneoPublico()`, que **no** depende del `user` — así el Home de
+anónimo y de `usuario` muestran el mismo torneo sin nada resaltado.
+
 ### `PublicAuthContext`
 
 Hoy hace `publicApi.me.context()` para `meContext` y usa `user.rol` del backend.
@@ -328,29 +427,37 @@ Cambios:
   sin DNI → usuario, seguidor.
 - `resolveMockContext`: el `MeContext` del fixture jugador tiene la forma correcta
   (`equipo`, `proximoPartido`, `standingsPosition`, `personalStats` no nulos).
-- `needsDniGate`.
+- `shouldShowOnboarding`.
+- `playerHomeSections`.
 
 ## 5. Vistas personalizadas
 
 Todas consumen `useFutbolIdentity()`. Ningún cambio de ruta.
 
-### 5a. Home del jugador (`HomePage.tsx`)
+### 5a. Home (`HomePage.tsx`)
 
-- **Cabecera:** si `rol` es `jugador` o `capitan`, saludo con nombre + chip del equipo
-  ("Los Halcones · Libre A").
-- **Mi próximo partido:** la card ya existe (`nextFromCtx`); asegurar que tome del
-  adapter y muestre local/visitante, cancha, fecha/hora y "sos local/visitante".
-- **Mini-tira de stats** (sólo `jugador`): fila compacta con Goles / Amarillas / Rojas,
-  arriba de "Últimos Resultados", con link "Ver mi rendimiento" → `/perfil`.
-- **Mi fila en la tabla:** la tabla del home ya resalta `myTeam`; verificar que use el
-  equipo del adapter.
-- **Aviso email no coincide:** si `dniEnPlantelOtroEmail`, banner sutil: "Tu DNI figura
-  en el plantel de {equipo} con otro email. Pedile al capitán que actualice tu email
-  para ver tus estadísticas."
-- Roles `usuario` / `seguidor`: el home queda como hoy.
+`playerHomeSections(role, meContext): { showStatsStrip, showEmailMismatch, teamLabel,
+showMiProximoPartido, highlightTeamId | null }` + test. Decide todo lo condicional:
 
-Helper `playerHomeSections(ctx): { showStatsStrip: boolean; showEmailMismatch: boolean;
-teamLabel: string | null }` + test.
+- **Anónimo y `usuario`:** torneo genérico. Tabla de posiciones, próximos partidos y
+  resultados desde `mockTorneoPublico()`. **Ninguna fila resaltada**, sin "mi próximo
+  partido", sin chip de equipo. CTA a la cantina y a las fotos como hoy. Si es anónimo,
+  además un CTA "Iniciá sesión para seguir tu equipo".
+- **`seguidor`:** igual que `usuario` + su equipo seguido resaltado en la tabla + card
+  "próximo partido de {equipo}". Sin stats personales.
+- **`jugador` / `capitan`:**
+  - Cabecera: saludo con nombre + chip del equipo ("Los Halcones · Libre A").
+  - Card "Mi próximo partido" (ya existe como `nextFromCtx`): local/visitante, cancha,
+    fecha/hora, "sos local/visitante".
+  - Mini-tira de stats (**sólo `jugador`**): Goles / Amarillas / Rojas, arriba de
+    "Últimos Resultados", link "Ver mi rendimiento" → `/perfil`.
+  - Su fila resaltada en la tabla.
+- **Aviso email no coincide** (cuando `dniEnPlantelOtroEmail`, rol `usuario`): banner:
+  "Tu DNI figura en el plantel de {equipo} con otro email. Pedile al capitán que
+  actualice tu email para ver tus estadísticas."
+
+Se **elimina** de `HomePage` la lógica `useDemoTorneo` / datos demo sueltos — el torneo
+genérico viene del adapter (`mockTorneoPublico`), no de un fallback ad-hoc.
 
 ### 5b. Perfil del jugador — bloque "Mi rendimiento" (`ProfilePage.tsx`)
 
@@ -364,6 +471,20 @@ antes de "Datos Personales":
 
 Rol `seguidor`: la sección "Seguir un equipo" (ya existe) se alimenta de `listMockTeams`
 / `mockFollowTeam` / `mockUnfollowTeam`.
+
+**Sección "Mi vínculo con el torneo"** (todos los roles, arriba de "Seguir un equipo"):
+re-abre el onboarding. Para `usuario` muestra los dos botones "Soy jugador" / "Soy
+hincha"; para `jugador`/`capitan` muestra el equipo vinculado; para `seguidor` muestra
+"Seguís a {equipo}" con opción de dejar de seguir o cambiar a jugador.
+
+### 5c bis. Cantina y anónimo
+
+- **Sin login:** `/cantina` y `/carrito` funcionan (el carrito ya vive en `localStorage`).
+  `/pago` ya muestra `AuthForm` si `!user` — se mantiene. Se agrega un texto claro:
+  "Necesitás una cuenta para confirmar el pedido y recibir tu código QR." Nada de DNI.
+- **Con login (cualquier rol, incluido `usuario`):** confirma el pedido como hoy.
+- El `PublicOrdersController` del backend ya exige sesión (`PublicAuthGuard`) — sin
+  cambios.
 
 ### 5c. Capitán (`CaptainTeamPage.tsx`)
 
@@ -390,10 +511,10 @@ Rol `seguidor`: la sección "Seguir un equipo" (ya existe) se alimenta de `listM
 
 | Archivo | Cubre |
 |---|---|
-| `apps/api/test/**` (junto a los tests de auth pública) | `verifyGoogleToken` rechaza `email_verified: false` (mock del `OAuth2Client`) |
-| `apps/web-public/src/app/mocks/futbol-identity.test.ts` | `resolveMockRole` (5 casos), `resolveMockContext` (forma de `MeContext`) |
-| `apps/web-public/.../auth/auth-helpers.test.ts` | `googleEnabled(clientId?)`, `needsDniGate(user)` |
-| `apps/web-public/.../pages/player-home.test.ts` | `playerHomeSections(ctx)` |
+| `apps/api/test/**` (junto a los tests de auth pública) | `verifyGoogleToken` rechaza `email_verified: false` (mock del `OAuth2Client`); `register` crea la cuenta sin `dni` (sin `Persona`, `rol: 'usuario'`) |
+| `apps/web-public/src/app/mocks/futbol-identity.test.ts` | `resolveMockRole` (5 casos), `resolveMockContext` (forma de `MeContext`), `mockTorneoPublico` (forma) |
+| `apps/web-public/.../auth/auth-helpers.test.ts` | `googleEnabled(clientId?)`, `shouldShowOnboarding(user, dismissed)` |
+| `apps/web-public/.../pages/player-home.test.ts` | `playerHomeSections(role, meContext)` — genérico / seguidor / jugador / email-mismatch |
 
 Sin tests de render: `apps/web-public` no tiene `@testing-library/react`. Todos los
 tests son sobre funciones puras.
@@ -404,57 +525,69 @@ Cuando la reestructuración del admin exponga los endpoints reales de torneo:
 
 1. `USE_MOCK_FUTBOL = false` en `futbol-identity.ts`.
 2. `useFutbolIdentity()` pasa a llamar `publicApi.me.context` / `publicApi.captain.getTeam`
-   / `publicApi.me.followTeam` (el branch real ya está escrito, sólo desactivado).
+   / `publicApi.me.followTeam` y el Home genérico a `publicApi.homeBundle` / `publicApi.torneo`
+   (el branch real ya está escrito, sólo desactivado).
 3. La regla email+DNI (`resolveMockRole`) se traslada a `resolveAndUpdateRole` en el
-   backend (`apps/api/src/public/public-auth.service.ts`).
+   backend (`apps/api/src/public/public-auth.service.ts`), y el paso "jugador" del
+   onboarding empieza a confiar en el `rol` que devuelve `completeDni`.
 4. Re-habilitar add/edit/remove del plantel del capitán en `CaptainTeamPage`.
 5. Eliminar el endpoint `/public/captain/roster/lista-buena-fe` y su servicio.
 
-Los tipos `MeContext` / `CaptainTeamData` / `PublicStandingRow` / `PublicTeamOption` **no
-cambian de forma** — son el contrato entre el mock y el backend real.
+Los tipos `MeContext` / `CaptainTeamData` / `PublicStandingRow` / `PublicTeamOption` /
+`PublicMatchPreview` **no cambian de forma** — son el contrato entre el mock y el
+backend real.
 
 ## Global Constraints
 
 - Todo el texto visible al usuario va en **español**.
-- Login (Google/email), sesión y DNI: **reales y de producción**.
-- Todo lo de torneo (rol jugador/capitán, equipo, partidos, tabla, stats, plantel):
-  **mock en el front**, no apto para producción hasta el swap de §7.
+- Login (Google/email), sesión y `completeDni`: **reales y de producción**.
+- Todo lo de torneo (rol jugador/capitán/seguidor, equipo, partidos, tabla, stats,
+  plantel, torneo genérico): **mock en el front**, no apto para producción hasta §7.
 - `VITE_GOOGLE_CLIENT_ID` debe ser idéntico a `GOOGLE_CLIENT_ID`. Sin client id → el
   botón de Google no se muestra (graceful, mismo criterio que la API).
-- DNI obligatorio: gate bloqueante a pantalla completa; única salida, cerrar sesión.
-- Sin cambios de esquema Prisma. Único cambio de backend: `email_verified` en
-  `verifyGoogleToken`.
+- **DNI: no obligatorio.** Sólo se pide en el paso "jugador" del onboarding. No hay gate.
+- Registro: email + contraseña + nombre. Sin DNI.
+- Anónimo: arma carrito, no confirma pedidos, ve el torneo genérico sin nada resaltado.
+- Sin cambios de esquema Prisma. Cambios de backend: (a) `email_verified` en
+  `verifyGoogleToken`, (b) `register` sin `dni`.
 - No hay `@testing-library/react` en `apps/web-public`: los tests son sólo sobre
   funciones puras.
 - El `rol` que devuelven `login` / `register` / `completeDni` del backend se **ignora**
-  en el front mientras `USE_MOCK_FUTBOL` sea `true`.
+  en el front mientras `USE_MOCK_FUTBOL` sea `true` — el rol efectivo lo da el adapter.
+- El onboarding se muestra **una vez** (flag en `localStorage`, se limpia en `logout`);
+  siempre re-accesible desde el Perfil.
 
 ## Criterios de éxito
 
 - En la pantalla de login aparece "Continuar con Google" (si hay client id); iniciar
-  sesión con Google crea/vincula la cuenta y, si no hay DNI, cae en el gate.
+  sesión con Google crea/vincula la cuenta.
 - Un ID token de Google con `email_verified: false` es rechazado por la API.
-- Ninguna cuenta sin DNI puede usar la app: el gate ocupa toda la pantalla y sólo deja
-  cerrar sesión.
-- La cuenta `jugador@lachacra.test` (DNI `30111222`) ve el Home personalizado (mi
-  próximo partido, mini-tira de goles/tarjetas, mi fila en la tabla) y el bloque "Mi
-  rendimiento" en el Perfil.
-- Una cuenta con el DNI `30111222` pero otro email queda como `usuario` y ve el aviso
+- El registro pide sólo nombre + email + contraseña; crea la cuenta con `rol: 'usuario'`
+  y sin `Persona`.
+- Tras registrarse aparece "¿Sos jugador o hincha?". "Más tarde" deja `usuario` y no
+  vuelve a aparecer sola.
+- Camino "hincha": elegir un equipo → `seguidor` → el equipo aparece destacado en Home
+  y Perfil, sin stats de jugador.
+- Camino "jugador" con `jugador@lachacra.test` + DNI `30111222` → `jugador` → Home
+  personalizado (mi próximo partido, mini-tira de goles/tarjetas, mi fila en la tabla)
+  + bloque "Mi rendimiento" en el Perfil.
+- Camino "jugador" con el DNI `30111222` pero otro email → queda `usuario` + aviso
   "avisá al capitán".
-- La cuenta `capitan@lachacra.test` ve su plantel completo; los botones de alta/edición/
-  baja están deshabilitados con el aviso de "cuando se conecte el torneo".
+- `capitan@lachacra.test` ve su plantel completo; alta/edición/baja deshabilitadas con
+  el aviso "cuando se conecte el torneo".
+- Anónimo y `usuario`: Home con torneo genérico, ninguna fila resaltada, sin "mi
+  próximo partido". Anónimo puede armar carrito; `/pago` pide cuenta.
 - No hay botón de lista de buena fe en la web de clientes.
-- `USE_MOCK_FUTBOL = false` deja el código compilando contra los tipos reales (branch
-  real escrito).
+- `USE_MOCK_FUTBOL = false` deja el código compilando contra los tipos reales.
 
 ## Archivos principales
 
 | Área | Archivos |
 |---|---|
-| Backend auth | `apps/api/src/public/public-auth.service.ts` (`verifyGoogleToken`) |
+| Backend | `apps/api/src/public/public-auth.service.ts` (`verifyGoogleToken`, `register`), `apps/api/src/public/dto/public-auth.dto.ts` (`RegisterDto` sin `dni`) |
 | Config | `apps/api/.env.example`, nuevo `apps/web-public/.env.example` |
-| Google front | nuevo `GoogleSignInButton.tsx`; `AuthForm.tsx`; root/`main.tsx`; `auth-helpers.ts` |
-| DNI gate | `DniModal.tsx` → `DniGate.tsx`; `PublicAuthContext.tsx`; `PublicLayout.tsx` |
+| Google front | nuevo `GoogleSignInButton.tsx`; `AuthForm.tsx` (sin DNI en registro); root/`main.tsx`; `auth-helpers.ts` |
+| Onboarding | `DniModal.tsx` → `JugadorDniStep.tsx`; nuevo `OnboardingGate.tsx`; nuevo componente team-picker reutilizable; `PublicAuthContext.tsx` (sacar `showDniModal`); `PublicLayout.tsx`; `ProfilePage.tsx` (sección "Mi vínculo") |
 | Adapter mock | nuevo `mocks/futbol-identity.ts` (+ test); nuevo `useFutbolIdentity.ts` |
-| Vistas | `HomePage.tsx`, `ProfilePage.tsx`, `CaptainTeamPage.tsx`, `PublicRouter.tsx` |
+| Vistas | `HomePage.tsx` (torneo genérico + personalizado), `ProfilePage.tsx`, `CaptainTeamPage.tsx`, `PublicRouter.tsx` |
 | API client | `apps/web-public/src/app/api/public-api.ts` (quitar `captain.getListaBuenaFe`) |
