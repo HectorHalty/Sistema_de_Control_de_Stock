@@ -1,10 +1,10 @@
 /** Datos ficticios de torneo — placeholder hasta el generador real de fixture. */
 
 export const DEMO_STANDINGS = [
-  { pos: 1, team: 'Los Pibes FC', abbr: 'LPF', pj: 8, pg: 6, pe: 1, pp: 1, gf: 18, gc: 7, pts: 19 },
-  { pos: 2, team: 'La Escaloneta', abbr: 'ESC', pj: 8, pg: 5, pe: 2, pp: 1, gf: 15, gc: 9, pts: 17 },
-  { pos: 3, team: 'Real Albañil', abbr: 'RAL', pj: 8, pg: 4, pe: 2, pp: 2, gf: 12, gc: 10, pts: 14 },
-  { pos: 4, team: 'El Rejunte', abbr: 'REJ', pj: 8, pg: 3, pe: 3, pp: 2, gf: 11, gc: 11, pts: 12 },
+  { inscripcionId: 'demo-1', pos: 1, team: 'Los Pibes FC', abbr: 'LPF', pj: 8, pg: 6, pe: 1, pp: 1, gf: 18, gc: 7, pts: 19 },
+  { inscripcionId: 'demo-2', pos: 2, team: 'La Escaloneta', abbr: 'ESC', pj: 8, pg: 5, pe: 2, pp: 1, gf: 15, gc: 9, pts: 17 },
+  { inscripcionId: 'demo-3', pos: 3, team: 'Real Albañil', abbr: 'RAL', pj: 8, pg: 4, pe: 2, pp: 2, gf: 12, gc: 10, pts: 14 },
+  { inscripcionId: 'demo-4', pos: 4, team: 'El Rejunte', abbr: 'REJ', pj: 8, pg: 3, pe: 3, pp: 2, gf: 11, gc: 11, pts: 12 },
 ];
 
 export const DEMO_RECENT_RESULTS = [

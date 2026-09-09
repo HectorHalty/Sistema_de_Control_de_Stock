@@ -1,15 +1,16 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { publicApi } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
+import { useFutbolIdentity } from '../auth/useFutbolIdentity';
 import { useCart } from '../cart/CartContext';
-import { PageLoader } from '../../ui/PageLoader';
 import { IconCart, IconClock, IconFood, IconMapPin, IconVideo, RivalMark, StarBadge } from '../figma-icons';
 import { SafeImage } from '../SafeImage';
 import { CANTEEN_HERO_IMG } from '../food-images';
-import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
+import { mapNextMatchFromPreview, mapStandingsFromApi } from '../torneo-mappers';
 import { SponsorCarousel } from '../sponsors/SponsorCarousel';
-import { QueryError } from '../QueryError';
+import { playerHomeSections } from './player-home';
 
 function formatMatchDate(iso: string) {
   return new Intl.DateTimeFormat('es-AR', {
@@ -29,21 +30,16 @@ function displayName(user?: { nombre?: string | null; email?: string | null } | 
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { meContext, user, token } = usePublicAuth();
+  const { user, dniEnPlantelOtroEmail, token } = usePublicAuth();
+  const { role, meContext, torneoPublico } = useFutbolIdentity();
   const { count } = useCart();
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['home-bundle'],
-    queryFn: () => publicApi.homeBundle(),
-    retry: false,
-  });
+  const torneo = useMemo(() => torneoPublico(), [torneoPublico]);
+  const sections = playerHomeSections(role.rol, meContext, dniEnPlantelOtroEmail);
 
-  const useDemoTorneo = !data?.torneo;
-
-  const { data: torneoDetail } = useQuery({
-    queryKey: ['torneo-detail', data?.torneo?.id],
-    queryFn: () => publicApi.torneo(data!.torneo!.id),
-    enabled: !!data?.torneo?.id,
+  const { data: sponsors = [] } = useQuery({
+    queryKey: ['home-sponsors'],
+    queryFn: () => publicApi.sponsors(),
     retry: false,
   });
 
@@ -63,43 +59,36 @@ export function HomePage() {
     (o) => o.qr && !o.qr.usado && o.status !== 'retirado' && o.status !== 'cancelado',
   );
 
-  if (isLoading) return <PageLoader />;
-
-  if (isError) {
-    return (
-      <QueryError
-        message={(error as Error)?.message ?? 'Error de red'}
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
   const name = displayName(user);
   const myTeam = meContext?.equipo?.name;
-  const nextFromCtx = meContext?.proximoPartido
-    ? {
-        local: meContext.proximoPartido.local,
-        visitante: meContext.proximoPartido.visitante,
-        fecha: formatMatchDate(meContext.proximoPartido.fecha),
-        hora: meContext.proximoPartido.hora,
-        cancha: meContext.proximoPartido.cancha,
-        jornada: null as number | null,
-      }
-    : null;
 
-  const nextFromBundle = data?.proximosPartidos?.[0]
-    ? {
-        local: data.proximosPartidos[0].local.name,
-        visitante: data.proximosPartidos[0].visitante.name,
-        fecha: formatMatchDate(data.proximosPartidos[0].fecha),
-        hora: data.proximosPartidos[0].hora,
-        cancha: data.proximosPartidos[0].cancha ?? undefined,
-        jornada: data.proximosPartidos[0].jornada,
-      }
-    : null;
-  const nextMatch = nextFromCtx ?? nextFromBundle;
-  const played = resolveRecentResults(torneoDetail, useDemoTorneo);
-  const standings = resolveStandings(data?.standings, useDemoTorneo);
+  const played = torneo.resultados.map((r) => ({
+    id: r.id,
+    local: r.local,
+    visitante: r.visitante,
+    homeGoals: r.golesLocal,
+    awayGoals: r.golesVisitante,
+    date: formatMatchDate(r.fecha),
+  }));
+  const standings = mapStandingsFromApi(torneo.standings);
+
+  const genericNext = mapNextMatchFromPreview(torneo.proximosPartidos[0]);
+  const miProximo =
+    sections.showMiProximoPartido && meContext?.proximoPartido
+      ? {
+          local: meContext.proximoPartido.local,
+          visitante: meContext.proximoPartido.visitante,
+          fecha: formatMatchDate(meContext.proximoPartido.fecha),
+          hora: meContext.proximoPartido.hora,
+          cancha: meContext.proximoPartido.cancha,
+          jornada: null as number | null,
+          esLocal: meContext.proximoPartido.esLocal as boolean | null,
+          mine: true,
+        }
+      : null;
+  const nextMatch =
+    miProximo ??
+    (genericNext ? { ...genericNext, esLocal: null as boolean | null, mine: false } : null);
 
   const localName = nextMatch?.local;
   const awayName = nextMatch?.visitante;
@@ -118,6 +107,14 @@ export function HomePage() {
           <h1 className="mt-0.5 text-2xl font-black text-white">
             {name ? `¡Hola, ${name}!` : 'La Chacra Fútbol'}
           </h1>
+          {sections.teamLabel && (
+            <span
+              style={{ background: '#6BFF9E18', color: '#6BFF9E', border: '1px solid #6BFF9E33' }}
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
+            >
+              {sections.teamLabel}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -152,6 +149,32 @@ export function HomePage() {
         </button>
       </div>
 
+      {sections.showEmailMismatch && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Tu DNI figura en el plantel de {dniEnPlantelOtroEmail} con otro email. Pedile al capitán
+          que actualice tu email para ver tus estadísticas.
+        </div>
+      )}
+
+      {!user && (
+        <button
+          type="button"
+          onClick={() => navigate('/perfil')}
+          style={{ background: '#6BFF9E10', border: '1px solid #6BFF9E33' }}
+          className="flex w-full items-center justify-between rounded-xl px-5 py-4 text-left transition-opacity hover:opacity-90"
+        >
+          <div>
+            <p className="text-sm font-black text-white">Iniciá sesión para seguir tu equipo</p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              Guardá tu equipo favorito y mirá tu próximo partido apenas entrás.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-lg bg-lch-accent px-3 py-1.5 text-xs font-black text-[#0e0e0e]">
+            Ingresar
+          </span>
+        </button>
+      )}
+
       {activeOrder && (
         <button
           type="button"
@@ -182,8 +205,16 @@ export function HomePage() {
             style={{ background: '#161616', borderBottom: '1px solid #222' }}
             className="flex items-center justify-between px-5 pb-2.5 pt-3"
           >
-            <p className="text-xs font-bold uppercase tracking-widest text-white">
-              {nextFromCtx ? 'Mi Próximo Partido' : 'Próximo partido'}
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white">
+              {nextMatch?.mine ? 'Mi Próximo Partido' : 'Próximo partido'}
+              {nextMatch?.mine && nextMatch.esLocal != null && (
+                <span
+                  style={{ background: '#ffffff10', color: '#9ca3af' }}
+                  className="rounded px-1.5 py-0.5 text-[9px] font-black tracking-normal"
+                >
+                  {nextMatch.esLocal ? 'Sos local' : 'Sos visitante'}
+                </span>
+              )}
             </p>
             <span
               style={{ background: '#6BFF9E18', color: '#6BFF9E', border: '1px solid #6BFF9E33' }}
@@ -232,20 +263,52 @@ export function HomePage() {
             <div style={{ width: 1, height: 40, background: '#2a2a2a' }} className="hidden shrink-0 sm:block" />
             <div className="hidden shrink-0 space-y-1 text-right sm:block">
               <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
-                <IconClock /> {jornada ? `Jornada ${jornada}` : data?.torneo?.categoria ?? 'Torneo'}
+                <IconClock /> {jornada ? `Jornada ${jornada}` : torneo.torneo.categoria}
               </div>
-              <p className="text-[10px] text-gray-600">
-                {data?.torneo?.campeonato ?? 'La Chacra Fútbol'}
-              </p>
+              <p className="text-[10px] text-gray-600">La Chacra Fútbol</p>
             </div>
           </div>
         </div>
       ) : null}
 
-      <SponsorCarousel slot="home" sponsors={data?.sponsors ?? []} />
+      <SponsorCarousel slot="home" sponsors={sponsors} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-4">
+          {sections.showStatsStrip && meContext?.personalStats && (
+            <div
+              style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
+              className="rounded-2xl p-5"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-bold text-white">Mi rendimiento</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/perfil')}
+                  style={{ color: '#6BFF9E' }}
+                  className="text-xs font-bold hover:underline"
+                >
+                  Ver mi rendimiento →
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                {([
+                  ['Goles', meContext.personalStats.goles],
+                  ['Amarillas', meContext.personalStats.amarillas],
+                  ['Rojas', meContext.personalStats.rojas],
+                ] as const).map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{ background: '#161616', border: '1px solid #242424' }}
+                    className="rounded-xl px-2 py-3"
+                  >
+                    <p className="text-xl font-black text-white">{value}</p>
+                    <p className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }} className="rounded-2xl p-5">
             <p className="mb-4 text-sm font-bold text-white">Últimos Resultados</p>
             {played.length ? (
@@ -335,10 +398,11 @@ export function HomePage() {
                 <span className="w-8 text-center text-[10px] font-bold text-gray-600">Pts</span>
               </div>
               {standings.slice(0, 6).map((row) => {
-                const highlight = myTeam === row.team;
+                const highlight =
+                  !!sections.highlightTeamId && row.inscripcionId === sections.highlightTeamId;
                 return (
                   <div
-                    key={row.abbr}
+                    key={row.inscripcionId}
                     style={
                       highlight
                         ? { background: '#6BFF9E0e', borderRadius: 9, border: '1px solid #6BFF9E22' }

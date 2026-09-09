@@ -11,6 +11,7 @@ import {
 } from './demo-torneo';
 
 export interface UiStandingRow {
+  inscripcionId: string;
   pos: number;
   team: string;
   abbr: string;
@@ -65,6 +66,7 @@ function teamAbbr(name: string) {
 
 export function mapStandingsFromApi(rows: PublicStandingRow[]): UiStandingRow[] {
   return rows.map((row, idx) => ({
+    inscripcionId: row.inscripcionId,
     pos: idx + 1,
     team: row.teamName,
     abbr: teamAbbr(row.teamName),
