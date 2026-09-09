@@ -4,7 +4,8 @@ import { publicApi } from '../../../api/public-api';
 import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart } from '../cart/CartContext';
 import { PageLoader } from '../../ui/PageLoader';
-import { IconCart, IconClock, IconFood, IconMapPin, RivalMark, StarBadge } from '../figma-icons';
+import { IconCart, IconClock, IconFood, IconMapPin, IconVideo, RivalMark, StarBadge } from '../figma-icons';
+import { SafeImage } from '../SafeImage';
 import { CANTEEN_HERO_IMG } from '../food-images';
 import { resolveRecentResults, resolveStandings } from '../torneo-mappers';
 
@@ -496,7 +497,20 @@ export function HomePage() {
                   onClick={() => navigate('/fotos')}
                   className="relative aspect-square overflow-hidden rounded-xl"
                 >
-                  <img src={item.url} alt={item.title} className="h-full w-full object-cover" />
+                  {'type' in item && (item as { type?: string }).type === 'video' ? (
+                    <div className="flex h-full w-full items-center justify-center bg-[#161616]">
+                      <span style={{ color: '#6BFF9E' }}>
+                        <IconVideo />
+                      </span>
+                    </div>
+                  ) : (
+                    <SafeImage
+                      src={item.url}
+                      alt={item.title}
+                      className="h-full w-full"
+                      fallbackLabel={item.title}
+                    />
+                  )}
                   {idx === 2 && mediaItems.length > 3 && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-black text-white">
                       +{mediaItems.length - 2}

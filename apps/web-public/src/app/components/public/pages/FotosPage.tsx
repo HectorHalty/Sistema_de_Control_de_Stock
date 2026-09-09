@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { publicApi } from '../../../api/public-api';
 import { PageLoader } from '../../ui/PageLoader';
 import { IconHeart, IconVideo } from '../figma-icons';
+import { SafeImage } from '../SafeImage';
 
 type Filter = 'todo' | 'fotos' | 'videos';
 
@@ -165,11 +166,22 @@ export function FotosPage() {
             >
               ✕
             </button>
-            <img
-              src={lightboxItem.url}
-              alt={lightboxItem.title}
-              className="max-h-[70vh] w-full rounded-2xl object-cover"
-            />
+            {lightboxItem.type === 'video' ? (
+              <video
+                src={lightboxItem.url}
+                controls
+                playsInline
+                autoPlay
+                className="max-h-[70vh] w-full rounded-2xl bg-black object-contain"
+              />
+            ) : (
+              <SafeImage
+                src={lightboxItem.url}
+                alt={lightboxItem.title}
+                className="max-h-[70vh] w-full rounded-2xl"
+                fallbackLabel={lightboxItem.title}
+              />
+            )}
             <div
               style={{ background: '#1c1c1c', border: '1px solid #2a2a2a' }}
               className="-mt-1 flex items-center justify-between rounded-b-2xl px-5 py-4"
