@@ -388,8 +388,6 @@ export const publicApi = {
         method: 'DELETE',
         token,
       }),
-    getListaBuenaFe: (token: string) =>
-      publicFetch<string>('/public/captain/roster/lista-buena-fe', { token }),
   },
 
   media: (type?: string) => {

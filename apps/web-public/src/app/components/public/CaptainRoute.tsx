@@ -11,6 +11,7 @@ export function CaptainRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/perfil" replace />;
   }
 
+  // `user.rol` ya es el rol efectivo resuelto por el adapter de identidad.
   if (user.rol !== 'capitan') {
     return <Navigate to="/perfil" replace />;
   }
