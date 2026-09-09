@@ -84,6 +84,8 @@ enum PlacementPatrocinador {
   banner
   sidebar
   footer
+  home
+  cantina
 }
 
 enum TipoMedioPatrocinador {
@@ -534,6 +536,7 @@ model Patrocinador {
   widthPx     Int?                  @map("ancho_px")
   heightPx    Int?                  @map("alto_px")
   sortOrder   Int                   @default(0) @map("orden")
+  durationSeconds Int               @default(5) @map("duration_seconds")
   active      Boolean               @default(true)
   linkUrl     String?
   createdAt   DateTime              @default(now())
