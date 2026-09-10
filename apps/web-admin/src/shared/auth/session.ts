@@ -17,3 +17,15 @@ export function getSessionUserId(): string | null {
     return null;
   }
 }
+
+/** Rol del usuario autenticado (fuente: sesión de login en localStorage). */
+export function getSessionUserRole(): string | null {
+  try {
+    const raw = localStorage.getItem(storageKeys.auth.user);
+    if (!raw) return null;
+    const user = JSON.parse(raw) as { role?: unknown };
+    return typeof user.role === 'string' && user.role.length > 0 ? user.role : null;
+  } catch {
+    return null;
+  }
+}
