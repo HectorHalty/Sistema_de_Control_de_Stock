@@ -152,7 +152,7 @@ function mapCategory(category: string): string {
   return category.trim();
 }
 
-function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitchen[]): PosTicket {
+export function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens: Kitchen[]): PosTicket {
   const isReturn = ticket.status === 'devuelto';
   const isConsumption = ticket.origen === 'consumo';
   return {

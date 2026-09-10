@@ -3,6 +3,7 @@
  * Resolves public API URL at runtime when the build used localhost by mistake.
  */
 import { resolveApiBaseUrl } from './resolve-api-base-url';
+import type { CursorPage } from './cursor-page';
 
 /** Resuelve en cada llamada para respetar window.__LCH_API_URL__ (lch-config.js). */
 export function getApiBaseUrl(): string {
@@ -394,6 +395,14 @@ export const salesApi = {
     list: (status?: string) => {
       const q = status ? `?status=${status}` : '';
       return apiFetch<SalesTicket[]>(`/sales/tickets${q}`);
+    },
+    listPage: (params?: { status?: string; cursor?: string; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set('status', params.status);
+      if (params?.cursor) q.set('cursor', params.cursor);
+      if (params?.limit != null) q.set('limit', String(params.limit));
+      const qs = q.toString();
+      return apiFetch<CursorPage<SalesTicket>>(`/sales/tickets${qs ? `?${qs}` : '?limit=50'}`);
     },
     get: (id: string) => apiFetch<SalesTicket>(`/sales/tickets/${id}`),
     void: (id: string, operatorId: string, token: string) =>

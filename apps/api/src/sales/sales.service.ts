@@ -845,9 +845,9 @@ export class SalesService {
     };
     const include = { items: true, operator: { select: { username: true } } } as const;
 
-    if (cursor === undefined) {
+    if (cursor === undefined && limit === undefined) {
       return this.prisma.ticketVenta.findMany({
-        where, include, orderBy: { createdAt: 'desc' }, take: limit ? normalizeLimit(limit) : 100,
+        where, include, orderBy: { createdAt: 'desc' }, take: 100,
       });
     }
     const take = normalizeLimit(limit);
@@ -855,8 +855,7 @@ export class SalesService {
       where,
       include,
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      cursor: { id: cursor },
-      skip: 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       take: take + 1,
     });
     return toCursorPage(rows, take);
