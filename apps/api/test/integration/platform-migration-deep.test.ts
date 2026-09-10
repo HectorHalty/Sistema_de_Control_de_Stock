@@ -32,6 +32,8 @@ import {
 import {
   hasAnyRole,
   STOCK_MUTATION_ROLES,
+  STOCK_READ_ROLES,
+  STOCK_POS_READ_ROLES,
   SALES_CATALOG_ROLES,
   FOOTBALL_MUTATION_ROLES,
   ONLINE_MUTATION_ROLES,
@@ -106,6 +108,24 @@ describe('Seguridad — matriz RBAC inventario', () => {
 
   it('Vendedor no puede mutar catálogo de inventario', () => {
     expect(hasAnyRole('Vendedor', STOCK_MUTATION_ROLES)).toBe(false);
+  });
+
+  it('Vendedor y Gerente_Ventas pueden leer el catálogo de insumos del POS', () => {
+    expect(hasAnyRole('Vendedor', STOCK_POS_READ_ROLES)).toBe(true);
+    expect(hasAnyRole('Gerente_Ventas', STOCK_POS_READ_ROLES)).toBe(true);
+    expect(hasAnyRole('Vendedor', STOCK_READ_ROLES)).toBe(false);
+    expect(hasAnyRole('Gerente_Ventas', STOCK_READ_ROLES)).toBe(false);
+  });
+
+  it('Vendedor sigue sin mutar inventario aunque pueda leer el catálogo POS', () => {
+    expect(hasAnyRole('Vendedor', STOCK_MUTATION_ROLES)).toBe(false);
+    expect(hasAnyRole('Gerente_Ventas', STOCK_MUTATION_ROLES)).toBe(false);
+    expect(hasAnyRole('Operador_Stock', STOCK_MUTATION_ROLES)).toBe(true);
+  });
+
+  it('Operador_Futbol y Operador_Cocina no leen catálogo de stock', () => {
+    expect(hasAnyRole('Operador_Futbol', STOCK_POS_READ_ROLES)).toBe(false);
+    expect(hasAnyRole('Operador_Cocina', STOCK_POS_READ_ROLES)).toBe(false);
   });
 
   it('Gerente_Ventas puede mutar catálogo de ventas', () => {
