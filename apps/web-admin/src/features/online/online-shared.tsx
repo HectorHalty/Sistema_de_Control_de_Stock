@@ -1,30 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
-import { onlineApi, getAccessToken, type OnlineOverview } from '@/app/api/client';
+import { useQuery } from '@tanstack/react-query';
+import { onlineApi, getAccessToken } from '@/app/api/client';
 
 export function useOnlineOverview() {
-  const [data, setData] = useState<OnlineOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: ['online', 'overview'],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token) throw new Error('Sesión requerida');
+      return onlineApi.overview(token);
+    },
+  });
 
-  const reload = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await onlineApi.overview(token));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { data, loading, error, reload };
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: query.error ? (query.error instanceof Error ? query.error.message : 'Error al cargar') : null,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }
 
 export function onlineFieldClass(extra = '') {

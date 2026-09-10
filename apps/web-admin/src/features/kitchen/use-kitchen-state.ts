@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
-import { useLocalStorage } from '@/shared/hooks/use-local-storage';
-import { storageKeys } from '@/shared/storage/keys';
+import { useQuery } from '@tanstack/react-query';
 import { kitchenApi } from '@/app/api/client';
 import type { KitchenOrder } from './types';
 
@@ -40,15 +38,20 @@ function mapApiKitchenOrder(row: {
 }
 
 export function useKitchenState() {
-  const [kitchenOrders, setKitchenOrders] = useLocalStorage<KitchenOrder[]>(storageKeys.kitchen.orders, []);
+  const query = useQuery({
+    queryKey: ['kitchen', 'orders'],
+    queryFn: () => kitchenApi.orders.list().then(rows => rows.map(mapApiKitchenOrder)),
+  });
 
-  useEffect(() => {
-    void kitchenApi.orders.list().then(rows => {
-      setKitchenOrders(rows.map(mapApiKitchenOrder));
-    }).catch(() => undefined);
-  }, [setKitchenOrders]);
-
-  return { kitchenOrders, setKitchenOrders };
+  return {
+    kitchenOrders: query.data ?? [],
+    setKitchenOrders: (
+      _next: KitchenOrder[] | ((prev: KitchenOrder[]) => KitchenOrder[]),
+    ) => {
+      // El KDS muta por kitchenApi.orders.transition, no por este setter.
+      // Se deja la firma para no romper useAppState / notificaciones.
+    },
+  };
 }
 
 export type KitchenState = ReturnType<typeof useKitchenState>;

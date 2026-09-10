@@ -1,31 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
-import { footballApi, getAccessToken, type FootballOverview } from '@/app/api/client';
+import { footballApi, getAccessToken } from '@/app/api/client';
 
 export function useFutbolOverview() {
   const [searchParams, setSearchParams] = useSearchParams();
   const torneoIdParam = searchParams.get('torneoId') ?? '';
-  const [data, setData] = useState<FootballOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await footballApi.overview(token, torneoIdParam || undefined));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar');
-    } finally {
-      setLoading(false);
-    }
-  }, [torneoIdParam]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const query = useQuery({
+    queryKey: ['football', 'overview', torneoIdParam],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token) throw new Error('Sesión requerida');
+      return footballApi.overview(token, torneoIdParam || undefined);
+    },
+  });
 
   function setTorneoId(id: string) {
     const sp = new URLSearchParams(searchParams);
@@ -34,9 +22,18 @@ export function useFutbolOverview() {
     setSearchParams(sp, { replace: true });
   }
 
-  const torneoId = data?.torneo?.id ?? (torneoIdParam || null);
+  const torneoId = query.data?.torneo?.id ?? (torneoIdParam || null);
 
-  return { data, loading, error, reload, torneoId, setTorneoId };
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: query.error ? (query.error instanceof Error ? query.error.message : 'Error al cargar') : null,
+    reload: () => {
+      void query.refetch();
+    },
+    torneoId,
+    setTorneoId,
+  };
 }
 
 export function futbolFieldClass(extra = '') {

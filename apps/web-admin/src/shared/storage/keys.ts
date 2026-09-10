@@ -60,7 +60,7 @@ export const storageKeys = {
     defaultCategory: 'futbol-default-category', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
   },
   kitchen: {
-    orders: 'kitchen-orders',
+    orders: 'kitchen-orders', // legacy — React Query Task 5, 2026-09-10
   },
   online: {
     products: 'online-products',
