@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import { settingsApi } from '@/app/api/client';
 import { persistRemoteConfig } from '@/shared/utils/remote-config';
+import { rememberConfigRows } from '@/shared/utils/config-versions';
 
 export function useOnlineSettings() {
   const [orderNotifications, setOrderNotificationsState] = useLocalStorage<boolean>(
@@ -22,16 +24,38 @@ export function useOnlineSettings() {
     true,
   );
 
+  const configQuery = useQuery({
+    queryKey: ['settings', 'config', 'online'],
+    queryFn: async () => {
+      const rows = await settingsApi.config.list('online');
+      rememberConfigRows(rows);
+      return rows;
+    },
+  });
+
   useEffect(() => {
-    void settingsApi.config.list('online').then(rows => {
-      for (const row of rows) {
-        if (row.key === 'online.orderNotifications' && typeof row.value === 'boolean') setOrderNotificationsState(row.value);
-        if (row.key === 'online.syncCatalogWithStock' && typeof row.value === 'boolean') setSyncCatalogWithStockState(row.value);
-        if (row.key === 'online.webChannelEnabled' && typeof row.value === 'boolean') setWebChannelEnabledState(row.value);
-        if (row.key === 'online.appChannelEnabled' && typeof row.value === 'boolean') setAppChannelEnabledState(row.value);
+    if (!configQuery.data) return;
+    for (const row of configQuery.data) {
+      if (row.key === 'online.orderNotifications' && typeof row.value === 'boolean') {
+        setOrderNotificationsState(row.value);
       }
-    }).catch(() => undefined);
-  }, [setOrderNotificationsState, setSyncCatalogWithStockState, setWebChannelEnabledState, setAppChannelEnabledState]);
+      if (row.key === 'online.syncCatalogWithStock' && typeof row.value === 'boolean') {
+        setSyncCatalogWithStockState(row.value);
+      }
+      if (row.key === 'online.webChannelEnabled' && typeof row.value === 'boolean') {
+        setWebChannelEnabledState(row.value);
+      }
+      if (row.key === 'online.appChannelEnabled' && typeof row.value === 'boolean') {
+        setAppChannelEnabledState(row.value);
+      }
+    }
+  }, [
+    configQuery.data,
+    setOrderNotificationsState,
+    setSyncCatalogWithStockState,
+    setWebChannelEnabledState,
+    setAppChannelEnabledState,
+  ]);
 
   return {
     orderNotifications,

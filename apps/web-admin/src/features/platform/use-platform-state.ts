@@ -1,8 +1,10 @@
 import { useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import { settingsApi } from '@/app/api/client';
 import { persistRemoteConfig } from '@/shared/utils/remote-config';
+import { rememberConfigRows } from '@/shared/utils/config-versions';
 import type { AppUser, CurrentUser } from './types';
 
 export function usePlatformState() {
@@ -57,16 +59,32 @@ export function usePlatformState() {
     applyTheme(darkMode);
   }, [darkMode]);
 
+  const stockConfigQuery = useQuery({
+    queryKey: ['settings', 'config', 'stock'],
+    queryFn: async () => {
+      const rows = await settingsApi.config.list('stock');
+      rememberConfigRows(rows);
+      return rows;
+    },
+  });
+
   useEffect(() => {
-    void settingsApi.config.list('stock').then(rows => {
-      for (const row of rows) {
-        if (row.key === 'stock.alertDay' && typeof row.value === 'string') setStockAlertDayState(row.value);
-        if (row.key === 'stock.lowStockNotifications' && typeof row.value === 'boolean') setStockLowNotificationsState(row.value);
-        if (row.key === 'stock.autoAlerts' && typeof row.value === 'boolean') setStockAutoAlertsState(row.value);
-        if (row.key === 'stock.packRounding' && typeof row.value === 'boolean') setStockPackRoundingState(row.value);
+    if (!stockConfigQuery.data) return;
+    for (const row of stockConfigQuery.data) {
+      if (row.key === 'stock.alertDay' && typeof row.value === 'string') setStockAlertDayState(row.value);
+      if (row.key === 'stock.lowStockNotifications' && typeof row.value === 'boolean') {
+        setStockLowNotificationsState(row.value);
       }
-    }).catch(() => undefined);
-  }, [setStockAlertDayState, setStockLowNotificationsState, setStockAutoAlertsState, setStockPackRoundingState]);
+      if (row.key === 'stock.autoAlerts' && typeof row.value === 'boolean') setStockAutoAlertsState(row.value);
+      if (row.key === 'stock.packRounding' && typeof row.value === 'boolean') setStockPackRoundingState(row.value);
+    }
+  }, [
+    stockConfigQuery.data,
+    setStockAlertDayState,
+    setStockLowNotificationsState,
+    setStockAutoAlertsState,
+    setStockPackRoundingState,
+  ]);
 
   return {
     darkMode,
