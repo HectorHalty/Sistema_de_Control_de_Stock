@@ -8,8 +8,9 @@ import { EstadoPartido, TipoEventoPartido } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
+import { bergerRoundToPairs, buildBergerRounds, numberTeams } from './berger';
 import { autoScheduleMatches } from './fixture-scheduler';
-import { buildRoundPairs, createMatchesForPairs, FixtureGeneratorService } from './fixture-generator.service';
+import { createMatchesForPairs, FixtureGeneratorService } from './fixture-generator.service';
 import { MatchSuspensionService } from './match-suspension.service';
 import { scheduleSaturdayMatches } from './saturday-scheduler';
 import { SuspensionSyncService } from './suspension-sync.service';
@@ -596,7 +597,10 @@ ${partidoBlock}
     }
 
     const roundIndex = Math.max(0, jornada.numero - 1);
-    const { pairs, byeInscripcionId } = buildRoundPairs(inscripciones, roundIndex);
+    const numbered = numberTeams(inscripciones);
+    const rounds = buildBergerRounds(numbered.length);
+    const round = rounds[roundIndex % rounds.length];
+    const { pairs, byeInscripcionId } = bergerRoundToPairs(round, numbered);
     const matchDate = new Date(jornada.fecha);
 
     const created = await createMatchesForPairs(
@@ -613,8 +617,8 @@ ${partidoBlock}
     return { jornadaId, created: created.length, matches: created };
   }
 
-  async generateFullSeasonFixture(torneoId: string, fechas: number, fechaInicio: string) {
-    return this.fixtureGenerator.generateFullSeason(torneoId, fechas, fechaInicio);
+  async generateFullSeasonFixture(torneoId: string, fechaInicio: string) {
+    return this.fixtureGenerator.generateFullSeason(torneoId, fechaInicio);
   }
 
   // Matches

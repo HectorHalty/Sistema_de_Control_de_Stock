@@ -1,68 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
+import {
+  bergerRoundToPairs,
+  buildBergerRounds,
+  chooseOffset,
+  numberTeams,
+  pairKey,
+} from './berger';
 
-/**
- * Equipo inscripto mínimo necesario para armar cruces (round-robin circle
- * method). Se usa un tipo genérico para poder reutilizar la función tanto
- * con el resultado "liviano" de un `findMany` simple como con variantes que
- * incluyan más relaciones (`equipo`, etc.).
- */
 export interface RoundRobinTeam {
   id: string;
   equipoId: string;
-}
-
-export interface RoundPairsResult<T extends RoundRobinTeam> {
-  pairs: [T, T][];
-  /** Inscripción que quedó libre en esta ronda (null si la cantidad de equipos es par). */
-  byeInscripcionId: string | null;
-}
-
-/**
- * Arma los cruces de una ronda de round-robin (circle method) para una
- * cantidad arbitraria de equipos. Si la cantidad es impar se agrega un
- * sentinela `__bye__` que queda descartado de los pares, pero se informa
- * en `byeInscripcionId` cuál fue el equipo real que quedó emparejado con
- * ese sentinela (el que queda libre esa ronda).
- *
- * Función pura, sin dependencias de Prisma/Nest — se puede testear o
- * reutilizar libremente.
- */
-export function buildRoundPairs<T extends RoundRobinTeam>(
-  teams: T[],
-  roundIndex: number,
-): RoundPairsResult<T> {
-  const list = [...teams];
-  if (list.length < 2) return { pairs: [], byeInscripcionId: null };
-
-  if (list.length % 2 === 1) {
-    list.push({ id: '__bye__', equipoId: '__bye__' } as T);
-  }
-
-  const rotated = [...list];
-  for (let r = 0; r < roundIndex % (rotated.length - 1); r++) {
-    const fixed = rotated[0];
-    const tail = rotated.slice(1);
-    const last = tail.pop()!;
-    rotated.splice(0, rotated.length, fixed, last, ...tail);
-  }
-
-  const half = rotated.length / 2;
-  const pairs: [T, T][] = [];
-  let byeInscripcionId: string | null = null;
-  for (let i = 0; i < half; i++) {
-    const home = rotated[i];
-    const away = rotated[rotated.length - 1 - i];
-    if (home.id === '__bye__') {
-      byeInscripcionId = away.id;
-    } else if (away.id === '__bye__') {
-      byeInscripcionId = home.id;
-    } else {
-      pairs.push([home, away]);
-    }
-  }
-  return { pairs, byeInscripcionId };
 }
 
 /**
@@ -72,9 +21,8 @@ export function buildRoundPairs<T extends RoundRobinTeam>(
 type PartidoWriter = Pick<Prisma.TransactionClient, 'partidoFutbol'>;
 
 /**
- * Crea los `PartidoFutbol` para una lista de cruces ya armada (por
- * `buildRoundPairs` o invertidos para la revancha). Comparte la misma
- * forma de creación que antes vivía inline en
+ * Crea los `PartidoFutbol` para una lista de cruces ya armada. Comparte
+ * la misma forma de creación que antes vivía inline en
  * `FootballService.generateRoundRobin`, para no duplicar el bloque de
  * `prisma.partidoFutbol.create` entre la generación de una sola jornada y
  * la generación de temporada completa.
@@ -113,25 +61,20 @@ export async function createMatchesForPairs<T extends RoundRobinTeam>(
 export class FixtureGeneratorService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Genera TODA la temporada de un torneo de una sola vez: `fechas` rondas
-   * a partir de `fechaInicio` (una por semana), rotando el equipo libre y
-   * repitiendo los cruces como revancha (local/visitante invertido) una
-   * vez que se completa una vuelta entera. Falla si el torneo ya tiene
-   * jornadas cargadas (para no mezclar con carga manual) o si hay menos
-   * de 2 inscripciones activas. Todo dentro de una transacción.
-   */
-  async generateFullSeason(torneoId: string, fechas: number, fechaInicio: string) {
+  async generateFullSeason(torneoId: string, fechaInicio: string): Promise<{
+    torneoId: string;
+    jornadasCreadas: number;
+    jornadas: { id: string; numero: number; fecha: Date; equipoLibreId: string | null }[];
+    offset: number;
+    choques: number;
+    torneoReferenciaId: string | null;
+  }> {
     return this.prisma.$transaction(async (tx) => {
-      const torneo = await tx.torneo.findUnique({ where: { id: torneoId } });
+      const torneo = await tx.torneo.findUnique({
+        where: { id: torneoId },
+        include: { campeonato: true },
+      });
       if (!torneo) throw new NotFoundException('Torneo no encontrado');
-
-      const existingJornadas = await tx.jornada.count({ where: { torneoId } });
-      if (existingJornadas > 0) {
-        throw new BadRequestException(
-          'El torneo ya tiene jornadas cargadas; la generación de fixture completo solo funciona sobre un torneo sin jornadas previas',
-        );
-      }
 
       const inscripciones = await tx.equipoInscripcion.findMany({
         where: { torneoId, activo: true },
@@ -141,21 +84,75 @@ export class FixtureGeneratorService {
         throw new BadRequestException('Se necesitan al menos 2 equipos inscriptos');
       }
 
-      const n = inscripciones.length;
-      const cycleLength = n % 2 === 0 ? n - 1 : n;
+      const existingJornadas = await tx.jornada.findMany({
+        where: { torneoId },
+        select: { publicada: true },
+      });
+      if (existingJornadas.length > 0) {
+        const partidoNoRegenerable = await tx.partidoFutbol.findFirst({
+          where: {
+            torneoId,
+            OR: [
+              { status: { not: 'pendiente' } },
+              { homeGoals: { not: null } },
+              { awayGoals: { not: null } },
+              { esWO: true },
+            ],
+          },
+          select: { id: true },
+        });
+        if (existingJornadas.some((jornada) => jornada.publicada) || partidoNoRegenerable) {
+          throw new BadRequestException(
+            'El torneo ya tiene jornadas cargadas; la generación de fixture completo solo funciona sobre un torneo sin jornadas previas',
+          );
+        }
+        await tx.partidoFutbol.deleteMany({ where: { torneoId } });
+        await tx.jornada.deleteMany({ where: { torneoId } });
+      }
+
+      const numbered = numberTeams(inscripciones);
+      const rounds = buildBergerRounds(numbered.length);
+      const torneoReferencia = await tx.torneo.findFirst({
+        where: {
+          categoriaId: torneo.categoriaId,
+          campeonatoId: { not: torneo.campeonatoId },
+          campeonato: { temporadaId: torneo.campeonato.temporadaId },
+          partidos: { some: {} },
+        },
+        include: {
+          partidos: { include: { jornada: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      let offset = 0;
+      let choques = 0;
+      let torneoReferenciaId: string | null = null;
+      if (torneoReferencia) {
+        const previousFechaByPair = new Map(
+          torneoReferencia.partidos
+            .filter((partido) => partido.jornada !== null)
+            .map((partido) => [
+              pairKey(partido.homeTeamId, partido.awayTeamId),
+              partido.jornada!.numero,
+            ]),
+        );
+        const selected = chooseOffset(
+          rounds,
+          (teamNumber) => numbered[teamNumber - 1].equipoId,
+          previousFechaByPair,
+        );
+        offset = selected.offset;
+        choques = selected.choques;
+        torneoReferenciaId = torneoReferencia.id;
+      }
 
       const jornadasCreadas: { id: string; numero: number; fecha: Date; equipoLibreId: string | null }[] =
         [];
 
-      for (let f = 0; f < fechas; f++) {
-        const cyclePosition = f % cycleLength;
-        const { pairs, byeInscripcionId } = buildRoundPairs(inscripciones, cyclePosition);
-
-        const invert = Math.floor(f / cycleLength) % 2 === 1;
-        const finalPairs = invert
-          ? pairs.map(([home, away]) => [away, home] as [(typeof pairs)[number][0], (typeof pairs)[number][1]])
-          : pairs;
-
+      for (let f = 0; f < rounds.length; f++) {
+        const round = rounds[(f + offset) % rounds.length];
+        const { pairs, byeInscripcionId } = bergerRoundToPairs(round, numbered);
         const matchDate = new Date(fechaInicio);
         matchDate.setDate(matchDate.getDate() + f * 7);
 
@@ -172,7 +169,7 @@ export class FixtureGeneratorService {
           torneoId,
           jornadaId: jornada.id,
           date: matchDate,
-          pairs: finalPairs,
+          pairs,
         });
 
         jornadasCreadas.push({
@@ -187,6 +184,9 @@ export class FixtureGeneratorService {
         torneoId,
         jornadasCreadas: jornadasCreadas.length,
         jornadas: jornadasCreadas,
+        offset,
+        choques,
+        torneoReferenciaId,
       };
     });
   }

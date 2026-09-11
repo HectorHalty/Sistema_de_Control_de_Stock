@@ -237,7 +237,7 @@ export class FootballController {
   @Post('torneos/:id/generate-fixture')
   @Roles(...FOOTBALL_MUTATION_ROLES)
   generateFixture(@Param('id') id: string, @Body() body: GenerateFixtureDto) {
-    return this.footballService.generateFullSeasonFixture(id, body.fechas, body.fechaInicio);
+    return this.footballService.generateFullSeasonFixture(id, body.fechaInicio);
   }
 
   @Post('jornadas/:id/auto-schedule')
