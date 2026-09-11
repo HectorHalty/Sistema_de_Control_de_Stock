@@ -625,6 +625,18 @@ ${partidoBlock}
     return this.fixtureGenerator.publishFixture(torneoId);
   }
 
+  async updateMatchCruces(
+    id: string,
+    homeInscripcionId: string,
+    awayInscripcionId: string,
+  ) {
+    return this.fixtureGenerator.updateMatchCruces(
+      id,
+      homeInscripcionId,
+      awayInscripcionId,
+    );
+  }
+
   // Matches
   async findAllMatches(filters?: { status?: string; torneoId?: string; jornadaId?: string }) {
     const where: Record<string, unknown> = {};

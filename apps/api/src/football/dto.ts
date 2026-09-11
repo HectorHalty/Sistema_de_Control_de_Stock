@@ -131,6 +131,14 @@ export class UpdateMatchScheduleDto {
   venue?: string | null;
 }
 
+export class UpdateMatchCrucesDto {
+  @IsUUID()
+  homeInscripcionId: string;
+
+  @IsUUID()
+  awayInscripcionId: string;
+}
+
 export class MatchEventDto {
   @IsUUID()
   personaId: string;

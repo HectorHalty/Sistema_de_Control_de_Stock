@@ -8,6 +8,7 @@ import {
   numberTeams,
   pairKey,
 } from './berger';
+import { collectCruceWarnings } from './cruce-warnings';
 
 export interface RoundRobinTeam {
   id: string;
@@ -60,6 +61,119 @@ export async function createMatchesForPairs<T extends RoundRobinTeam>(
 @Injectable()
 export class FixtureGeneratorService {
   constructor(private prisma: PrismaService) {}
+
+  async updateMatchCruces(
+    id: string,
+    homeInscripcionId: string,
+    awayInscripcionId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const partido = await tx.partidoFutbol.findUnique({
+        where: { id },
+        include: { jornada: true },
+      });
+      if (!partido) throw new NotFoundException('Partido no encontrado');
+      if (homeInscripcionId === awayInscripcionId) {
+        throw new BadRequestException('Local y visitante no pueden ser el mismo equipo');
+      }
+      if (!partido.torneoId || !partido.jornadaId || !partido.jornada) {
+        throw new BadRequestException('El partido no pertenece a una jornada de torneo');
+      }
+
+      const inscripciones = await tx.equipoInscripcion.findMany({
+        where: {
+          id: { in: [homeInscripcionId, awayInscripcionId] },
+          torneoId: partido.torneoId,
+          activo: true,
+        },
+      });
+      if (inscripciones.length !== 2) {
+        throw new BadRequestException('Equipo no inscripto en este torneo');
+      }
+
+      const inscripcionById = new Map(
+        inscripciones.map((inscripcion) => [inscripcion.id, inscripcion]),
+      );
+      const homeInscripcion = inscripcionById.get(homeInscripcionId)!;
+      const awayInscripcion = inscripcionById.get(awayInscripcionId)!;
+      const [inscripcionesTorneo, partidosJornada, partidosOtrasJornadas] =
+        await Promise.all([
+          tx.equipoInscripcion.findMany({
+            where: { torneoId: partido.torneoId, activo: true },
+            select: { id: true },
+          }),
+          tx.partidoFutbol.findMany({
+            where: { jornadaId: partido.jornadaId },
+            select: {
+              id: true,
+              homeInscripcionId: true,
+              awayInscripcionId: true,
+            },
+          }),
+          tx.partidoFutbol.findMany({
+            where: {
+              torneoId: partido.torneoId,
+              jornadaId: { not: partido.jornadaId },
+            },
+            select: { homeTeamId: true, awayTeamId: true },
+          }),
+        ]);
+
+      const warnings = collectCruceWarnings({
+        matchId: partido.id,
+        nuevaHomeInscripcionId: homeInscripcionId,
+        nuevaAwayInscripcionId: awayInscripcionId,
+        jornadaPublicada: partido.jornada.publicada,
+        matchTieneResultado:
+          partido.status !== 'pendiente' ||
+          partido.homeGoals !== null ||
+          partido.awayGoals !== null ||
+          partido.esWO,
+        inscripcionIdsTorneo: inscripcionesTorneo.map((inscripcion) => inscripcion.id),
+        partidosJornada,
+        paresOtrasJornadas: partidosOtrasJornadas,
+        nuevaHomeTeamId: homeInscripcion.equipoId,
+        nuevaAwayTeamId: awayInscripcion.equipoId,
+      });
+
+      await tx.partidoFutbol.update({
+        where: { id },
+        data: {
+          homeInscripcionId,
+          awayInscripcionId,
+          homeTeamId: homeInscripcion.equipoId,
+          awayTeamId: awayInscripcion.equipoId,
+        },
+      });
+
+      const inscripcionesPresentes = new Set<string>();
+      for (const partidoJornada of partidosJornada) {
+        const ids =
+          partidoJornada.id === id
+            ? [homeInscripcionId, awayInscripcionId]
+            : [
+                partidoJornada.homeInscripcionId,
+                partidoJornada.awayInscripcionId,
+              ];
+        for (const inscripcionId of ids) {
+          if (inscripcionId) inscripcionesPresentes.add(inscripcionId);
+        }
+      }
+      const ausentes = inscripcionesTorneo.filter(
+        (inscripcion) => !inscripcionesPresentes.has(inscripcion.id),
+      );
+      await tx.jornada.update({
+        where: { id: partido.jornadaId },
+        data: { equipoLibreId: ausentes.length === 1 ? ausentes[0].id : null },
+      });
+
+      const match = await tx.partidoFutbol.findUnique({
+        where: { id },
+        include: { homeTeam: true, awayTeam: true, jornada: true },
+      });
+      return { match: match!, warnings };
+    });
+  }
 
   async publishFixture(torneoId: string) {
     const jornadas = await this.prisma.jornada.findMany({ where: { torneoId } });

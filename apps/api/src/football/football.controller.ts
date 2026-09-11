@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Put,
   Delete,
   Param,
@@ -24,6 +25,7 @@ import {
   UpdateCaptainDto,
   UpdateCategoriaDto,
   UpdateInscriptionDto,
+  UpdateMatchCrucesDto,
   UpdateMatchScheduleDto,
   UpdateMatchScoreDto,
   UpdateReglamentoArticuloDto,
@@ -333,6 +335,16 @@ export class FootballController {
     @Body() body: UpdateMatchScheduleDto,
   ) {
     return this.footballService.updateMatchSchedule(id, body);
+  }
+
+  @Patch('matches/:id/cruces')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateMatchCruces(@Param('id') id: string, @Body() body: UpdateMatchCrucesDto) {
+    return this.footballService.updateMatchCruces(
+      id,
+      body.homeInscripcionId,
+      body.awayInscripcionId,
+    );
   }
 
   @Put('matches/:id/score')

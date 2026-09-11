@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { testPrisma, resetTestDb } from './helpers/db';
 import { FixtureGeneratorService } from '../../src/football/fixture-generator.service';
 import { PrismaService } from '../../src/common/prisma.service';
 import { pairKey } from '../../src/football/berger';
+import { CRUCE_WARNINGS } from '../../src/football/cruce-warnings';
 
 const prisma = testPrisma();
 
@@ -202,5 +203,50 @@ describe('generateFullSeason Berger', () => {
       },
     });
     expect(visible.length).toBeGreaterThan(0);
+  });
+
+  it('updateMatchCruces cambia solo ese partido y avisa si pisa un rival de la fecha', async () => {
+    const { temporada, categoria } = await seedCategoriaYTemporada();
+    const { torneo } = await seedTorneoConEquipos(
+      temporada.id,
+      categoria.id,
+      'Apertura',
+      ['Alfa', 'Beta', 'Gamma', 'Delta'],
+    );
+    const gen = generator();
+    await gen.generateFullSeason(torneo.id, '2026-08-22');
+    const j1 = await prisma.jornada.findFirst({ where: { torneoId: torneo.id, numero: 1 } });
+    const partidos = await prisma.partidoFutbol.findMany({ where: { jornadaId: j1!.id } });
+    expect(partidos.length).toBeGreaterThanOrEqual(2);
+    const [m1, m2] = partidos;
+    const otherIds = await prisma.partidoFutbol.findMany({ where: { jornadaId: j1!.id } });
+
+    const result = await gen.updateMatchCruces(m1.id, m1.homeInscripcionId!, m2.homeInscripcionId!);
+    expect(result.warnings).toContain(CRUCE_WARNINGS.dobleEnFecha);
+    const reloaded = await prisma.partidoFutbol.findUnique({ where: { id: m1.id } });
+    expect(reloaded?.awayInscripcionId).toBe(m2.homeInscripcionId);
+    const m2After = await prisma.partidoFutbol.findUnique({ where: { id: m2.id } });
+    expect(m2After?.homeInscripcionId).toBe(m2.homeInscripcionId);
+    expect(m2After?.awayInscripcionId).toBe(m2.awayInscripcionId);
+    expect(otherIds).toHaveLength(partidos.length);
+  });
+
+  it('updateMatchCruces rechaza el mismo equipo y el id inexistente', async () => {
+    const { temporada, categoria } = await seedCategoriaYTemporada();
+    const { torneo, inscripciones } = await seedTorneoConEquipos(
+      temporada.id,
+      categoria.id,
+      'Apertura',
+      ['Alfa', 'Beta', 'Gamma'],
+    );
+    const gen = generator();
+    await gen.generateFullSeason(torneo.id, '2026-08-22');
+    const m = await prisma.partidoFutbol.findFirst({ where: { torneoId: torneo.id } });
+    await expect(gen.updateMatchCruces(m!.id, inscripciones[0].id, inscripciones[0].id)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(gen.updateMatchCruces('00000000-0000-0000-0000-000000000000', inscripciones[0].id, inscripciones[1].id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });
