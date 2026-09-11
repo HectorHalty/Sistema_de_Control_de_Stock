@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildSeasonTable, isFixtureRegenerable } from './fixture-season-table';
+import {
+  buildSeasonTable,
+  isFixtureRegenerable,
+  pickSelectedJornada,
+} from './fixture-season-table';
 import type { FootballJornada, FootballMatch, FootballInscription } from '@/app/api/client';
 
 const j1 = { id: 'j1', torneoId: 't', numero: 1, fecha: '2026-08-22', suspendida: false, esRecuperacion: false, publicada: false, equipoLibreId: 'i3' } satisfies FootballJornada;
@@ -32,5 +36,13 @@ describe('isFixtureRegenerable', () => {
     expect(isFixtureRegenerable([], matches)).toBe(false);
     expect(isFixtureRegenerable([{ ...j1, publicada: true }], matches)).toBe(false);
     expect(isFixtureRegenerable([j1], [{ ...matches[0], status: 'jugado' }])).toBe(false);
+  });
+});
+
+describe('pickSelectedJornada', () => {
+  it('reselecciona la primera jornada cuando la actual ya no existe', () => {
+    expect(pickSelectedJornada('eliminada', [j2, j1])).toBe('j2');
+    expect(pickSelectedJornada('j1', [j2, j1])).toBe('j1');
+    expect(pickSelectedJornada('eliminada', [])).toBe('');
   });
 });

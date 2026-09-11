@@ -10,6 +10,15 @@ export type SeasonTableRow = {
   partidos: FootballMatch[];
 };
 
+export function pickSelectedJornada(
+  currentId: string,
+  jornadas: FootballJornada[],
+): string {
+  return jornadas.some((jornada) => jornada.id === currentId)
+    ? currentId
+    : jornadas[0]?.id ?? '';
+}
+
 export function buildSeasonTable(
   jornadas: FootballJornada[],
   matches: FootballMatch[],

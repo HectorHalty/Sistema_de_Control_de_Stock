@@ -21,7 +21,7 @@ import {
 import { FixtureGridPreview } from './FixtureGridPreview';
 import { FixtureSeasonTable } from './FixtureSeasonTable';
 import { SaturdayGridPreview } from './SaturdayGridPreview';
-import { isFixtureRegenerable } from './fixture-season-table';
+import { isFixtureRegenerable, pickSelectedJornada } from './fixture-season-table';
 import type { SaturdayGridResponse } from '@/app/api/client';
 
 function TorneoFixtureWizard({
@@ -338,8 +338,8 @@ export function FixturePanel() {
       setCanchas(c);
       setInscripciones(i);
       setSeasonMatches(allMatches);
-      const jId = selectedJornada || j[0]?.id || '';
-      if (!selectedJornada && j[0]) setSelectedJornada(j[0].id);
+      const jId = pickSelectedJornada(selectedJornada, j);
+      if (jId !== selectedJornada) setSelectedJornada(jId);
       if (jId) {
         setMatches(await footballApi.matches.list(token, { jornadaId: jId }));
       } else {
