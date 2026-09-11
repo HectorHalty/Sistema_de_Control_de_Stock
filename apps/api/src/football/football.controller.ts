@@ -240,6 +240,12 @@ export class FootballController {
     return this.footballService.generateFullSeasonFixture(id, body.fechaInicio);
   }
 
+  @Post('torneos/:id/publish-fixture')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  publishFixture(@Param('id') id: string) {
+    return this.footballService.publishFixture(id);
+  }
+
   @Post('jornadas/:id/auto-schedule')
   @Roles(...FOOTBALL_MUTATION_ROLES)
   autoScheduleJornada(@Param('id') id: string) {

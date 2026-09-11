@@ -165,4 +165,42 @@ describe('generateFullSeason Berger', () => {
       BadRequestException,
     );
   });
+
+  it('publishFixture publica todas; sin jornadas o ya publicadas → 400', async () => {
+    const { temporada, categoria } = await seedCategoriaYTemporada();
+    const { torneo } = await seedTorneoConEquipos(temporada.id, categoria.id, 'Apertura', ['Uno', 'Dos', 'Tres']);
+    const gen = generator();
+    await expect(gen.publishFixture(torneo.id)).rejects.toBeInstanceOf(BadRequestException);
+    await gen.generateFullSeason(torneo.id, '2026-08-22');
+    const pub = await gen.publishFixture(torneo.id);
+    expect(pub.publicadas).toBe(3);
+    const jornadas = await prisma.jornada.findMany({ where: { torneoId: torneo.id } });
+    expect(jornadas.every((j) => j.publicada)).toBe(true);
+    await expect(gen.publishFixture(torneo.id)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('getTorneoDetail no lista partidos de jornada no publicada y sí después de publicar', async () => {
+    const { temporada, categoria } = await seedCategoriaYTemporada();
+    const { torneo } = await seedTorneoConEquipos(temporada.id, categoria.id, 'Apertura', ['Uno', 'Dos', 'Tres']);
+    await prisma.torneo.update({ where: { id: torneo.id }, data: { publicado: true, activo: true } });
+    await prisma.campeonato.update({ where: { id: (await prisma.torneo.findUnique({ where: { id: torneo.id } }))!.campeonatoId }, data: { activo: true } });
+    await generator().generateFullSeason(torneo.id, '2026-08-22');
+
+    const hidden = await prisma.partidoFutbol.findMany({
+      where: {
+        torneoId: torneo.id,
+        jornada: { publicada: true, suspendida: false },
+      },
+    });
+    expect(hidden).toHaveLength(0);
+
+    await generator().publishFixture(torneo.id);
+    const visible = await prisma.partidoFutbol.findMany({
+      where: {
+        torneoId: torneo.id,
+        jornada: { publicada: true, suspendida: false },
+      },
+    });
+    expect(visible.length).toBeGreaterThan(0);
+  });
 });

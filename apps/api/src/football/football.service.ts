@@ -621,6 +621,10 @@ ${partidoBlock}
     return this.fixtureGenerator.generateFullSeason(torneoId, fechaInicio);
   }
 
+  async publishFixture(torneoId: string): Promise<{ torneoId: string; publicadas: number }> {
+    return this.fixtureGenerator.publishFixture(torneoId);
+  }
+
   // Matches
   async findAllMatches(filters?: { status?: string; torneoId?: string; jornadaId?: string }) {
     const where: Record<string, unknown> = {};

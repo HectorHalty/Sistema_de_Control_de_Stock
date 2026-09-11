@@ -61,6 +61,21 @@ export async function createMatchesForPairs<T extends RoundRobinTeam>(
 export class FixtureGeneratorService {
   constructor(private prisma: PrismaService) {}
 
+  async publishFixture(torneoId: string) {
+    const jornadas = await this.prisma.jornada.findMany({ where: { torneoId } });
+    if (jornadas.length === 0) {
+      throw new BadRequestException('No hay jornadas para publicar');
+    }
+    if (jornadas.some((j) => j.publicada)) {
+      throw new BadRequestException('El fixture ya tiene jornadas publicadas');
+    }
+    const updated = await this.prisma.jornada.updateMany({
+      where: { torneoId },
+      data: { publicada: true },
+    });
+    return { torneoId, publicadas: updated.count };
+  }
+
   async generateFullSeason(torneoId: string, fechaInicio: string): Promise<{
     torneoId: string;
     jornadasCreadas: number;
