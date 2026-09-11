@@ -527,12 +527,21 @@ export const footballApi = {
   ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
   generateFixture: (
     torneoId: string,
-    data: { fechas: number; fechaInicio: string },
+    data: { fechaInicio: string },
     token: string,
   ) =>
-    apiFetch<{ torneoId: string; jornadasCreadas: number; jornadas: FootballJornada[] }>(
-      `/football/torneos/${torneoId}/generate-fixture`,
-      { method: 'POST', token, body: data },
+    apiFetch<{
+      torneoId: string;
+      jornadasCreadas: number;
+      jornadas: FootballJornada[];
+      offset: number;
+      choques: number;
+      torneoReferenciaId: string | null;
+    }>(`/football/torneos/${torneoId}/generate-fixture`, { method: 'POST', token, body: data }),
+  publishFixture: (torneoId: string, token: string) =>
+    apiFetch<{ torneoId: string; publicadas: number }>(
+      `/football/torneos/${torneoId}/publish-fixture`,
+      { method: 'POST', token },
     ),
   canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
   categorias: {
@@ -710,6 +719,15 @@ export const footballApi = {
       apiFetch<{ match: FootballMatch; warnings: string[] }>(
         `/football/matches/${id}/schedule`,
         { method: 'PUT', token, body: data },
+      ),
+    updateCruces: (
+      id: string,
+      data: { homeInscripcionId: string; awayInscripcionId: string },
+      token: string,
+    ) =>
+      apiFetch<{ match: FootballMatch; warnings: string[] }>(
+        `/football/matches/${id}/cruces`,
+        { method: 'PATCH', token, body: data },
       ),
     updateScore: (
       id: string,
@@ -1378,6 +1396,7 @@ export interface FootballMatch {
   canchaId?: string | null;
   jornadaId?: string | null;
   bloqueadoManual?: boolean;
+  esWO?: boolean;
   homeTeam?: FootballTeam;
   awayTeam?: FootballTeam;
   cancha?: FootballCancha | null;

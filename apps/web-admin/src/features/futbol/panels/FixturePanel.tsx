@@ -19,18 +19,22 @@ import {
   useFutbolOverview,
 } from '../futbol-shared';
 import { FixtureGridPreview } from './FixtureGridPreview';
+import { FixtureSeasonTable } from './FixtureSeasonTable';
 import { SaturdayGridPreview } from './SaturdayGridPreview';
+import { isFixtureRegenerable } from './fixture-season-table';
 import type { SaturdayGridResponse } from '@/app/api/client';
 
 function TorneoFixtureWizard({
   torneoId,
+  fechaInicio,
+  onFechaInicioChange,
   onGenerated,
 }: {
   torneoId: string | null;
+  fechaInicio: string;
+  onFechaInicioChange: (fechaInicio: string) => void;
   onGenerated: () => void | Promise<void>;
 }) {
-  const [fechas, setFechas] = useState('10');
-  const [fechaInicio, setFechaInicio] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -41,17 +45,21 @@ function TorneoFixtureWizard({
     e.preventDefault();
     const token = getAccessToken();
     if (!token || !torneoId || !fechaInicio) return;
-    const fechasNum = Number(fechas);
     setBusy(true);
     setError(null);
     setSuccess(null);
     try {
       const result = await footballApi.generateFixture(
         torneoId,
-        { fechas: fechasNum, fechaInicio },
+        { fechaInicio },
         token,
       );
-      setSuccess(`Fixture completo generado: ${result.jornadasCreadas} jornada(s) creadas.`);
+      setSuccess(
+        `Fixture completo generado: ${result.jornadasCreadas} jornada(s) creadas.` +
+          (result.offset > 0
+            ? ` Corrimiento vs el otro campeonato: ${result.offset} fecha(s).`
+            : ''),
+      );
       await onGenerated();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No se pudo generar el fixture';
@@ -77,34 +85,23 @@ function TorneoFixtureWizard({
         Generar fixture completo del torneo
       </h3>
       <p className="text-xs text-muted-foreground">
-        Crea todas las jornadas de la temporada en un solo paso. Si la cantidad de fechas supera
-        una vuelta completa, las fechas extra se arman como revancha (ida y vuelta) invirtiendo
-        local/visitante.
+        Arma una vuelta completa con el modelo de la liga. Queda como borrador: la web de clientes
+        no lo ve hasta que confirmes.
       </p>
-      <div className="grid gap-3 md:grid-cols-3">
-        <label className="space-y-1 text-xs text-muted-foreground">
-          Cantidad de fechas
-          <input
-            className={futbolFieldClass()}
-            type="number"
-            min={1}
-            value={fechas}
-            onChange={(e) => setFechas(e.target.value)}
-          />
-        </label>
+      <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-xs text-muted-foreground">
           Fecha de inicio
           <input
             className={futbolFieldClass()}
             type="date"
             value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
+            onChange={(e) => onFechaInicioChange(e.target.value)}
           />
         </label>
         <div className="flex items-end">
           <button
             type="submit"
-            disabled={busy || !torneoId || !fechaInicio || !fechas}
+            disabled={busy || !torneoId || !fechaInicio}
             className={futbolButtonClass()}
           >
             Generar fixture completo
@@ -308,8 +305,10 @@ export function FixturePanel() {
   const { torneoId } = useFutbolOverview();
   const [jornadas, setJornadas] = useState<FootballJornada[]>([]);
   const [matches, setMatches] = useState<FootballMatch[]>([]);
+  const [seasonMatches, setSeasonMatches] = useState<FootballMatch[]>([]);
   const [canchas, setCanchas] = useState<FootballCancha[]>([]);
   const [inscripciones, setInscripciones] = useState<FootballInscription[]>([]);
+  const [fixtureFechaInicio, setFixtureFechaInicio] = useState('');
   const [selectedJornada, setSelectedJornada] = useState('');
   const [numero, setNumero] = useState('1');
   const [fecha, setFecha] = useState('');
@@ -325,16 +324,20 @@ export function FixturePanel() {
     setLoading(true);
     setError(null);
     try {
-      const [j, c, i] = await Promise.all([
+      const [j, c, i, allMatches] = await Promise.all([
         footballApi.jornadas.list(token, torneoId ?? undefined),
         footballApi.canchas(token),
         torneoId
           ? footballApi.inscriptions.list(token, torneoId)
           : Promise.resolve<FootballInscription[]>([]),
+        torneoId
+          ? footballApi.matches.list(token, { torneoId })
+          : Promise.resolve<FootballMatch[]>([]),
       ]);
       setJornadas(j);
       setCanchas(c);
       setInscripciones(i);
+      setSeasonMatches(allMatches);
       const jId = selectedJornada || j[0]?.id || '';
       if (!selectedJornada && j[0]) setSelectedJornada(j[0].id);
       if (jId) {
@@ -442,6 +445,50 @@ export function FixturePanel() {
     }
   }
 
+  async function publishFixture() {
+    const token = getAccessToken();
+    if (!token || !torneoId) return;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await footballApi.publishFixture(torneoId, token);
+      setSuccess('Fixture publicado en la web de clientes.');
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo publicar el fixture');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function regenerateFixture() {
+    const token = getAccessToken();
+    if (!token || !torneoId || !fixtureFechaInicio) return;
+    if (!confirm('Se borra el borrador y se arma de nuevo. ¿Seguir?')) return;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await footballApi.generateFixture(
+        torneoId,
+        { fechaInicio: fixtureFechaInicio },
+        token,
+      );
+      setSuccess(
+        `Fixture completo generado: ${result.jornadasCreadas} jornada(s) creadas.` +
+          (result.offset > 0
+            ? ` Corrimiento vs el otro campeonato: ${result.offset} fecha(s).`
+            : ''),
+      );
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo volver a generar el fixture');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const selectedJornadaData = jornadas.find((j) => j.id === selectedJornada);
 
   function equipoLibreNombre(jornada: FootballJornada | undefined) {
@@ -468,6 +515,28 @@ export function FixturePanel() {
     }
   }
 
+  async function updateCruce(
+    matchId: string,
+    homeInscripcionId: string,
+    awayInscripcionId: string,
+  ) {
+    const token = getAccessToken();
+    if (!token) return;
+    setError(null);
+    try {
+      const result = await footballApi.matches.updateCruces(
+        matchId,
+        { homeInscripcionId, awayInscripcionId },
+        token,
+      );
+      if (result.warnings.length) setScheduleWarnings(result.warnings);
+      else setScheduleWarnings([]);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar el cruce');
+    }
+  }
+
   return (
     <FutbolPanelShell
       title="Fixture"
@@ -487,7 +556,47 @@ export function FixturePanel() {
         </div>
       )}
 
-      <TorneoFixtureWizard torneoId={torneoId} onGenerated={reload} />
+      <TorneoFixtureWizard
+        torneoId={torneoId}
+        fechaInicio={fixtureFechaInicio}
+        onFechaInicioChange={setFixtureFechaInicio}
+        onGenerated={reload}
+      />
+
+      {jornadas.length > 0 && jornadas.every((jornada) => !jornada.publicada) && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void publishFixture()}
+            className={futbolButtonClass()}
+          >
+            Confirmar y publicar
+          </button>
+          {isFixtureRegenerable(jornadas, seasonMatches) && (
+            <button
+              type="button"
+              disabled={busy || !fixtureFechaInicio}
+              onClick={() => void regenerateFixture()}
+              className={futbolButtonClass('ghost')}
+            >
+              Volver a generar
+            </button>
+          )}
+        </div>
+      )}
+
+      {seasonMatches.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Fixture de la temporada</h3>
+          <FixtureSeasonTable
+            jornadas={jornadas}
+            matches={seasonMatches}
+            inscripciones={inscripciones}
+            onCruceChange={updateCruce}
+          />
+        </div>
+      )}
 
       <SaturdayMultiCatSection />
 
