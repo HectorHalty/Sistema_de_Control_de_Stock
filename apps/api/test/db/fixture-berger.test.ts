@@ -219,16 +219,28 @@ describe('generateFullSeason Berger', () => {
     const partidos = await prisma.partidoFutbol.findMany({ where: { jornadaId: j1!.id } });
     expect(partidos.length).toBeGreaterThanOrEqual(2);
     const [m1, m2] = partidos;
-    const otherIds = await prisma.partidoFutbol.findMany({ where: { jornadaId: j1!.id } });
+    const otrosAntes = partidos
+      .filter((partido) => partido.id !== m1.id)
+      .map(({ id, homeInscripcionId, awayInscripcionId }) => ({
+        id,
+        homeInscripcionId,
+        awayInscripcionId,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
 
     const result = await gen.updateMatchCruces(m1.id, m1.homeInscripcionId!, m2.homeInscripcionId!);
     expect(result.warnings).toContain(CRUCE_WARNINGS.dobleEnFecha);
     const reloaded = await prisma.partidoFutbol.findUnique({ where: { id: m1.id } });
     expect(reloaded?.awayInscripcionId).toBe(m2.homeInscripcionId);
-    const m2After = await prisma.partidoFutbol.findUnique({ where: { id: m2.id } });
-    expect(m2After?.homeInscripcionId).toBe(m2.homeInscripcionId);
-    expect(m2After?.awayInscripcionId).toBe(m2.awayInscripcionId);
-    expect(otherIds).toHaveLength(partidos.length);
+    const jornadaAfter = await prisma.jornada.findUnique({ where: { id: j1!.id } });
+    expect(jornadaAfter?.equipoLibreId).toBe(m1.awayInscripcionId);
+    const otrosDespues = (
+      await prisma.partidoFutbol.findMany({
+        where: { jornadaId: j1!.id, id: { not: m1.id } },
+        select: { id: true, homeInscripcionId: true, awayInscripcionId: true },
+      })
+    ).sort((a, b) => a.id.localeCompare(b.id));
+    expect(otrosDespues).toEqual(otrosAntes);
   });
 
   it('updateMatchCruces rechaza el mismo equipo y el id inexistente', async () => {
@@ -245,8 +257,45 @@ describe('generateFullSeason Berger', () => {
     await expect(gen.updateMatchCruces(m!.id, inscripciones[0].id, inscripciones[0].id)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+    await expect(
+      gen.updateMatchCruces(
+        m!.id,
+        inscripciones[0].id,
+        '00000000-0000-4000-8000-000000000099',
+      ),
+    ).rejects.toMatchObject({ status: 400 });
     await expect(gen.updateMatchCruces('00000000-0000-0000-0000-000000000000', inscripciones[0].id, inscripciones[1].id)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('updateMatchCruces persiste un cruce válido aunque el partido no tenga jornada', async () => {
+    const { temporada, categoria } = await seedCategoriaYTemporada();
+    const { torneo, inscripciones } = await seedTorneoConEquipos(
+      temporada.id,
+      categoria.id,
+      'Apertura',
+      ['Alfa', 'Beta', 'Gamma'],
+    );
+    const partido = await prisma.partidoFutbol.create({
+      data: {
+        torneoId: torneo.id,
+        homeTeamId: inscripciones[0].equipoId,
+        awayTeamId: inscripciones[1].equipoId,
+        homeInscripcionId: inscripciones[0].id,
+        awayInscripcionId: inscripciones[1].id,
+        date: new Date('2026-08-22'),
+      },
+    });
+
+    const result = await generator().updateMatchCruces(
+      partido.id,
+      inscripciones[1].id,
+      inscripciones[2].id,
+    );
+
+    expect(result.match.homeInscripcionId).toBe(inscripciones[1].id);
+    expect(result.match.awayInscripcionId).toBe(inscripciones[2].id);
+    expect(result.match.jornadaId).toBeNull();
   });
 });

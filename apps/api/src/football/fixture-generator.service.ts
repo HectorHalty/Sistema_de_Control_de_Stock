@@ -76,14 +76,15 @@ export class FixtureGeneratorService {
       if (homeInscripcionId === awayInscripcionId) {
         throw new BadRequestException('Local y visitante no pueden ser el mismo equipo');
       }
-      if (!partido.torneoId || !partido.jornadaId || !partido.jornada) {
-        throw new BadRequestException('El partido no pertenece a una jornada de torneo');
+      const torneoId = partido.torneoId;
+      if (!torneoId) {
+        throw new BadRequestException('Equipo no inscripto en este torneo');
       }
 
       const inscripciones = await tx.equipoInscripcion.findMany({
         where: {
           id: { in: [homeInscripcionId, awayInscripcionId] },
-          torneoId: partido.torneoId,
+          torneoId,
           activo: true,
         },
       });
@@ -99,21 +100,31 @@ export class FixtureGeneratorService {
       const [inscripcionesTorneo, partidosJornada, partidosOtrasJornadas] =
         await Promise.all([
           tx.equipoInscripcion.findMany({
-            where: { torneoId: partido.torneoId, activo: true },
+            where: { torneoId, activo: true },
             select: { id: true },
           }),
-          tx.partidoFutbol.findMany({
-            where: { jornadaId: partido.jornadaId },
-            select: {
-              id: true,
-              homeInscripcionId: true,
-              awayInscripcionId: true,
-            },
-          }),
+          partido.jornadaId
+            ? tx.partidoFutbol.findMany({
+                where: { jornadaId: partido.jornadaId },
+                select: {
+                  id: true,
+                  homeInscripcionId: true,
+                  awayInscripcionId: true,
+                },
+              })
+            : Promise.resolve([
+                {
+                  id: partido.id,
+                  homeInscripcionId: partido.homeInscripcionId,
+                  awayInscripcionId: partido.awayInscripcionId,
+                },
+              ]),
           tx.partidoFutbol.findMany({
             where: {
-              torneoId: partido.torneoId,
-              jornadaId: { not: partido.jornadaId },
+              torneoId,
+              ...(partido.jornadaId
+                ? { jornadaId: { not: partido.jornadaId } }
+                : { id: { not: partido.id } }),
             },
             select: { homeTeamId: true, awayTeamId: true },
           }),
@@ -123,7 +134,7 @@ export class FixtureGeneratorService {
         matchId: partido.id,
         nuevaHomeInscripcionId: homeInscripcionId,
         nuevaAwayInscripcionId: awayInscripcionId,
-        jornadaPublicada: partido.jornada.publicada,
+        jornadaPublicada: partido.jornada?.publicada ?? false,
         matchTieneResultado:
           partido.status !== 'pendiente' ||
           partido.homeGoals !== null ||
@@ -162,10 +173,12 @@ export class FixtureGeneratorService {
       const ausentes = inscripcionesTorneo.filter(
         (inscripcion) => !inscripcionesPresentes.has(inscripcion.id),
       );
-      await tx.jornada.update({
-        where: { id: partido.jornadaId },
-        data: { equipoLibreId: ausentes.length === 1 ? ausentes[0].id : null },
-      });
+      if (partido.jornadaId) {
+        await tx.jornada.update({
+          where: { id: partido.jornadaId },
+          data: { equipoLibreId: ausentes.length === 1 ? ausentes[0].id : null },
+        });
+      }
 
       const match = await tx.partidoFutbol.findUnique({
         where: { id },
