@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildSeasonTable,
+  invertCruce,
   isFixtureRegenerable,
   pickSelectedJornada,
 } from './fixture-season-table';
@@ -44,5 +45,16 @@ describe('pickSelectedJornada', () => {
     expect(pickSelectedJornada('eliminada', [j2, j1])).toBe('j2');
     expect(pickSelectedJornada('j1', [j2, j1])).toBe('j1');
     expect(pickSelectedJornada('eliminada', [])).toBe('');
+  });
+});
+
+describe('invertCruce', () => {
+  it('envía local y visitante invertidos en una sola llamada', () => {
+    const onCruceChange = vi.fn();
+
+    invertCruce('m1', 'i1', 'i2', onCruceChange);
+
+    expect(onCruceChange).toHaveBeenCalledOnce();
+    expect(onCruceChange).toHaveBeenCalledWith('m1', 'i2', 'i1');
   });
 });

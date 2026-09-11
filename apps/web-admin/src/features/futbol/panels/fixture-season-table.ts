@@ -10,6 +10,19 @@ export type SeasonTableRow = {
   partidos: FootballMatch[];
 };
 
+export function invertCruce(
+  matchId: string,
+  homeInscripcionId: string,
+  awayInscripcionId: string,
+  onCruceChange: (
+    matchId: string,
+    homeInscripcionId: string,
+    awayInscripcionId: string,
+  ) => void | Promise<void>,
+) {
+  return onCruceChange(matchId, awayInscripcionId, homeInscripcionId);
+}
+
 export function pickSelectedJornada(
   currentId: string,
   jornadas: FootballJornada[],

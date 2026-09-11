@@ -123,16 +123,29 @@ describe('generateFullSeason Berger', () => {
 
   it('regenera un borrador', async () => {
     const { temporada, categoria } = await seedCategoriaYTemporada();
-    const { torneo } = await seedTorneoConEquipos(temporada.id, categoria.id, 'Apertura', [
+    const { torneo, inscripciones } = await seedTorneoConEquipos(temporada.id, categoria.id, 'Apertura', [
       'Uno',
       'Dos',
       'Tres',
     ]);
     await generator().generateFullSeason(torneo.id, '2026-08-22');
+    const partidoSinJornada = await prisma.partidoFutbol.create({
+      data: {
+        torneoId: torneo.id,
+        homeTeamId: inscripciones[0].equipoId,
+        awayTeamId: inscripciones[1].equipoId,
+        homeInscripcionId: inscripciones[0].id,
+        awayInscripcionId: inscripciones[1].id,
+        date: new Date('2026-08-23'),
+      },
+    });
     const second = await generator().generateFullSeason(torneo.id, '2026-08-29');
     expect(second.jornadasCreadas).toBe(3);
     const count = await prisma.jornada.count({ where: { torneoId: torneo.id } });
     expect(count).toBe(3);
+    await expect(
+      prisma.partidoFutbol.findUnique({ where: { id: partidoSinJornada.id } }),
+    ).resolves.not.toBeNull();
   });
 
   it('rechaza regenerar si hay una jornada publicada', async () => {
@@ -144,8 +157,8 @@ describe('generateFullSeason Berger', () => {
     ]);
     await generator().generateFullSeason(torneo.id, '2026-08-22');
     await prisma.jornada.updateMany({ where: { torneoId: torneo.id }, data: { publicada: true } });
-    await expect(generator().generateFullSeason(torneo.id, '2026-09-05')).rejects.toBeInstanceOf(
-      BadRequestException,
+    await expect(generator().generateFullSeason(torneo.id, '2026-09-05')).rejects.toThrow(
+      'El fixture ya está publicado',
     );
   });
 
@@ -162,8 +175,8 @@ describe('generateFullSeason Berger', () => {
       where: { id: partido.id },
       data: { status: 'jugado', homeGoals: 1, awayGoals: 0 },
     });
-    await expect(generator().generateFullSeason(torneo.id, '2026-09-05')).rejects.toBeInstanceOf(
-      BadRequestException,
+    await expect(generator().generateFullSeason(torneo.id, '2026-09-05')).rejects.toThrow(
+      'Hay resultados cargados',
     );
   });
 
@@ -180,7 +193,7 @@ describe('generateFullSeason Berger', () => {
     await expect(gen.publishFixture(torneo.id)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('getTorneoDetail no lista partidos de jornada no publicada y sí después de publicar', async () => {
+  it('el filtro Prisma público oculta jornadas no publicadas y las muestra al publicar', async () => {
     const { temporada, categoria } = await seedCategoriaYTemporada();
     const { torneo } = await seedTorneoConEquipos(temporada.id, categoria.id, 'Apertura', ['Uno', 'Dos', 'Tres']);
     await prisma.torneo.update({ where: { id: torneo.id }, data: { publicado: true, activo: true } });

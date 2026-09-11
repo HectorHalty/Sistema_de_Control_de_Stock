@@ -158,6 +158,20 @@ describe('chooseOffset', () => {
     const { offset } = chooseOffset(rounds, (n) => String(n), new Map([[pairKey('1', '2'), 1]]));
     expect(offset).toBe(0);
   });
+
+  it('sin offset libre elige el mínimo y desempata a favor de s distinto de cero', () => {
+    const rounds = buildBergerRounds(4);
+    const ids = ['', 'A', 'B', 'C', 'D'];
+    const prev = new Map<string, number>([
+      [pairKey(ids[rounds[0].pairs[0].home], ids[rounds[0].pairs[0].away]), 1],
+      [pairKey(ids[rounds[1].pairs[0].home], ids[rounds[1].pairs[0].away]), 1],
+      [pairKey(ids[rounds[2].pairs[0].home], ids[rounds[2].pairs[0].away]), 1],
+    ]);
+
+    const result = chooseOffset(rounds, (n) => ids[n], prev);
+
+    expect(result).toEqual({ offset: 1, choques: 1 });
+  });
 });
 
 describe('bergerRoundToPairs', () => {

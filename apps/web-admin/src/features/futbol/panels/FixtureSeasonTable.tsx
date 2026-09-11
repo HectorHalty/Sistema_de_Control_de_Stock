@@ -3,8 +3,8 @@ import type {
   FootballJornada,
   FootballMatch,
 } from '@/app/api/client';
-import { futbolFieldClass } from '../futbol-shared';
-import { buildSeasonTable } from './fixture-season-table';
+import { futbolButtonClass, futbolFieldClass } from '../futbol-shared';
+import { buildSeasonTable, invertCruce } from './fixture-season-table';
 
 export function FixtureSeasonTable({
   jornadas,
@@ -74,7 +74,7 @@ export function FixtureSeasonTable({
                   '';
 
                 return (
-                  <td key={match.id} className="min-w-[300px] px-2 py-2 align-top">
+                  <td key={match.id} className="min-w-[390px] px-2 py-2 align-top">
                     <div className="flex items-center gap-2">
                       <select
                         aria-label={`Local fecha ${row.jornada.numero}, partido ${index + 1}`}
@@ -105,6 +105,20 @@ export function FixtureSeasonTable({
                           </option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        className={futbolButtonClass('ghost')}
+                        onClick={() =>
+                          void invertCruce(
+                            match.id,
+                            homeInscripcionId,
+                            awayInscripcionId,
+                            onCruceChange,
+                          )
+                        }
+                      >
+                        Invertir
+                      </button>
                     </div>
                   </td>
                 );

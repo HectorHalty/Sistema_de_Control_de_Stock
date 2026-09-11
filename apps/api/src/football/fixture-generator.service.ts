@@ -228,9 +228,14 @@ export class FixtureGeneratorService {
 
       const existingJornadas = await tx.jornada.findMany({
         where: { torneoId },
-        select: { publicada: true },
+        select: { id: true, publicada: true },
       });
       if (existingJornadas.length > 0) {
+        if (existingJornadas.some((jornada) => jornada.publicada)) {
+          throw new BadRequestException(
+            'El fixture ya está publicado y no se puede regenerar',
+          );
+        }
         const partidoNoRegenerable = await tx.partidoFutbol.findFirst({
           where: {
             torneoId,
@@ -243,13 +248,16 @@ export class FixtureGeneratorService {
           },
           select: { id: true },
         });
-        if (existingJornadas.some((jornada) => jornada.publicada) || partidoNoRegenerable) {
+        if (partidoNoRegenerable) {
           throw new BadRequestException(
-            'El torneo ya tiene jornadas cargadas; la generación de fixture completo solo funciona sobre un torneo sin jornadas previas',
+            'Hay resultados cargados; no se puede regenerar el fixture',
           );
         }
-        await tx.partidoFutbol.deleteMany({ where: { torneoId } });
-        await tx.jornada.deleteMany({ where: { torneoId } });
+        const jornadaIds = existingJornadas.map((jornada) => jornada.id);
+        await tx.partidoFutbol.deleteMany({
+          where: { jornadaId: { in: jornadaIds } },
+        });
+        await tx.jornada.deleteMany({ where: { id: { in: jornadaIds } } });
       }
 
       const numbered = numberTeams(inscripciones);
@@ -330,6 +338,6 @@ export class FixtureGeneratorService {
         choques,
         torneoReferenciaId,
       };
-    });
+    }, { timeout: 15000 });
   }
 }
