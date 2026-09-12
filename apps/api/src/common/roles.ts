@@ -46,8 +46,21 @@ export const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN] as const;
 /** Gestión de usuarios y roles. */
 export const USER_MANAGEMENT_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN] as const;
 
-/** Lectura de inventario. */
+/** Lectura del módulo Inventario (sidebar admin: proveedores, OC, movimientos, conteos). */
 export const STOCK_READ_ROLES = [...ADMIN_ROLES, ROLES.OPERADOR_STOCK] as const;
+
+/**
+ * Lectura del catálogo de insumos que el POS necesita para saber qué se puede
+ * vender / consumir (productos + niveles + almacenes + categorías).
+ * No incluye proveedores, órdenes de compra, movimientos ni conteos.
+ */
+export const STOCK_POS_READ_ROLES = [
+  ...STOCK_READ_ROLES,
+  ROLES.VENDEDOR,
+  ROLES.GERENTE_VENTAS,
+] as const;
+
+/** Mutar inventario. Anclado a STOCK_READ_ROLES, NUNCA a STOCK_POS_READ_ROLES. */
 export const STOCK_MUTATION_ROLES = [...STOCK_READ_ROLES] as const;
 export const STOCK_COUNT_ROLES = [...STOCK_MUTATION_ROLES] as const;
 

@@ -23,6 +23,7 @@ import { historyFromTickets, mergeSalesHistory, mergeTicketsFromServer } from '.
 import { isLocalOnlyId } from '@/shared/utils/local-ids';
 import { scheduleBackgroundHydrate, reportMutationError } from '@/shared/utils/persist-mutation';
 import { persistRemoteConfig } from '@/shared/utils/remote-config';
+import { rememberConfigRows } from '@/shared/utils/config-versions';
 
 const DEFAULT_SALES_EMOJI = '🍽️';
 
@@ -132,6 +133,31 @@ export function useSalesState() {
     storageKeys.sales.raceConditionProtection,
     true,
   );
+
+  const salesConfigQuery = useQuery({
+    queryKey: ['settings', 'config', 'sales'],
+    queryFn: async () => {
+      const rows = await settingsApi.config.list('sales');
+      rememberConfigRows(rows);
+      return rows;
+    },
+  });
+
+  useEffect(() => {
+    if (!salesConfigQuery.data) return;
+    for (const row of salesConfigQuery.data) {
+      if (row.key === 'sales.ticketTemplate' && row.value && typeof row.value === 'object') {
+        setTicketTemplate(row.value as TicketTemplate);
+      }
+      if (row.key === 'sales.validateStockOnSale' && typeof row.value === 'boolean') {
+        setValidateStockOnSale(row.value);
+      }
+      if (row.key === 'sales.raceConditionProtection' && typeof row.value === 'boolean') {
+        setRaceConditionProtection(row.value);
+      }
+    }
+  }, [salesConfigQuery.data, setTicketTemplate, setValidateStockOnSale, setRaceConditionProtection]);
+
   const [teamAccounts, setTeamAccounts] = useLocalStorage<TeamAccount[]>(
     storageKeys.sales.teamAccounts,
     [],
@@ -291,15 +317,6 @@ export function useSalesState() {
         currentOrderId: t.currentOrderId ?? undefined,
       })));
     }).catch(() => undefined);
-    void settingsApi.config.list('sales').then(rows => {
-      for (const row of rows) {
-        if (row.key === 'sales.validateStockOnSale' && typeof row.value === 'boolean') setValidateStockOnSale(row.value);
-        if (row.key === 'sales.raceConditionProtection' && typeof row.value === 'boolean') setRaceConditionProtection(row.value);
-        if (row.key === 'sales.ticketTemplate' && row.value && typeof row.value === 'object') {
-          setTicketTemplate(prev => ({ ...prev, ...(row.value as TicketTemplate) }));
-        }
-      }
-    }).catch(() => undefined);
     void settingsApi.teamAccounts.list().then(rows => {
       setTeamAccounts(rows.map(r => ({
         id: r.id,
@@ -309,7 +326,7 @@ export function useSalesState() {
         items: Array.isArray(r.items) ? r.items as TeamAccount['items'] : [],
       })));
     }).catch(() => undefined);
-  }, [setSalesCategories, setSalesCategoryEmojis, setSalesPrinters, setSalesTables, setValidateStockOnSale, setRaceConditionProtection, setTicketTemplate, setTeamAccounts]);
+  }, [setSalesCategories, setSalesCategoryEmojis, setSalesPrinters, setSalesTables, setTeamAccounts]);
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {

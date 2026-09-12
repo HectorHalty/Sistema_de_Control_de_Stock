@@ -32,6 +32,8 @@ import {
   uuidProductIds,
 } from './catalog-persistence';
 import type { AuditEntry, AuditModule, Category, ConsumptionLog, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
+import { getSessionUserRole } from '@/shared/auth/session';
+import { canQueryStockAdmin, canQueryStockCatalog } from './stock-query-access';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -75,6 +77,9 @@ export function useInventoryState() {
   const [stockCountSessions, setStockCountSessions] = useState<StockCountSession[]>([]);
 
   const queryClient = useQueryClient();
+  const role = getSessionUserRole();
+  const catalogEnabled = canQueryStockCatalog(role);
+  const adminEnabled = canQueryStockAdmin(role);
 
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   // En producción usamos API estricta (sin fallback silencioso) para evitar desincronización.
@@ -119,30 +124,37 @@ export function useInventoryState() {
   const categoriesQuery = useQuery({
     queryKey: ['inventory', 'categories'],
     queryFn: () => stockApi.categories.list().then(rows => rows.map(mapApiCategoryToLocal)),
+    enabled: catalogEnabled,
   });
   const warehousesQuery = useQuery({
     queryKey: ['inventory', 'warehouses'],
     queryFn: () => stockApi.warehouses.list().then(rows => rows.map(mapApiWarehouseToLocal)),
+    enabled: catalogEnabled,
   });
   const productsQuery = useQuery({
     queryKey: ['inventory', 'products'],
     queryFn: () => stockApi.products.list().then(rows => rows.map(mapApiProductToLocal)),
+    enabled: catalogEnabled,
   });
   const movementsQuery = useQuery({
     queryKey: ['inventory', 'movements'],
     queryFn: () => stockApi.movements.list({ limit: 500 }).then(rows => rows.map(mapApiMovementToLocal)),
+    enabled: adminEnabled,
   });
   const countSessionsQuery = useQuery({
     queryKey: ['inventory', 'countSessions'],
     queryFn: () => stockApi.countSessions.list(100).then(rows => rows.map(mapApiCountSessionToLocal)),
+    enabled: adminEnabled,
   });
   const suppliersQuery = useQuery({
     queryKey: ['inventory', 'suppliers'],
     queryFn: () => stockApi.suppliers.list().then(rows => rows.map(mapApiSupplierToLocal)),
+    enabled: adminEnabled,
   });
   const ordersQuery = useQuery({
     queryKey: ['inventory', 'orders'],
     queryFn: () => stockApi.purchaseOrders.list().then(rows => rows.map(mapApiPurchaseOrderToLocal)),
+    enabled: adminEnabled,
   });
 
   // Cada `hydrateX` sigue existiendo con la misma firma que usan las 15+

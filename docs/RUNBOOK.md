@@ -380,22 +380,20 @@ sudo systemctl reload caddy
 
 - Pagination por cursor disponible (`?cursor=&limit=`) en `GET /stock/products`,
   `/stock/suppliers`, `/stock/purchase-orders`, `/kitchen/orders` y
-  `/sales/tickets` — devuelve `{ items, nextCursor }`. Sin esos params cada
-  endpoint sigue devolviendo el array completo (compatibilidad). El admin
-  todavía no la consume: cada `useQuery` de Inventario/Ventas pide la lista
-  completa (ver
-  [2026-09-07-admin-fuente-de-verdad-c.md](superpowers/plans/2026-09-07-admin-fuente-de-verdad-c.md),
-  Task 9/10 de Plan B) — React Query maneja la caché y la revalidación, pero
-  no pagina. Catálogos chicos (mesas, impresoras, configuración) siguen sin
-  límite.
+  `/sales/tickets` — devuelve `{ items, nextCursor }`. Sin `cursor` ni `limit`
+  cada endpoint sigue devolviendo un array (compatibilidad). Inventario sigue
+  pidiendo listas completas; Ventas → Reportes → Historial pagina tickets de
+  a 50 (`?limit=50&cursor=`). El mostrador hidrata los últimos 100 sin cursor.
+  Catálogos chicos (mesas, impresoras) siguen sin límite.
 - **Admin — fuente de lectura (Inventario y Ventas):** React Query
   (`app/queryClient.ts`), no `localStorage`-first a mano. `localStorage`
   sigue existiendo sólo como caché de revalidación (persister de
   `@tanstack/react-query-persist-client`, clave `lch-admin-query-cache`) —
   al montar, si hay caché persistida se muestra mientras revalida en
   segundo plano; si no hay red, sigue mostrando la última página buena y un
-  toast avisa que no se pudo conectar. Fútbol/online/cocina/plataforma
-  siguen con el patrón viejo (`useLocalStorage` + hidratación manual) — ver
+  toast avisa que no se pudo conectar. Settings de fútbol/online/stock/ventas,
+  cocina y overviews de fútbol/online también van por React Query
+  (2026-09-10). Ver
   [2026-09-07-admin-fuente-de-verdad-c-design.md](superpowers/specs/2026-09-07-admin-fuente-de-verdad-c-design.md).
   Mutaciones: optimismo a mano (no `useMutation`) con reconciliación vía
   `queryClient.refetchQueries` si el servidor rechaza — no se reescribieron
@@ -403,9 +401,7 @@ sudo systemctl reload caddy
 - Bloqueo optimista (`version`) disponible en `Producto`, `ProductoVenta`,
   `OrdenCompra` y `Configuracion` — opcional en el DTO, 409 si no coincide.
   El admin ya lo manda en los 3 formularios de edición (Producto,
-  ProductoVenta, OrdenCompra); `Configuracion` lo soporta en el backend pero
-  el frontend (`persistRemoteConfig`, guardado fire-and-forget/debounced en
-  4 pantallas) todavía no lo manda.
+  ProductoVenta, OrdenCompra) y en `persistRemoteConfig` (settings).
 - Stock deduction uses raw SQL for composite key updates (Prisma limitation — now uses parameterized `$queryRaw`/`$executeRaw`)
 - Offline fallback remains for when API health check fails; in production keep API always reachable
 - SSE se redistribuye entre instancias vía Postgres `LISTEN/NOTIFY` (canal
@@ -431,3 +427,11 @@ The following security remediations have been applied:
 7. **CORS**: Env-based origin allowlist in production
 8. **Validation**: UUID validation on ID fields, max length constraints on strings
 9. **Audit Logging**: Server-side logging for login attempts and critical mutations
+
+## POS, roles y listados (2026-09-10)
+
+- El rol **Vendedor** y **Gerente_Ventas** pueden `GET /stock/products` (y almacenes/categorías) para calcular stock vendible. No pueden mutar inventario ni ver proveedores/OC/movimientos.
+- El admin no dispara esas queries de inventario admin si el rol no entra al módulo Inventario — evita un 403 con toast al loguear un vendedor.
+- `PUT /settings/config` manda `version` cuando el front ya leyó la fila. Un 409 significa que otro operador guardó la misma clave: recargar.
+- Ventas → Reportes → Historial pide páginas de 50 tickets (`?limit=50&cursor=`). El mostrador sigue hidratando los últimos 100 sin cursor, para el dashboard del día.
+

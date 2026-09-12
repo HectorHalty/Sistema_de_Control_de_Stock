@@ -3,6 +3,7 @@
  * Resolves public API URL at runtime when the build used localhost by mistake.
  */
 import { resolveApiBaseUrl } from './resolve-api-base-url';
+import type { CursorPage } from './cursor-page';
 
 /** Resuelve en cada llamada para respetar window.__LCH_API_URL__ (lch-config.js). */
 export function getApiBaseUrl(): string {
@@ -395,6 +396,14 @@ export const salesApi = {
       const q = status ? `?status=${status}` : '';
       return apiFetch<SalesTicket[]>(`/sales/tickets${q}`);
     },
+    listPage: (params?: { status?: string; cursor?: string; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set('status', params.status);
+      if (params?.cursor) q.set('cursor', params.cursor);
+      if (params?.limit != null) q.set('limit', String(params.limit));
+      const qs = q.toString();
+      return apiFetch<CursorPage<SalesTicket>>(`/sales/tickets${qs ? `?${qs}` : '?limit=50'}`);
+    },
     get: (id: string) => apiFetch<SalesTicket>(`/sales/tickets/${id}`),
     void: (id: string, operatorId: string, token: string) =>
       apiFetch<SalesTicket>(`/sales/tickets/${id}/void`, {
@@ -518,12 +527,21 @@ export const footballApi = {
   ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
   generateFixture: (
     torneoId: string,
-    data: { fechas: number; fechaInicio: string },
+    data: { fechaInicio: string },
     token: string,
   ) =>
-    apiFetch<{ torneoId: string; jornadasCreadas: number; jornadas: FootballJornada[] }>(
-      `/football/torneos/${torneoId}/generate-fixture`,
-      { method: 'POST', token, body: data },
+    apiFetch<{
+      torneoId: string;
+      jornadasCreadas: number;
+      jornadas: FootballJornada[];
+      offset: number;
+      choques: number;
+      torneoReferenciaId: string | null;
+    }>(`/football/torneos/${torneoId}/generate-fixture`, { method: 'POST', token, body: data }),
+  publishFixture: (torneoId: string, token: string) =>
+    apiFetch<{ torneoId: string; publicadas: number }>(
+      `/football/torneos/${torneoId}/publish-fixture`,
+      { method: 'POST', token },
     ),
   canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
   categorias: {
@@ -701,6 +719,15 @@ export const footballApi = {
       apiFetch<{ match: FootballMatch; warnings: string[] }>(
         `/football/matches/${id}/schedule`,
         { method: 'PUT', token, body: data },
+      ),
+    updateCruces: (
+      id: string,
+      data: { homeInscripcionId: string; awayInscripcionId: string },
+      token: string,
+    ) =>
+      apiFetch<{ match: FootballMatch; warnings: string[] }>(
+        `/football/matches/${id}/cruces`,
+        { method: 'PATCH', token, body: data },
       ),
     updateScore: (
       id: string,
@@ -1369,6 +1396,7 @@ export interface FootballMatch {
   canchaId?: string | null;
   jornadaId?: string | null;
   bloqueadoManual?: boolean;
+  esWO?: boolean;
   homeTeam?: FootballTeam;
   awayTeam?: FootballTeam;
   cancha?: FootballCancha | null;

@@ -15,6 +15,7 @@ import {
 import {
   STOCK_COUNT_ROLES,
   STOCK_MUTATION_ROLES,
+  STOCK_POS_READ_ROLES,
   STOCK_READ_ROLES,
 } from '../common/roles';
 
@@ -24,7 +25,7 @@ export class StockController {
   constructor(private stockService: StockService) {}
 
   @Get('products')
-  @Roles(...STOCK_READ_ROLES)
+  @Roles(...STOCK_POS_READ_ROLES)
   findAll(
     @Query('categoryId') categoryId?: string,
     @Query('cursor') cursor?: string,
@@ -34,7 +35,7 @@ export class StockController {
   }
 
   @Get('products/:id')
-  @Roles(...STOCK_READ_ROLES)
+  @Roles(...STOCK_POS_READ_ROLES)
   findOne(@Param('id') id: string) {
     return this.stockService.findProductById(id);
   }
@@ -58,7 +59,7 @@ export class StockController {
   }
 
   @Get('products/:id/stock')
-  @Roles(...STOCK_READ_ROLES)
+  @Roles(...STOCK_POS_READ_ROLES)
   getStockLevels(@Param('id') id: string) {
     return this.stockService.getStockLevels(id);
   }
@@ -70,7 +71,7 @@ export class StockController {
   }
 
   @Get('warehouses')
-  @Roles(...STOCK_READ_ROLES)
+  @Roles(...STOCK_POS_READ_ROLES)
   findAllWarehouses() {
     return this.stockService.findAllWarehouses();
   }
@@ -94,7 +95,7 @@ export class StockController {
   }
 
   @Get('categories')
-  @Roles(...STOCK_READ_ROLES)
+  @Roles(...STOCK_POS_READ_ROLES)
   findAllCategories() {
     return this.stockService.findAllCategories();
   }

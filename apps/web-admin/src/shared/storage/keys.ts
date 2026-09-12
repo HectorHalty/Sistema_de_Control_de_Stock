@@ -27,12 +27,12 @@ export const storageKeys = {
     countSessions: 'stock-count-sessions', // legacy — ver React Query, Task 2
     suppliers: 'stock-suppliers', // legacy — ver React Query, Task 2
     darkMode: 'stock-darkmode',
-    alertDay: 'stock-alert-day',
+    alertDay: 'stock-alert-day', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
     currentUser: 'stock-current-user',
     users: 'stock-users',
-    lowStockNotifications: 'stock-low-notifications',
-    autoAlerts: 'stock-auto-alerts',
-    packRounding: 'stock-pack-rounding',
+    lowStockNotifications: 'stock-low-notifications', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    autoAlerts: 'stock-auto-alerts', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    packRounding: 'stock-pack-rounding', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
   },
   platform: {
     notificationsEnabled: 'platform-notifications',
@@ -49,26 +49,26 @@ export const storageKeys = {
     history: 'sales-history',
     auditLog: 'sales-auditlog',
     printers: 'sales-printers',
-    ticketTemplate: 'sales-ticket-template',
-    validateStockOnSale: 'sales-validate-stock',
-    raceConditionProtection: 'sales-race-protection',
+    ticketTemplate: 'sales-ticket-template', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    validateStockOnSale: 'sales-validate-stock', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    raceConditionProtection: 'sales-race-protection', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
     teamAccounts: 'sales-team-accounts',
   },
   futbol: {
     showPublicFixture: 'futbol-public-fixture',
-    matchNotifications: 'futbol-match-notifications',
-    defaultCategory: 'futbol-default-category',
+    matchNotifications: 'futbol-match-notifications', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    defaultCategory: 'futbol-default-category', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
   },
   kitchen: {
-    orders: 'kitchen-orders',
+    orders: 'kitchen-orders', // legacy — React Query Task 5, 2026-09-10
   },
   online: {
     products: 'online-products',
     sponsors: 'sponsors',
     media: 'media-items',
-    orderNotifications: 'online-order-notifications',
-    syncCatalogWithStock: 'online-sync-catalog',
-    webChannelEnabled: 'online-web-channel',
-    appChannelEnabled: 'online-app-channel',
+    orderNotifications: 'online-order-notifications', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    syncCatalogWithStock: 'online-sync-catalog', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    webChannelEnabled: 'online-web-channel', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    appChannelEnabled: 'online-app-channel', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
   },
 } as const;
