@@ -516,15 +516,6 @@ export const footballApi = {
     data: { publicado?: boolean; activo?: boolean; nombre?: string },
     token: string,
   ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
-  generateFixture: (
-    torneoId: string,
-    data: { fechas: number; fechaInicio: string },
-    token: string,
-  ) =>
-    apiFetch<{ torneoId: string; jornadasCreadas: number; jornadas: FootballJornada[] }>(
-      `/football/torneos/${torneoId}/generate-fixture`,
-      { method: 'POST', token, body: data },
-    ),
   canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
   categorias: {
     list: (token: string) => apiFetch<FootballCategoriaConfig[]>('/football/categorias', { token }),
@@ -625,16 +616,6 @@ export const footballApi = {
     },
     create: (data: { torneoId: string; numero: number; fecha: string }, token: string) =>
       apiFetch<FootballJornada>('/football/jornadas', { method: 'POST', token, body: data }),
-    roundRobin: (jornadaId: string, token: string) =>
-      apiFetch<{ created: number; matches: FootballMatch[] }>(
-        `/football/jornadas/${jornadaId}/round-robin`,
-        { method: 'POST', token },
-      ),
-    autoSchedule: (jornadaId: string, token: string) =>
-      apiFetch<{ scheduled: number; warnings: string[]; skippedManual: number }>(
-        `/football/jornadas/${jornadaId}/auto-schedule`,
-        { method: 'POST', token },
-      ),
     suspendRain: (jornadaId: string, token: string) =>
       apiFetch<{
         recoveryJornadaId: string;
@@ -646,22 +627,6 @@ export const footballApi = {
         `/football/jornadas/${jornadaId}/publish`,
         { method: 'POST', token },
       ),
-    preferencias: {
-      get: (jornadaId: string, token: string) =>
-        apiFetch<FootballJornadaPreferencias>(`/football/jornadas/${jornadaId}/preferencias`, {
-          token,
-        }),
-      upsert: (
-        jornadaId: string,
-        inscripcionId: string,
-        horaPreferida: string | null,
-        token: string,
-      ) =>
-        apiFetch<{ equipoInscripcionId: string; horaPreferida: string | null }>(
-          `/football/jornadas/${jornadaId}/preferencias/${inscripcionId}`,
-          { method: 'PUT', token, body: { horaPreferida } },
-        ),
-    },
   },
   matches: {
     list: (token: string, filters?: { status?: string; torneoId?: string; jornadaId?: string }) => {
@@ -746,22 +711,6 @@ export const footballApi = {
       if (campeonatoId) params.set('campeonatoId', campeonatoId);
       return apiFetch<SaturdayGridResponse>(`/football/scheduling/saturday?${params}`, { token });
     },
-    autoSaturday: (
-      token: string,
-      data: { fecha: string; campeonatoId?: string; categoriaOrder?: string[] },
-    ) =>
-      apiFetch<{
-        fecha: string;
-        scheduled: number;
-        skippedManual: number;
-        unassigned: number;
-        warnings: string[];
-      }>('/football/scheduling/auto-saturday', { method: 'POST', token, body: data }),
-    publishFecha: (token: string, data: { fecha: string; campeonatoId?: string }) =>
-      apiFetch<{ fecha: string; publicadas: number }>(
-        '/football/scheduling/publish-fecha',
-        { method: 'POST', token, body: data },
-      ),
     suspendSaturday: (token: string, fecha: string) =>
       apiFetch<{
         fecha: string;
@@ -1339,12 +1288,6 @@ export interface FootballCategoriaConfig {
   grupoCanchasId?: string | null;
   colorHex?: string | null;
   _count?: { torneos: number };
-}
-
-export interface FootballJornadaPreferencias {
-  jornadaId: string;
-  franjas: string[];
-  equipos: { inscripcionId: string; name: string; horaPreferida: string | null }[];
 }
 
 export interface FootballCancha {
