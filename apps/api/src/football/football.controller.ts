@@ -18,7 +18,6 @@ import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
 import {
   CreateCategoriaDto,
-  GenerateFixtureDto,
   SuspendMatchDto,
   SuspendSaturdayDto,
   UpdateCaptainDto,
@@ -74,24 +73,6 @@ export class FootballController {
   @Roles(...FOOTBALL_READ_ROLES)
   getSaturdayGrid(@Query('fecha') fecha: string, @Query('campeonatoId') campeonatoId?: string) {
     return this.footballService.getSaturdayGrid(fecha, campeonatoId);
-  }
-
-  @Post('scheduling/auto-saturday')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  autoScheduleSaturday(
-    @Body() body: { fecha: string; campeonatoId?: string; categoriaOrder?: string[] },
-  ) {
-    return this.footballService.autoScheduleSaturday(
-      body.fecha,
-      body.campeonatoId,
-      body.categoriaOrder,
-    );
-  }
-
-  @Post('scheduling/publish-fecha')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  publishJornadasByFecha(@Body() body: { fecha: string; campeonatoId?: string }) {
-    return this.footballService.publishJornadasByFecha(body.fecha, body.campeonatoId);
   }
 
   @Get('categorias')
@@ -228,24 +209,6 @@ export class FootballController {
     return this.footballService.createJornada(body);
   }
 
-  @Post('jornadas/:id/round-robin')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  generateRoundRobin(@Param('id') id: string) {
-    return this.footballService.generateRoundRobin(id);
-  }
-
-  @Post('torneos/:id/generate-fixture')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  generateFixture(@Param('id') id: string, @Body() body: GenerateFixtureDto) {
-    return this.footballService.generateFullSeasonFixture(id, body.fechas, body.fechaInicio);
-  }
-
-  @Post('jornadas/:id/auto-schedule')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  autoScheduleJornada(@Param('id') id: string) {
-    return this.footballService.autoScheduleJornada(id);
-  }
-
   @Post('jornadas/:id/suspend-rain')
   @Roles(...FOOTBALL_MUTATION_ROLES)
   suspendJornadaPorLluvia(@Param('id') id: string) {
@@ -256,26 +219,6 @@ export class FootballController {
   @Roles(...FOOTBALL_MUTATION_ROLES)
   publishJornada(@Param('id') id: string) {
     return this.footballService.publishJornada(id);
-  }
-
-  @Get('jornadas/:id/preferencias')
-  @Roles(...FOOTBALL_READ_ROLES)
-  getJornadaPreferencias(@Param('id') id: string) {
-    return this.footballService.getJornadaPreferencias(id);
-  }
-
-  @Put('jornadas/:id/preferencias/:inscripcionId')
-  @Roles(...FOOTBALL_MUTATION_ROLES)
-  upsertJornadaPreferencia(
-    @Param('id') id: string,
-    @Param('inscripcionId') inscripcionId: string,
-    @Body() body: { horaPreferida: string | null },
-  ) {
-    return this.footballService.upsertJornadaPreferencia(
-      id,
-      inscripcionId,
-      body.horaPreferida,
-    );
   }
 
   @Get('matches')
