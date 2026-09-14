@@ -25,15 +25,19 @@ function readDismissed(): boolean {
 
 /**
  * Deriva el estado efectivo (rol, contexto) desde el `PublicSessionUser` crudo
- * que devuelve el backend. En fase mock todo sale del adapter; el branch real
- * se completa en el spec de reestructuración (§7).
+ * que devuelve el backend. En fase mock, rol y contexto salen del adapter; en
+ * el branch real (§7) ambos ya vienen resueltos del backend — `rawUser` es
+ * `ctx.user` y `rawMeContext` es el `MeContext` completo de `/public/me/context`.
  */
-function applyMock(u: PublicSessionUser): {
+function applyMock(
+  u: PublicSessionUser,
+  realMeContext: MeContext | null,
+): {
   user: PublicSessionUser;
   meContext: MeContext | null;
   dniEnPlantelOtroEmail?: string;
 } {
-  if (!USE_MOCK_FUTBOL) return { user: u, meContext: null };
+  if (!USE_MOCK_FUTBOL) return { user: u, meContext: realMeContext };
   const { rol, dniEnPlantelOtroEmail } = resolveMockRole(u);
   const effUser = { ...u, rol };
   return {
@@ -69,6 +73,9 @@ const PublicAuthContext = createContext<PublicAuthContextValue | null>(null);
 export function PublicAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => publicAuthStorage.getToken());
   const [rawUser, setRawUser] = useState<PublicSessionUser | null>(null);
+  // Sólo se usa en el branch real: el `MeContext` completo de `/public/me/context`.
+  // En fase mock queda `null` — `applyMock` lo ignora y re-deriva del adapter.
+  const [rawMeContext, setRawMeContext] = useState<MeContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => readDismissed());
   const [followVersion, setFollowVersion] = useState(0);
@@ -79,10 +86,11 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
   // `applyMock`: el equipo seguido vive en localStorage (adapter mock), fuera del
   // estado de React, y `resolveMockRole`/`resolveMockContext` lo leen en cada
   // llamada. Sin este contador, seguir o dejar de seguir un equipo no re-derivaría
-  // el rol efectivo hasta recargar la página.
+  // el rol efectivo hasta recargar la página. En el branch real, `rawMeContext` ya
+  // se actualiza directamente tras cada follow/unfollow (ver más abajo).
   const derived = useMemo(
-    () => (rawUser ? applyMock(rawUser) : null),
-    [rawUser, followVersion],
+    () => (rawUser ? applyMock(rawUser, rawMeContext) : null),
+    [rawUser, rawMeContext, followVersion],
   );
   const user = derived?.user ?? null;
   const meContext = derived?.meContext ?? null;
@@ -97,12 +105,14 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
     }
     const ctx = await publicApi.me.context(res.accessToken);
     setRawUser(ctx.user);
+    setRawMeContext(ctx);
   }, []);
 
   const refreshContext = useCallback(async () => {
     if (!token) return;
     const ctx = await publicApi.me.context(token);
     setRawUser(ctx.user);
+    if (!USE_MOCK_FUTBOL) setRawMeContext(ctx);
   }, [token]);
 
   useEffect(() => {
@@ -128,6 +138,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
         const ctx = await publicApi.me.context(token);
         if (!cancelled) {
           setRawUser(ctx.user);
+          if (!USE_MOCK_FUTBOL) setRawMeContext(ctx);
         }
       } catch (err) {
         // Sólo cerramos sesión si el backend rechazó las credenciales (401/403).
@@ -188,6 +199,13 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
       publicAuthStorage.setToken(res.accessToken);
       setToken(res.accessToken);
       setRawUser(res.user);
+      // El DNI puede haber cambiado el rol efectivo (usuario → jugador/capitán);
+      // en el branch real hay que volver a pedir el contexto para reflejarlo.
+      if (!USE_MOCK_FUTBOL) {
+        const ctx = await publicApi.me.context(res.accessToken);
+        setRawUser(ctx.user);
+        setRawMeContext(ctx);
+      }
     },
     [token],
   );
@@ -196,6 +214,7 @@ export function PublicAuthProvider({ children }: { children: ReactNode }) {
     publicAuthStorage.setToken(null);
     setToken(null);
     setRawUser(null);
+    setRawMeContext(null);
     try { localStorage.removeItem(ONBOARDING_KEY); } catch { /* noop */ }
     setOnboardingDismissed(false);
   }, []);
