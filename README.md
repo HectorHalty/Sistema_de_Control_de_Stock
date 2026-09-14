@@ -39,6 +39,7 @@ npm run dev:infra
 # 2. API
 cd apps/api && cp .env.example .env && npm install
 npx prisma migrate dev && npm run prisma:seed
+npm run prisma:seed:demo   # opcional: datos de demostración (torneo, cantina, cuentas de prueba)
 npm run dev:api
 
 # 3. Frontends (terminales separadas)
@@ -67,6 +68,16 @@ npm run dev:public    # http://localhost:5174
 - **Helmet**, consultas parametrizadas y auditoría
 
 En producción: `NODE_ENV=production` y `JWT_SECRET` de al menos 32 caracteres.
+
+## Producción (Fase 1)
+
+Deploy en **Google Cloud / VPS** (no Oracle): [deploy/GCP.md](deploy/GCP.md) · [deploy/CHECKLIST.md](deploy/CHECKLIST.md)
+
+```bash
+cp .env.production.example .env.production
+# completar secretos → en el servidor:
+./deploy/deploy.sh && ./deploy/seed-prod.sh
+```
 
 ## Licencia y empresa
 

@@ -1,4 +1,5 @@
-﻿import { stockApi } from '@/app/api/client';
+﻿import { getApiErrorMessage, stockApi } from '@/app/api/client';
+import { operatorFields } from '@/shared/utils/persist-mutation';
 import { useEffect, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
@@ -110,7 +111,7 @@ export function ConsumptionPage() {
       date: newLog.date,
       dateType,
       operatorId: currentUser?.id,
-      operatorName: currentUser?.name,
+      operatorName: currentUser?.username,
       entries: Array.from(productAgg.entries()).map(([productId, agg]) => {
         const product = products.find(p => p.id === productId);
         return {
@@ -123,38 +124,25 @@ export function ConsumptionPage() {
       }),
     };
 
-    if (inventoryApiAvailable) {
-      try {
-        for (const e of changedEdits) {
-          const delta = e.newStock - e.previousStock;
-          if (delta !== 0) {
-            await stockApi.products.adjustStock(e.productId, e.warehouseId, delta, '', {
-              reference: 'control-stock',
+    try {
+      for (const e of changedEdits) {
+        const delta = e.newStock - e.previousStock;
+        if (delta !== 0) {
+          await stockApi.products.adjustStock(e.productId, e.warehouseId, delta, '', {
+            reference: 'control-stock',
+            ...operatorFields({
               operatorId: currentUser?.id,
-              operatorName: currentUser?.name,
-            });
-          }
+              operatorName: currentUser?.username,
+            }),
+          });
         }
-        await saveStockCountSession(countSession);
-        await refreshStockProducts();
-        await refreshOperations();
-      } catch {
-        return;
       }
-    } else {
-      // Update products with new stock values (modo local)
-      setProducts(prev => prev.map(p => {
-        const changed = changedEdits.filter(e => e.productId === p.id);
-        if (changed.length === 0) return p;
-        return {
-          ...p,
-          stockByWarehouse: p.stockByWarehouse.map(s => {
-            const edit = changed.find(e => e.warehouseId === s.warehouseId);
-            return edit ? { ...s, quantity: edit.newStock } : s;
-          }),
-        };
-      }));
       await saveStockCountSession(countSession);
+      await refreshStockProducts();
+      await refreshOperations();
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo guardar el conteo'));
+      return;
     }
 
     // Save consumption log (local; usado por historial legacy)

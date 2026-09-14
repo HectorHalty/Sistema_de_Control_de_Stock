@@ -1,10 +1,7 @@
-/**
- * API client configuration.
- * Reads base URL from Vite env var VITE_API_URL, falls back to localhost:3001.
- */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { resolveApiBaseUrl } from './resolve-api-base-url';
 
-export { API_BASE_URL };
+export { resolveApiBaseUrl as getApiBaseUrl };
+export const API_BASE_URL = typeof window !== 'undefined' ? resolveApiBaseUrl() : 'http://localhost:3001';
 
 export interface ApiOptions {
   token?: string;
@@ -14,7 +11,7 @@ export interface ApiOptions {
  * Low-level fetch wrapper with auth header and JSON serialization.
  */
 async function apiFetch<T>(path: string, options?: RequestInit & { token?: string }): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${resolveApiBaseUrl()}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
@@ -210,28 +207,6 @@ export const footballApi = {
   standings: () => apiFetch<StandingRow[]>('/football/standings'),
 };
 
-/**
- * Online Catalog endpoints
- */
-export const onlineCatalogApi = {
-  products: {
-    list: (active?: boolean, category?: string) => {
-      const params = new URLSearchParams();
-      if (active !== undefined) params.set('active', String(active));
-      if (category) params.set('category', category);
-      const q = params.toString();
-      return apiFetch<OnlineProduct[]>(`/online-catalog/products${q ? `?${q}` : ''}`);
-    },
-    get: (id: string) => apiFetch<OnlineProduct>(`/online-catalog/products/${id}`),
-    create: (data: CreateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>('/online-catalog/products', { method: 'POST', token, body: data }),
-    update: (id: string, data: UpdateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>(`/online-catalog/products/${id}`, { method: 'PUT', token, body: data }),
-    remove: (id: string, token: string) =>
-      apiFetch<void>(`/online-catalog/products/${id}`, { method: 'DELETE', token }),
-  },
-};
-
 // ============ Type definitions shared between API and frontend ============
 
 export interface StockProduct {
@@ -334,19 +309,6 @@ export interface Sponsor {
   placement: string;
   active: boolean;
   linkUrl?: string;
-}
-
-export interface OnlineProduct {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  image?: string;
-  images: string[];
-  category: string;
-  attributes?: Record<string, any>;
-  active: boolean;
-  stockProductId?: string;
 }
 
 export interface FootballTeam {
@@ -466,16 +428,4 @@ export interface CreateSponsorPayload {
 
 export interface UpdateSponsorPayload {
   name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string;
-}
-
-export interface CreateOnlineProductPayload {
-  name: string; description?: string; price: number; image?: string;
-  images?: string[]; category: string; attributes?: Record<string, any>;
-  stockProductId?: string;
-}
-
-export interface UpdateOnlineProductPayload {
-  name?: string; description?: string; price?: number; image?: string;
-  images?: string[]; category?: string; attributes?: Record<string, any>;
-  active?: boolean; stockProductId?: string;
 }

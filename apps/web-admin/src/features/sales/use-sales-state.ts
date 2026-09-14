@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
 import type { AuditEntry, AuditModule } from '@/features/inventory/types';
-import { salesApi } from '@/app/api/client';
-import { isApiReachable, shouldAllowLocalFallback } from '@/app/api/adapters';
+import { salesApi, settingsApi } from '@/app/api/client';
 import { invalidatePrinterTestCache } from '@/features/sales/lib/printer-test-cache';
 import { mapApiSalesProductToLocal, mapApiKitchenToLocal, mapApiTicketToLocal, normalizeSalesProduct } from './api/sales-mappers';
 import { DEFAULT_SALES_CATEGORIES, LEGACY_MOCK_SALES_CATEGORIES, normalizeCategoryName } from './lib/sales-categories';
@@ -21,6 +21,10 @@ import type {
 import { DEFAULT_TICKET_TEMPLATE } from './types';
 import { historyFromTickets, mergeSalesHistory, mergeTicketsFromServer } from './sales-history';
 import { isLocalOnlyId } from '@/shared/utils/local-ids';
+import { scheduleBackgroundHydrate, reportMutationError } from '@/shared/utils/persist-mutation';
+import { persistRemoteConfig } from '@/shared/utils/remote-config';
+
+const DEFAULT_SALES_EMOJI = '🍽️';
 
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
@@ -52,10 +56,10 @@ function toApiSalesProductBody(input: SalesProduct) {
   if (kind === 'promo') {
     return {
       name: input.name,
-      category: input.category,
+      categoriaVentaId: input.categoriaVentaId,
       kitchenId: input.kitchenId,
       price: input.price,
-      emoji: input.emoji || undefined,
+      emoji: input.emoji || DEFAULT_SALES_EMOJI,
       kind: 'promo' as const,
       bundle: (input.bundle ?? []).map(b => ({
         componentProductId: b.salesProductId,
@@ -65,17 +69,34 @@ function toApiSalesProductBody(input: SalesProduct) {
   }
   return {
     name: input.name,
-    category: input.category,
+    categoriaVentaId: input.categoriaVentaId,
     kitchenId: input.kitchenId,
     price: input.price,
-    emoji: input.emoji || undefined,
+    emoji: input.emoji || DEFAULT_SALES_EMOJI,
     kind: 'simple' as const,
-    recipe: (input.recipe ?? []).map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
+    recipe: (input.recipe ?? [])
+      .filter(r => r.stockProductId && !isLocalOnlyId(r.stockProductId))
+      .map(r => ({ stockProductId: r.stockProductId, quantity: r.quantity })),
   };
 }
 
+/**
+ * Resuelve el id real de una categoría de venta a partir de su nombre
+ * (la UI todavía elige categorías por nombre vía SalesCategorySelect).
+ * Si la lista remota no está disponible, cae al id ya conocido del producto.
+ */
+async function resolveCategoriaVentaId(categoryName: string, fallbackId?: string): Promise<string> {
+  try {
+    const rows = await settingsApi.salesCategories.list();
+    const found = rows.find(r => r.name.toLowerCase() === categoryName.trim().toLowerCase());
+    if (found) return found.id;
+  } catch {
+    // sin conexión: seguimos con el id ya conocido (si lo hay)
+  }
+  return fallbackId ?? '';
+}
+
 export function useSalesState() {
-  const allowLocalFallback = shouldAllowLocalFallback();
   const [salesCategories, setSalesCategories] = useLocalStorage<string[]>(
     storageKeys.sales.categories,
     [...DEFAULT_SALES_CATEGORIES],
@@ -86,9 +107,14 @@ export function useSalesState() {
   );
   const salesCategoriesRef = useRef(salesCategories);
   salesCategoriesRef.current = salesCategories;
-  const [kitchens, setKitchens] = useLocalStorage<Kitchen[]>(storageKeys.sales.kitchens, initialKitchens);
-  const [salesProducts, setSalesProducts] = useLocalStorage<SalesProduct[]>(storageKeys.sales.products, initialSalesProducts);
-  const [salesTickets, setSalesTickets] = useLocalStorage<SalesTicket[]>(storageKeys.sales.tickets, []);
+  // kitchens, salesProducts y salesTickets vienen de la API — React Query es
+  // la fuente de lectura (Proyecto C, Task 4:
+  // docs/superpowers/plans/2026-09-07-admin-fuente-de-verdad-c.md). Ya no se
+  // inicializan de localStorage; localStorage sigue existiendo como caché de
+  // revalidación de React Query (Task 0), no como estado inicial a mano.
+  const [kitchens, setKitchens] = useState<Kitchen[]>(initialKitchens);
+  const [salesProducts, setSalesProducts] = useState<SalesProduct[]>(initialSalesProducts);
+  const [salesTickets, setSalesTickets] = useState<SalesTicket[]>([]);
   const [salesTicketCounter, setSalesTicketCounter] = useLocalStorage<number>(storageKeys.sales.ticketCounter, 1000);
   const [salesTables, setSalesTables] = useLocalStorage<SalesTable[]>(storageKeys.sales.tables, initialTables);
   const [salesHistory, setSalesHistory] = useLocalStorage<SalesHistoryEntry[]>(storageKeys.sales.history, []);
@@ -138,233 +164,284 @@ export function useSalesState() {
     });
   }, [setSalesProducts]);
 
+  const queryClient = useQueryClient();
+
   // null = aún no chequeado, true = API es fuente de verdad, false = modo local (offline).
   // En producción usamos API estricta para evitar cambios solo locales.
-  const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(
-    allowLocalFallback ? null : true,
-  );
-  const mountHydrationGen = useRef(0);
+  const [salesApiAvailable, setSalesApiAvailable] = useState<boolean | null>(true);
 
+  /**
+   * Igual que en `use-inventory-state.ts` (Task 2): antes bumpeaba un
+   * "mountGen" a mano para que una hidratación inicial en vuelo no pisara
+   * cambios más nuevos. React Query ya protege eso (sólo la fetch más
+   * reciente de cada query commitea); esto sólo cancela explícitamente lo
+   * que siga circulando de fondo. Nombre preservado: el POS
+   * (`VentasPosContext.tsx`) lo llama como `invalidateSalesHydration`.
+   */
   const invalidateMountHydration = useCallback(() => {
-    mountHydrationGen.current += 1;
-  }, []);
-
-  const applyHydration = useCallback((mountGen: number | undefined, apply: () => void) => {
-    if (mountGen === undefined || mountGen === mountHydrationGen.current) apply();
-  }, []);
+    void queryClient.cancelQueries({ queryKey: ['sales'] });
+  }, [queryClient]);
 
   const markApiSynced = useCallback(() => {
     invalidateMountHydration();
     setSalesApiAvailable(prev => (prev === false ? false : true));
   }, [invalidateMountHydration]);
 
-  // ============ API-first: hidratación y CRUD del catálogo de ventas ============
-  // Productos de venta (con receta) y cocinas viven en la API. Al montar, si la API
-  // responde, sobrescribimos el caché local con lo del servidor; si no, seguimos
-  // operando contra localStorage.
+  // ============ API-first: hidratación (React Query) y CRUD del catálogo de ventas ============
+  // Productos de venta (con receta) y cocinas viven en la API.
 
-  const hydrateKitchens = useCallback(async (mountGen?: number) => {
-    const ks = await salesApi.kitchens.list();
-    applyHydration(mountGen, () => setKitchens(ks.map(mapApiKitchenToLocal)));
-  }, [setKitchens, applyHydration]);
+  const kitchensQuery = useQuery({
+    queryKey: ['sales', 'kitchens'],
+    queryFn: () => salesApi.kitchens.list().then(rows => rows.map(mapApiKitchenToLocal)),
+  });
+  const salesProductsQuery = useQuery({
+    queryKey: ['sales', 'products'],
+    queryFn: () => salesApi.products.list().then(rows => rows.map(mapApiSalesProductToLocal)),
+  });
 
-  const hydrateSalesProducts = useCallback(async (mountGen?: number): Promise<SalesProduct[]> => {
-    const ps = await salesApi.products.list();
-    const server = ps.map(mapApiSalesProductToLocal);
-    applyHydration(mountGen, () => setSalesProducts(prev => {
+  useEffect(() => {
+    if (kitchensQuery.data === undefined) return;
+    setKitchens(kitchensQuery.data);
+  }, [kitchensQuery.data]);
+
+  useEffect(() => {
+    if (salesProductsQuery.data === undefined) return;
+    const server = salesProductsQuery.data;
+    setSalesProducts(prev => {
       const serverIds = new Set(server.map(p => p.id));
       const pendingLocal = prev
         .filter(p => isLocalOnlyId(p.id) && !serverIds.has(p.id))
         .map(normalizeSalesProduct);
       return [...server, ...pendingLocal];
-    }));
-    return server;
-  }, [setSalesProducts, applyHydration]);
+    });
+  }, [salesProductsQuery.data]);
 
-  const hydrateTickets = useCallback(
-    async (products: SalesProduct[], mountGen?: number) => {
-      const ts = await salesApi.tickets.list();
-      const local = ts.map(t => mapApiTicketToLocal(t, products));
-      applyHydration(mountGen, () => {
-        setSalesTickets(prev => mergeTicketsFromServer(local, prev));
-        setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
-        const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
-        if (maxNum > 0) setSalesTicketCounter(c => Math.max(c, maxNum));
-      });
-    },
-    [setSalesTickets, setSalesHistory, setSalesTicketCounter, applyHydration],
+  const hydrateKitchens = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['sales', 'kitchens'] }),
+    [queryClient],
+  );
+  const hydrateSalesProducts = useCallback(
+    () => queryClient.refetchQueries({ queryKey: ['sales', 'products'] }),
+    [queryClient],
   );
 
+  // `hydrateTickets` recibe `products` explícito porque el POS
+  // (`VentasPosContext.tsx`) lo llama así en 3 lugares — no se toca esa
+  // firma. No está respaldado por `useQuery` (no hay un solo "momento" de
+  // lectura: se llama con la lista de productos vigente en cada punto de
+  // la app, no con la de una query propia).
+  const hydrateTickets = useCallback(
+    async (products: SalesProduct[]) => {
+      const ts = await salesApi.tickets.list();
+      const local = ts.map(t => mapApiTicketToLocal(t, products));
+      setSalesTickets(prev => mergeTicketsFromServer(local, prev));
+      setSalesHistory(prev => mergeSalesHistory(historyFromTickets(local), prev));
+      const maxNum = local.reduce((m, t) => Math.max(m, t.number), 0);
+      if (maxNum > 0) setSalesTicketCounter(c => Math.max(c, maxNum));
+    },
+    [setSalesTickets, setSalesHistory, setSalesTicketCounter],
+  );
+
+  // Hidratación inicial de tickets: se dispara una vez que la primera
+  // carga de productos resuelve (necesita la lista para mapear items de
+  // ticket a producto) — mismo orden que la cadena manual de antes
+  // (kitchens+products en paralelo, tickets después).
+  const ticketsHydratedOnce = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    const mountGen = mountHydrationGen.current;
-    isApiReachable().then(async ok => {
-      if (cancelled) return;
-      if (!ok) {
-        setSalesApiAvailable(allowLocalFallback ? false : true);
-        return;
-      }
-      try {
-        const [, products] = await Promise.all([hydrateKitchens(mountGen), hydrateSalesProducts(mountGen)]);
-        await hydrateTickets(products, mountGen);
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setSalesApiAvailable(true);
+    if (ticketsHydratedOnce.current) return;
+    if (salesProductsQuery.data === undefined) return;
+    ticketsHydratedOnce.current = true;
+    hydrateTickets(salesProductsQuery.data)
+      .then(() => setSalesApiAvailable(true))
+      .catch(() => setSalesApiAvailable(false));
+  }, [salesProductsQuery.data, hydrateTickets]);
+
+  useEffect(() => {
+    if (kitchensQuery.isError || salesProductsQuery.isError) {
+      setSalesApiAvailable(false);
+    }
+  }, [kitchensQuery.isError, salesProductsQuery.isError]);
+
+  useEffect(() => {
+    void settingsApi.salesCategories.list().then(rows => {
+      if (!rows.length) return;
+      setSalesCategories(rows.map(r => r.name));
+      const emojis: Record<string, string> = {};
+      for (const row of rows) emojis[row.name] = row.emoji;
+      setSalesCategoryEmojis(emojis);
+    }).catch(() => undefined);
+    void settingsApi.printers.list().then(rows => {
+      setSalesPrinters(rows.map(p => ({
+        id: p.id,
+        name: p.name,
+        type: p.type as SalesPrinter['type'],
+        ip: p.ip,
+        port: p.port,
+        paperWidth: (p.paperWidth === 58 ? 58 : 80) as 58 | 80,
+        connected: p.connected,
+        isDefault: p.isDefault,
+      })));
+    }).catch(() => undefined);
+    void settingsApi.tables.list().then(rows => {
+      if (!rows.length) return;
+      setSalesTables(rows.map(t => ({
+        id: t.id,
+        name: t.name,
+        status: t.status === 'ocupada' ? 'ocupada' : 'libre',
+        currentOrderId: t.currentOrderId ?? undefined,
+      })));
+    }).catch(() => undefined);
+    void settingsApi.config.list('sales').then(rows => {
+      for (const row of rows) {
+        if (row.key === 'sales.validateStockOnSale' && typeof row.value === 'boolean') setValidateStockOnSale(row.value);
+        if (row.key === 'sales.raceConditionProtection' && typeof row.value === 'boolean') setRaceConditionProtection(row.value);
+        if (row.key === 'sales.ticketTemplate' && row.value && typeof row.value === 'object') {
+          setTicketTemplate(prev => ({ ...prev, ...(row.value as TicketTemplate) }));
         }
-      } catch {
-        if (!cancelled && mountGen === mountHydrationGen.current) {
-          setSalesApiAvailable(allowLocalFallback ? false : true);
-        }
       }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [allowLocalFallback, hydrateKitchens, hydrateSalesProducts, hydrateTickets]);
+    }).catch(() => undefined);
+    void settingsApi.teamAccounts.list().then(rows => {
+      setTeamAccounts(rows.map(r => ({
+        id: r.id,
+        team: r.team,
+        openedAt: new Date(r.openedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        status: r.status === 'cerrada' ? 'cerrada' : 'abierta',
+        items: Array.isArray(r.items) ? r.items as TeamAccount['items'] : [],
+      })));
+    }).catch(() => undefined);
+  }, [setSalesCategories, setSalesCategoryEmojis, setSalesPrinters, setSalesTables, setValidateStockOnSale, setRaceConditionProtection, setTicketTemplate, setTeamAccounts]);
 
   const createSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
+      const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
       const product: SalesProduct = {
         kind: 'simple',
         bundle: [],
         recipe: [],
         ...input,
+        categoriaVentaId,
         id: input.id || `p${Date.now()}`,
       };
-      if (allowLocalFallback) upsertSalesProduct(setSalesProducts, product);
-
-      if (salesApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
       try {
-        await salesApi.products.create(toApiSalesProductBody(product), '');
+        const created = await salesApi.products.create(toApiSalesProductBody(product), '');
         markApiSynced();
-        await hydrateSalesProducts();
+        upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(created));
+        scheduleBackgroundHydrate(() => hydrateSalesProducts());
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateSalesProducts(); } catch {}
-        }
+        try { await hydrateSalesProducts(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const updateSalesProduct = useCallback(
     async (input: SalesProduct): Promise<void> => {
-      if (allowLocalFallback) upsertSalesProduct(setSalesProducts, input);
-
-      if (salesApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
       try {
-        const body = { ...toApiSalesProductBody(input), active: input.active };
-        if (isLocalOnlyId(input.id)) {
-          await salesApi.products.create(toApiSalesProductBody(input), '');
+        const categoriaVentaId = await resolveCategoriaVentaId(input.category, input.categoriaVentaId);
+        const resolved: SalesProduct = { ...input, categoriaVentaId };
+        const body = { ...toApiSalesProductBody(resolved), active: resolved.active, version: resolved.version };
+        if (isLocalOnlyId(resolved.id)) {
+          const created = await salesApi.products.create(toApiSalesProductBody(resolved), '');
+          upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(created));
         } else {
-          await salesApi.products.update(input.id, body, '');
+          const updated = await salesApi.products.update(resolved.id, body, '');
+          upsertSalesProduct(setSalesProducts, mapApiSalesProductToLocal(updated));
         }
         markApiSynced();
-        await hydrateSalesProducts();
+        scheduleBackgroundHydrate(() => hydrateSalesProducts());
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateSalesProducts(); } catch {}
-        }
+        try { await hydrateSalesProducts(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const deleteSalesProduct = useCallback(
     async (id: string): Promise<void> => {
-      if (allowLocalFallback) {
-        setSalesProducts(prev => prev.filter(p => p.id !== id));
-      }
-
-      if (salesApiAvailable !== true) {
-        if (!allowLocalFallback) throw new Error('Servidor no disponible. Reintentá cuando la API esté en línea.');
-        return;
-      }
-
       try {
         if (!isLocalOnlyId(id)) {
           await salesApi.products.update(id, { active: false }, '');
         }
         markApiSynced();
-        await hydrateSalesProducts();
+        setSalesProducts(prev => prev.filter(p => p.id !== id));
+        scheduleBackgroundHydrate(() => hydrateSalesProducts());
       } catch (e) {
-        if (!allowLocalFallback) {
-          try { await hydrateSalesProducts(); } catch {}
-        }
+        try { await hydrateSalesProducts(); } catch { /* rethrow original */ }
         throw e;
       }
     },
-    [allowLocalFallback, salesApiAvailable, hydrateSalesProducts, setSalesProducts, markApiSynced],
+    [hydrateSalesProducts, setSalesProducts, markApiSynced],
   );
 
   const createKitchen = useCallback(
     async (input: { name: string; emoji?: string }): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: input.name, emoji: input.emoji || '🍽️', active: true }]);
-        return;
-      }
       try {
-        await salesApi.kitchens.create({ name: input.name, emoji: input.emoji || undefined }, '');
+        const created = await salesApi.kitchens.create({ name: input.name, emoji: input.emoji || DEFAULT_SALES_EMOJI }, '');
         markApiSynced();
-        await hydrateKitchens();
-        return;
+        const mapped = mapApiKitchenToLocal(created);
+        setKitchens(prev => {
+          const without = prev.filter(k => k.id !== mapped.id && k.name.toLowerCase() !== mapped.name.toLowerCase());
+          return [...without, mapped].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        });
+        scheduleBackgroundHydrate(() => hydrateKitchens());
       } catch (e) {
-        if (salesApiAvailable === true) throw e;
-        setKitchens(prev => [...prev, { id: `k-${Date.now()}`, name: input.name, emoji: input.emoji || '🍽️', active: true }]);
+        try { await hydrateKitchens(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
+    [hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const updateKitchen = useCallback(
     async (id: string, patch: { name?: string; emoji?: string; active?: boolean }): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setKitchens(prev => prev.map(k => (k.id === id ? { ...k, ...patch } : k)));
-        return;
-      }
       try {
-        await salesApi.kitchens.update(id, patch, '');
+        const updated = await salesApi.kitchens.update(
+          id,
+          {
+            ...patch,
+            ...(patch.emoji !== undefined ? { emoji: patch.emoji || DEFAULT_SALES_EMOJI } : {}),
+          },
+          '',
+        );
         markApiSynced();
-        await hydrateKitchens();
-        return;
+        const mapped = mapApiKitchenToLocal(updated);
+        setKitchens(prev => prev.map(k => (k.id === mapped.id ? mapped : k)));
+        scheduleBackgroundHydrate(() => hydrateKitchens());
       } catch (e) {
-        if (salesApiAvailable === true) throw e;
-        setKitchens(prev => prev.map(k => (k.id === id ? { ...k, ...patch } : k)));
+        try { await hydrateKitchens(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
+    [hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const deleteKitchen = useCallback(
     async (id: string): Promise<void> => {
-      if (salesApiAvailable === false) {
-        setKitchens(prev => prev.filter(k => k.id !== id));
-        return;
-      }
       try {
-        await salesApi.kitchens.remove(id, '');
+        if (!isLocalOnlyId(id)) await salesApi.kitchens.remove(id, '');
         markApiSynced();
-        await hydrateKitchens();
-        return;
-      } catch (e) {
-        if (salesApiAvailable === true) throw e;
         setKitchens(prev => prev.filter(k => k.id !== id));
+        scheduleBackgroundHydrate(() => hydrateKitchens());
+      } catch (e) {
+        try { await hydrateKitchens(); } catch { /* rethrow original */ }
+        throw e;
       }
     },
-    [salesApiAvailable, hydrateKitchens, setKitchens, markApiSynced],
+    [hydrateKitchens, setKitchens, markApiSynced],
   );
 
   const addSalesAudit = useCallback((entry: Omit<AuditEntry, 'id' | 'date' | 'module'>) => {
     appendAudit(setSalesAuditLog, 'ventas', entry);
+    void settingsApi.audit.create({
+      module: 'ventas',
+      action: entry.action,
+      element: entry.element,
+      previousValue: entry.previousValue,
+      newValue: entry.newValue,
+      userName: entry.user,
+    }, '').catch(() => undefined);
   }, [setSalesAuditLog]);
 
   const addSalesCategory = useCallback((name: string, emoji = '🍽️'): string | null => {
@@ -377,21 +454,51 @@ export function useSalesState() {
 
     if (!existing) {
       setSalesCategories(current => [...current, normalized]);
+      void settingsApi.salesCategories.create({ name: normalized, emoji: emoji || DEFAULT_SALES_EMOJI }, '')
+        .catch(error => reportMutationError(error, 'No se pudo guardar la categoría de venta'));
     }
-    setSalesCategoryEmojis(current => ({ ...current, [key]: emoji }));
+    setSalesCategoryEmojis(current => ({ ...current, [key]: emoji || DEFAULT_SALES_EMOJI }));
+    if (existing) {
+      void settingsApi.salesCategories.list().then(rows => {
+        const row = rows.find(r => r.name.toLowerCase() === key.toLowerCase());
+        if (row) void settingsApi.salesCategories.update(row.id, { emoji: emoji || DEFAULT_SALES_EMOJI }, '');
+      }).catch(() => undefined);
+    }
 
     return key;
   }, [setSalesCategories, setSalesCategoryEmojis]);
 
   const addPrinter = useCallback((printer: Omit<SalesPrinter, 'id'>) => {
+    const tempId = `pr${Date.now()}`;
     setSalesPrinters(prev => {
-      const id = `pr${Date.now()}`;
       const makeDefault = printer.isDefault || prev.length === 0;
-      const normalized = { ...printer, id, isDefault: makeDefault };
-      if (makeDefault) {
-        return [...prev.map(p => ({ ...p, isDefault: false })), normalized];
-      }
-      return [...prev, normalized];
+      const normalized = { ...printer, id: tempId, isDefault: makeDefault };
+      const next = makeDefault
+        ? [...prev.map(p => ({ ...p, isDefault: false })), normalized]
+        : [...prev, normalized];
+      void settingsApi.printers.create({ ...printer, isDefault: makeDefault }, '')
+        .then(row => {
+          setSalesPrinters(current => current.map(p => (
+            p.id === tempId
+              ? {
+                  ...p,
+                  id: String(row.id),
+                  name: String(row.name ?? p.name),
+                  type: (row.type as SalesPrinter['type']) ?? p.type,
+                  ip: String(row.ip ?? p.ip),
+                  port: Number(row.port ?? p.port),
+                  paperWidth: Number(row.paperWidth) === 58 ? 58 : 80,
+                  connected: Boolean(row.connected),
+                  isDefault: Boolean(row.isDefault),
+                }
+              : p
+          )));
+        })
+        .catch(error => {
+          reportMutationError(error, 'No se pudo guardar la impresora');
+          setSalesPrinters(current => current.filter(p => p.id !== tempId));
+        });
+      return next;
     });
   }, [setSalesPrinters]);
 
@@ -404,14 +511,26 @@ export function useSalesState() {
           invalidatePrinterTestCache(patch.ip ?? current.ip, patch.port ?? current.port);
         }
       }
+      if (current && !isLocalOnlyId(id)) {
+        void settingsApi.printers.update(id, patch as Record<string, unknown>, '')
+          .catch(error => reportMutationError(error, 'No se pudo actualizar la impresora'));
+      }
       return prev.map(p => (p.id === id ? { ...p, ...patch } : p));
     });
   }, [setSalesPrinters]);
 
   const removePrinter = useCallback((id: string) => {
     setSalesPrinters(prev => {
+      if (!isLocalOnlyId(id)) {
+        void settingsApi.printers.remove(id, '')
+          .catch(error => reportMutationError(error, 'No se pudo eliminar la impresora'));
+      }
       const next = prev.filter(p => p.id !== id);
       if (next.length > 0 && !next.some(p => p.isDefault)) {
+        const first = next[0];
+        if (first && !isLocalOnlyId(first.id)) {
+          void settingsApi.printers.update(first.id, { isDefault: true }, '');
+        }
         return next.map((p, i) => (i === 0 ? { ...p, isDefault: true } : p));
       }
       return next;
@@ -419,17 +538,105 @@ export function useSalesState() {
   }, [setSalesPrinters]);
 
   const setDefaultPrinter = useCallback((id: string) => {
-    setSalesPrinters(prev => prev.map(p => ({ ...p, isDefault: p.id === id })));
+    setSalesPrinters(prev => {
+      for (const p of prev) {
+        const nextDefault = p.id === id;
+        if (p.isDefault !== nextDefault && !isLocalOnlyId(p.id)) {
+          void settingsApi.printers.update(p.id, { isDefault: nextDefault }, '')
+            .catch(error => reportMutationError(error, 'No se pudo actualizar la impresora'));
+        }
+      }
+      return prev.map(p => ({ ...p, isDefault: p.id === id }));
+    });
   }, [setSalesPrinters]);
 
   const togglePrinter = useCallback((id: string) => {
     setSalesPrinters(prev =>
-      prev.map(p => (p.id === id ? { ...p, connected: !p.connected } : p)),
+      prev.map(p => {
+        if (p.id !== id) return p;
+        const connected = !p.connected;
+        if (!isLocalOnlyId(id)) {
+          void settingsApi.printers.update(id, { connected }, '')
+            .catch(error => reportMutationError(error, 'No se pudo actualizar la impresora'));
+        }
+        return { ...p, connected };
+      }),
     );
   }, [setSalesPrinters]);
 
+  const persistSalesTables = useCallback<Dispatch<SetStateAction<SalesTable[]>>>((update) => {
+    setSalesTables(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      for (const table of next) {
+        const old = prev.find(t => t.id === table.id);
+        if (!old) {
+          void settingsApi.tables.create({ name: table.name, status: table.status }, '')
+            .then(row => {
+              const id = String(row.id);
+              setSalesTables(current => current.map(t => (t.id === table.id ? { ...t, id } : t)));
+            })
+            .catch(error => reportMutationError(error, 'No se pudo guardar la mesa'));
+        } else if (
+          !isLocalOnlyId(table.id)
+          && (old.status !== table.status || old.currentOrderId !== table.currentOrderId || old.name !== table.name)
+        ) {
+          void settingsApi.tables.update(table.id, {
+            name: table.name,
+            status: table.status,
+            currentOrderId: table.currentOrderId ?? null,
+          }, '').catch(error => reportMutationError(error, 'No se pudo actualizar la mesa'));
+        }
+      }
+      for (const old of prev) {
+        if (!next.some(t => t.id === old.id) && !isLocalOnlyId(old.id)) {
+          void settingsApi.tables.remove(old.id, '')
+            .catch(error => reportMutationError(error, 'No se pudo eliminar la mesa'));
+        }
+      }
+      return next;
+    });
+  }, [setSalesTables]);
+
+  const persistTeamAccounts = useCallback<Dispatch<SetStateAction<TeamAccount[]>>>((update) => {
+    setTeamAccounts(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      for (const account of next) {
+        const old = prev.find(t => t.id === account.id);
+        if (!old) {
+          void settingsApi.teamAccounts.create({
+            team: account.team,
+            status: account.status,
+            items: account.items,
+          }, '')
+            .then(row => {
+              const id = String(row.id);
+              setTeamAccounts(current => current.map(t => (t.id === account.id ? { ...t, id } : t)));
+            })
+            .catch(error => reportMutationError(error, 'No se pudo guardar la cuenta'));
+        } else if (!isLocalOnlyId(account.id) && JSON.stringify(old) !== JSON.stringify(account)) {
+          void settingsApi.teamAccounts.update(account.id, {
+            team: account.team,
+            status: account.status,
+            items: account.items,
+          }, '').catch(error => reportMutationError(error, 'No se pudo actualizar la cuenta'));
+        }
+      }
+      for (const old of prev) {
+        if (!next.some(t => t.id === old.id) && !isLocalOnlyId(old.id)) {
+          void settingsApi.teamAccounts.remove(old.id, '')
+            .catch(error => reportMutationError(error, 'No se pudo eliminar la cuenta'));
+        }
+      }
+      return next;
+    });
+  }, [setTeamAccounts]);
+
   const updateTicketTemplate = useCallback((patch: Partial<TicketTemplate>) => {
-    setTicketTemplate(prev => ({ ...prev, ...patch }));
+    setTicketTemplate(prev => {
+      const next = { ...prev, ...patch };
+      persistRemoteConfig('sales.ticketTemplate', 'sales', next);
+      return next;
+    });
   }, [setTicketTemplate]);
 
   return {
@@ -457,7 +664,7 @@ export function useSalesState() {
     salesTicketCounter,
     setSalesTicketCounter,
     salesTables,
-    setSalesTables,
+    setSalesTables: persistSalesTables,
     salesHistory,
     setSalesHistory,
     salesAuditLog,
@@ -474,11 +681,17 @@ export function useSalesState() {
     setTicketTemplate,
     updateTicketTemplate,
     validateStockOnSale,
-    setValidateStockOnSale,
+    setValidateStockOnSale: (value: boolean) => {
+      setValidateStockOnSale(value);
+      persistRemoteConfig('sales.validateStockOnSale', 'sales', value);
+    },
     raceConditionProtection,
-    setRaceConditionProtection,
+    setRaceConditionProtection: (value: boolean) => {
+      setRaceConditionProtection(value);
+      persistRemoteConfig('sales.raceConditionProtection', 'sales', value);
+    },
     teamAccounts,
-    setTeamAccounts,
+    setTeamAccounts: persistTeamAccounts,
   };
 }
 

@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
+import { getApiErrorMessage } from '@/app/api/client';
 import { Plus, X, Pencil, Trash2, Package, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import type { Supplier } from '@/app/components/store';
 
@@ -59,28 +60,33 @@ export function SuppliersPage() {
   const handleSave = async () => {
     if (!formName.trim()) return;
 
-    if (view === 'create') {
-      await createSupplier({ name: formName.trim(), productIds: formProductIds });
-      addAudit({
-        user: 'Admin',
-        action: 'Alta Proveedor',
-        element: formName.trim(),
-        newValue: `${formProductIds.length} productos asignados`,
-      });
-    } else if (view === 'edit' && editingId) {
-      const existing = suppliers.find(s => s.id === editingId);
-      if (!existing) return;
-      await updateSupplier({
-        ...existing,
-        name: formName.trim(),
-        productIds: formProductIds,
-      });
-      addAudit({
-        user: 'Admin',
-        action: 'Edición Proveedor',
-        element: formName.trim(),
-        newValue: `${formProductIds.length} productos asignados`,
-      });
+    try {
+      if (view === 'create') {
+        await createSupplier({ name: formName.trim(), productIds: formProductIds });
+        addAudit({
+          user: 'Admin',
+          action: 'Alta Proveedor',
+          element: formName.trim(),
+          newValue: `${formProductIds.length} productos asignados`,
+        });
+      } else if (view === 'edit' && editingId) {
+        const existing = suppliers.find(s => s.id === editingId);
+        if (!existing) return;
+        await updateSupplier({
+          ...existing,
+          name: formName.trim(),
+          productIds: formProductIds,
+        });
+        addAudit({
+          user: 'Admin',
+          action: 'Edición Proveedor',
+          element: formName.trim(),
+          newValue: `${formProductIds.length} productos asignados`,
+        });
+      }
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo guardar el proveedor'));
+      return;
     }
 
     resetForm();
@@ -90,7 +96,12 @@ export function SuppliersPage() {
 
   const handleDelete = async (id: string) => {
     const supplier = suppliers.find(s => s.id === id);
-    await deleteSupplier(id);
+    try {
+      await deleteSupplier(id);
+    } catch (e) {
+      window.alert(getApiErrorMessage(e, 'No se pudo eliminar el proveedor'));
+      return;
+    }
     if (supplier) {
       addAudit({
         user: 'Admin',

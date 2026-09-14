@@ -1,14 +1,110 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Header,
+} from '@nestjs/common';
+import { TipoEventoPartido } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
+import {
+  CreateCategoriaDto,
+  CreateMatchDto,
+  SuspendMatchDto,
+  SuspendSaturdayDto,
+  UpdateCaptainDto,
+  UpdateCategoriaDto,
+  UpdateInscriptionDto,
+  UpdateMatchScheduleDto,
+  UpdateMatchScoreDto,
+  UpdateReglamentoArticuloDto,
+  UpdateSuspensionDto,
+} from './dto';
 
 @Controller('football')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class FootballController {
   constructor(private footballService: FootballService) {}
+
+  @Get('overview')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getOverview(@Query('torneoId') torneoId?: string) {
+    return this.footballService.getOverview(torneoId);
+  }
+
+  @Get('torneos')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listTorneos() {
+    return this.footballService.listTorneos();
+  }
+
+  @Put('torneos/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateTorneo(
+    @Param('id') id: string,
+    @Body() body: { publicado?: boolean; activo?: boolean; nombre?: string },
+  ) {
+    return this.footballService.updateTorneo(id, body);
+  }
+
+  @Post('torneos')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createTorneo(
+    @Body() body: { campeonatoId: string; categoriaId: string; nombre?: string },
+  ) {
+    return this.footballService.createTorneo(body);
+  }
+
+  @Post('torneos/bootstrap')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  bootstrapTorneos(@Body() body: { campeonatoId?: string }) {
+    return this.footballService.bootstrapTorneosCampeonato(body.campeonatoId);
+  }
+
+  @Get('scheduling/saturday')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getSaturdayGrid(@Query('fecha') fecha: string, @Query('campeonatoId') campeonatoId?: string) {
+    return this.footballService.getSaturdayGrid(fecha, campeonatoId);
+  }
+
+  @Get('categorias')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listCategorias() {
+    return this.footballService.listCategorias();
+  }
+
+  @Post('categorias')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createCategoria(@Body() body: CreateCategoriaDto) {
+    return this.footballService.createCategoria(body);
+  }
+
+  @Put('categorias/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateCategoria(@Param('id') id: string, @Body() body: UpdateCategoriaDto) {
+    return this.footballService.updateCategoria(id, body);
+  }
+
+  @Delete('categorias/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  deleteCategoria(@Param('id') id: string) {
+    return this.footballService.deleteCategoria(id);
+  }
+
+  @Get('canchas')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listCanchas() {
+    return this.footballService.listCanchas();
+  }
 
   @Get('teams')
   @Roles(...FOOTBALL_READ_ROLES)
@@ -16,33 +112,228 @@ export class FootballController {
     return this.footballService.findAllTeams();
   }
 
-  @Get('matches')
-  @Roles(...FOOTBALL_READ_ROLES)
-  findAllMatches(@Query('status') status?: string) {
-    return this.footballService.findAllMatches(status);
-  }
-
-  @Get('standings')
-  @Roles(...FOOTBALL_READ_ROLES)
-  getStandings() {
-    return this.footballService.getStandings();
-  }
-
   @Post('teams')
   @Roles(...FOOTBALL_MUTATION_ROLES)
-  createTeam(@Body() body: { name: string; shortName?: string; logo?: string }) {
+  createTeam(@Body() body: { name: string; shortName?: string; logo?: string; color?: string }) {
     return this.footballService.createTeam(body);
+  }
+
+  @Put('teams/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateTeam(@Param('id') id: string, @Body() body: { name?: string; logo?: string }) {
+    return this.footballService.updateTeam(id, body);
+  }
+
+  @Get('inscriptions')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listInscriptions(@Query('torneoId') torneoId?: string) {
+    return this.footballService.listInscriptions(torneoId);
+  }
+
+  @Post('inscriptions')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createInscription(
+    @Body()
+    body: {
+      torneoId: string;
+      equipoId?: string;
+      name?: string;
+      shortName?: string;
+      color?: string;
+      abbr?: string;
+    },
+  ) {
+    return this.footballService.createInscription(body);
+  }
+
+  @Put('inscriptions/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateInscription(
+    @Param('id') id: string,
+    @Body() body: UpdateInscriptionDto,
+  ) {
+    return this.footballService.updateInscription(id, body);
+  }
+
+  @Get('captains')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listCaptains(@Query('torneoId') torneoId?: string) {
+    return this.footballService.listCaptains(torneoId);
+  }
+
+  @Post('captains')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createCaptain(
+    @Body()
+    body: { email: string; dni: string; torneoId: string; equipoInscripcionId: string },
+  ) {
+    return this.footballService.createCaptain(body);
+  }
+
+  @Put('captains/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateCaptain(
+    @Param('id') id: string,
+    @Body() body: UpdateCaptainDto,
+  ) {
+    return this.footballService.updateCaptain(id, body);
+  }
+
+  @Delete('captains/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  deleteCaptain(@Param('id') id: string) {
+    return this.footballService.deleteCaptain(id);
+  }
+
+  @Get('roster/:inscripcionId')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getRoster(@Param('inscripcionId') inscripcionId: string) {
+    return this.footballService.getRoster(inscripcionId);
+  }
+
+  @Get('roster/:inscripcionId/lista-buena-fe')
+  @Roles(...FOOTBALL_READ_ROLES)
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getListaBuenaFe(@Param('inscripcionId') inscripcionId: string) {
+    return this.footballService.getListaBuenaFeHtml(inscripcionId);
+  }
+
+  @Get('jornadas')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listJornadas(@Query('torneoId') torneoId?: string) {
+    return this.footballService.listJornadas(torneoId);
+  }
+
+  @Post('jornadas')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  createJornada(@Body() body: { torneoId: string; numero: number; fecha: string }) {
+    return this.footballService.createJornada(body);
+  }
+
+  @Post('jornadas/:id/suspend-rain')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendJornadaPorLluvia(@Param('id') id: string) {
+    return this.footballService.suspendJornadaPorLluvia(id);
+  }
+
+  @Post('jornadas/:id/publish')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  publishJornada(@Param('id') id: string) {
+    return this.footballService.publishJornada(id);
+  }
+
+  @Get('matches')
+  @Roles(...FOOTBALL_READ_ROLES)
+  findAllMatches(
+    @Query('status') status?: string,
+    @Query('torneoId') torneoId?: string,
+    @Query('jornadaId') jornadaId?: string,
+  ) {
+    return this.footballService.findAllMatches({ status, torneoId, jornadaId });
   }
 
   @Post('matches')
   @Roles(...FOOTBALL_MUTATION_ROLES)
-  createMatch(@Body() body: { homeTeamId: string; awayTeamId: string; date: string; venue?: string }) {
+  createMatch(@Body() body: CreateMatchDto) {
     return this.footballService.createMatch(body);
+  }
+
+  @Post('matches/:id/suspend')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendMatch(@Param('id') id: string, @Body() _body: SuspendMatchDto) {
+    return this.footballService.suspendMatch(id);
+  }
+
+  @Post('scheduling/suspend-saturday')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  suspendSaturday(@Body() body: SuspendSaturdayDto) {
+    return this.footballService.suspendSaturday(body.fecha);
+  }
+
+  @Put('matches/:id/schedule')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateMatchSchedule(
+    @Param('id') id: string,
+    @Body() body: UpdateMatchScheduleDto,
+  ) {
+    return this.footballService.updateMatchSchedule(id, body);
   }
 
   @Put('matches/:id/score')
   @Roles(...FOOTBALL_MUTATION_ROLES)
-  updateScore(@Param('id') id: string, @Body() body: { homeGoals: number; awayGoals: number }) {
-    return this.footballService.updateMatchScore(id, body.homeGoals, body.awayGoals);
+  updateScore(
+    @Param('id') id: string,
+    @Body() body: UpdateMatchScoreDto,
+  ) {
+    return this.footballService.updateMatchScore(id, body.homeGoals, body.awayGoals, body.events);
+  }
+
+  @Get('matches/:id/events')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listMatchEvents(@Param('id') id: string) {
+    return this.footballService.listMatchEvents(id);
+  }
+
+  @Post('matches/:id/events')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  addMatchEvent(
+    @Param('id') id: string,
+    @Body() body: { personaId: string; tipo: TipoEventoPartido; minuto?: number; articuloRef?: string },
+  ) {
+    return this.footballService.addMatchEvent(id, body);
+  }
+
+  @Delete('events/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  deleteMatchEvent(@Param('id') id: string) {
+    return this.footballService.deleteMatchEvent(id);
+  }
+
+  @Get('standings')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getStandings(@Query('torneoId') torneoId?: string) {
+    return this.footballService.getStandings(torneoId);
+  }
+
+  @Get('suspensions')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listSuspensions(@Query('torneoId') torneoId?: string) {
+    return this.footballService.listSuspensions(torneoId);
+  }
+
+  @Put('suspensions/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateSuspension(
+    @Param('id') id: string,
+    @Body() body: UpdateSuspensionDto,
+  ) {
+    return this.footballService.updateSuspension(id, body);
+  }
+
+  @Post('suspensions/sync')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  syncSuspensions(@Query('torneoId') torneoId?: string) {
+    return this.footballService.syncSuspensions(torneoId);
+  }
+
+  @Get('planillas')
+  @Roles(...FOOTBALL_READ_ROLES)
+  getPlanillas(@Query('fecha') fecha: string) {
+    return this.footballService.getPlanillasForFecha(fecha);
+  }
+
+  @Get('reglamento')
+  @Roles(...FOOTBALL_READ_ROLES)
+  listReglamento() {
+    return this.footballService.listReglamento();
+  }
+
+  @Put('reglamento/articulos/:id')
+  @Roles(...FOOTBALL_MUTATION_ROLES)
+  updateReglamentoArticulo(
+    @Param('id') id: string,
+    @Body() body: UpdateReglamentoArticuloDto,
+  ) {
+    return this.footballService.updateReglamentoArticulo(id, body);
   }
 }

@@ -16,7 +16,7 @@ import { CurrentUser, type AuthUser } from '../common/decorators/current-user.de
 
 import { SalesService } from './sales.service';
 
-import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
+import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto, CreateSalesProductDto, UpdateSalesProductDto, CreateKitchenDto, UpdateKitchenDto } from './dto';
 
 import {
 
@@ -25,6 +25,8 @@ import {
   SALES_ADMIN_ROLES,
 
   SALES_CATALOG_ROLES,
+
+  SALES_CONSUMPTION_ROLES,
 
   SALES_OPERATION_ROLES,
 
@@ -72,17 +74,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  createProduct(@Body() body: {
-
-    name: string; category: string; kitchenId: string; price: number;
-
-    emoji?: string; kind?: string;
-
-    recipe?: { stockProductId: string; quantity: number }[];
-
-    bundle?: { componentProductId: string; quantity: number }[];
-
-  }) {
+  createProduct(@Body() body: CreateSalesProductDto) {
 
     return this.salesService.createSalesProduct(body);
 
@@ -94,17 +86,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  updateProduct(@Param('id') id: string, @Body() body: {
-
-    name?: string; category?: string; kitchenId?: string;
-
-    price?: number; emoji?: string; active?: boolean; kind?: string;
-
-    recipe?: { stockProductId: string; quantity: number }[];
-
-    bundle?: { componentProductId: string; quantity: number }[];
-
-  }) {
+  updateProduct(@Param('id') id: string, @Body() body: UpdateSalesProductDto) {
 
     return this.salesService.updateSalesProduct(id, body);
 
@@ -119,6 +101,20 @@ export class SalesController {
   checkout(@Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
 
     return this.salesService.checkout({ ...dto, operatorId: user.id });
+
+  }
+
+
+
+  /** Consumo interno: mismo circuito que checkout, precio $0, sin imprimir. */
+
+  @Post('consumption')
+
+  @Roles(...SALES_CONSUMPTION_ROLES)
+
+  registerConsumption(@Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
+
+    return this.salesService.registerConsumption({ ...dto, operatorId: user.id });
 
   }
 
@@ -152,11 +148,16 @@ export class SalesController {
 
   @Roles(...SALES_READ_ROLES)
 
-  findAllTickets(@Query('status') status: string | undefined, @CurrentUser() user: AuthUser) {
+  findAllTickets(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: AuthUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
 
     const operatorId = isVendedorRole(user.role) ? user.id : undefined;
 
-    return this.salesService.findAllTickets(status, operatorId);
+    return this.salesService.findAllTickets(status, operatorId, cursor, limit ? Number(limit) : undefined);
 
   }
 
@@ -224,7 +225,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  createKitchen(@Body() body: { name: string; emoji?: string }) {
+  createKitchen(@Body() body: CreateKitchenDto) {
 
     return this.salesService.createKitchen(body);
 
@@ -236,7 +237,7 @@ export class SalesController {
 
   @Roles(...SALES_CATALOG_ROLES)
 
-  updateKitchen(@Param('id') id: string, @Body() body: { name?: string; emoji?: string; active?: boolean }) {
+  updateKitchen(@Param('id') id: string, @Body() body: UpdateKitchenDto) {
 
     return this.salesService.updateKitchen(id, body);
 

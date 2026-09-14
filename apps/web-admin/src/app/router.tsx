@@ -14,7 +14,6 @@ import { ConsumptionPage } from '@/features/inventory/pages/ConsumptionPage';
 import { DashboardPage } from '@/features/inventory/pages/DashboardPage';
 import { OrdersPage } from '@/features/inventory/pages/OrdersPage';
 import { ProductsPage } from '@/features/inventory/pages/ProductsPage';
-import { RegisterConsumptionPage } from '@/features/inventory/pages/RegisterConsumptionPage';
 import { ReportsPage } from '@/features/inventory/pages/ReportsPage';
 import { SuppliersPage } from '@/features/inventory/pages/SuppliersPage';
 import { WarehousesPage } from '@/features/inventory/pages/WarehousesPage';
@@ -22,6 +21,8 @@ import { ModulePlaceholderPage } from '@/features/platform/pages/ModulePlacehold
 import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
 import { SettingsPage } from '@/features/platform/pages/SettingsPage';
 import { SalesModule } from '@/features/sales/SalesModule';
+import { FutbolModule } from '@/features/futbol/FutbolModule';
+import { OnlineModule } from '@/features/online/OnlineModule';
 
 const LogoutContext = createContext<(() => void) | null>(null);
 
@@ -105,11 +106,25 @@ function ComingSoonModuleGuard({
 }
 
 function OnlineGuard() {
-  return <ComingSoonModuleGuard moduleId="online" title="Ventas Online" />;
+  const { currentUser } = useAppStateFromContext();
+  if (!canAccessModule(currentUser.role, 'online')) {
+    return (
+      <ModulePlaceholderPage
+        title="Ventas Online"
+        description="Tu perfil no tiene acceso al módulo Online."
+        denied
+      />
+    );
+  }
+  return <OnlineModule />;
 }
 
 function FutbolGuard() {
-  return <ComingSoonModuleGuard moduleId="futbol" title="Fútbol" />;
+  const { currentUser } = useAppStateFromContext();
+  if (!canAccessModule(currentUser.role, 'futbol')) {
+    return <ModulePlaceholderPage title="Fútbol" description="Tu perfil no tiene acceso al módulo de Fútbol." denied />;
+  }
+  return <FutbolModule />;
 }
 
 function DefaultLandingRedirect() {
@@ -143,7 +158,6 @@ const router = createHashRouter([
       { path: 'pedidos', Component: () => <StockRouteGuard><OrdersPage /></StockRouteGuard> },
       { path: 'proveedores', Component: () => <StockRouteGuard><SuppliersPage /></StockRouteGuard> },
       { path: 'consumo', Component: () => <StockRouteGuard><ConsumptionPage /></StockRouteGuard> },
-      { path: 'registrar-consumo', Component: () => <StockRouteGuard><RegisterConsumptionPage /></StockRouteGuard> },
       { path: 'reportes', Component: () => <StockRouteGuard><ReportsPage /></StockRouteGuard> },
       { path: 'configuracion', Component: SettingsGuard },
     ],

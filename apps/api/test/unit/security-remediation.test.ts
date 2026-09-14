@@ -228,7 +228,7 @@ describe('Rate limiting configuration', () => {
 // Role-based Access Control Guards (pure functions)
 // ============================================================
 
-type Role = 'Admin' | 'Operador' | 'Viewer' | 'SuperAdmin';
+type Role = 'Admin' | 'Vendedor' | 'Operador_Stock' | 'SuperAdmin';
 
 const MUTATING_ROLES: Role[] = ['Admin', 'SuperAdmin'];
 
@@ -255,12 +255,12 @@ describe('Role-based access control', () => {
     expect(hasMutatingRole('SuperAdmin')).toBe(true);
   });
 
-  it('blocks Operador from mutating', () => {
-    expect(hasMutatingRole('Operador')).toBe(false);
+  it('blocks Vendedor from mutating', () => {
+    expect(hasMutatingRole('Vendedor')).toBe(false);
   });
 
-  it('blocks Viewer from mutating', () => {
-    expect(hasMutatingRole('Viewer')).toBe(false);
+  it('blocks Operador_Stock from mutating', () => {
+    expect(hasMutatingRole('Operador_Stock')).toBe(false);
   });
 
   it('role guard allows authorized role', () => {
@@ -268,7 +268,7 @@ describe('Role-based access control', () => {
   });
 
   it('role guard blocks unauthorized role', () => {
-    const result = checkRoleGuard('Viewer', ['Admin', 'SuperAdmin']);
+    const result = checkRoleGuard('Operador_Stock', ['Admin', 'SuperAdmin']);
     expect(result.allowed).toBe(false);
     expect(result.error).toContain('not authorized');
   });

@@ -269,27 +269,6 @@ export const stockApi = {
       return apiFetch<ApiStockMovement[]>(`/stock/movements${qs ? `?${qs}` : ''}`);
     },
   },
-  employeeConsumptions: {
-    list: (limit?: number) => {
-      const q = limit ? `?limit=${limit}` : '';
-      return apiFetch<ApiEmployeeConsumption[]>(`/stock/employee-consumptions${q}`);
-    },
-    create: (
-      data: {
-        productId: string;
-        warehouseId: string;
-        quantity: number;
-        note?: string;
-        operatorId?: string;
-        operatorName?: string;
-        operatorRole?: string;
-      },
-      token: string,
-    ) =>
-      apiFetch<ApiEmployeeConsumption>('/stock/employee-consumptions', {
-        method: 'POST', token, body: data,
-      }),
-  },
   countSessions: {
     list: (limit?: number) => {
       const q = limit ? `?limit=${limit}` : '';
@@ -357,6 +336,20 @@ export const stockApi = {
       token: string,
     ) =>
       apiFetch<ApiPurchaseOrder>('/stock/purchase-orders', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: {
+        supplierId?: string | null;
+        provider?: string;
+        items: { productId: string; quantityOrdered: number }[];
+        /** Bloqueo optimista: mandar ApiPurchaseOrder.version tal cual se leyó. */
+        version?: number;
+      },
+      token: string,
+    ) =>
+      apiFetch<ApiPurchaseOrder>(`/stock/purchase-orders/${encodeURIComponent(id)}`, {
+        method: 'PUT', token, body: data,
+      }),
     receive: (
       id: string,
       data: {
@@ -390,6 +383,9 @@ export const salesApi = {
   },
   checkout: (data: CheckoutPayload, token: string) =>
     apiFetch<CheckoutResult>('/sales/checkout', { method: 'POST', token, body: data }),
+  /** Consumo interno: mismo payload que checkout, el servidor fuerza precio $0 y origen 'consumo'. */
+  consumption: (data: CheckoutPayload, token: string) =>
+    apiFetch<CheckoutResult>('/sales/consumption', { method: 'POST', token, body: data }),
   returnSale: (data: ReturnPayload, token: string) =>
     apiFetch<ReturnResult>('/sales/return', { method: 'POST', token, body: data }),
   returnItems: (data: ReturnItemsPayload, token: string) =>
@@ -437,16 +433,19 @@ export const printingApi = {
  */
 export const kitchenApi = {
   orders: {
-    list: (kitchenId?: string, status?: string) => {
+    list: (kitchenId?: string, status?: string, onlineOnly?: boolean) => {
       const params = new URLSearchParams();
       if (kitchenId) params.set('kitchenId', kitchenId);
       if (status) params.set('status', status);
+      if (onlineOnly) params.set('onlineOnly', 'true');
       const q = params.toString();
       return apiFetch<KitchenOrder[]>(`/kitchen/orders${q ? `?${q}` : ''}`);
     },
     get: (id: string) => apiFetch<KitchenOrder>(`/kitchen/orders/${id}`),
-    activeForKitchen: (kitchenId: string) =>
-      apiFetch<KitchenOrder[]>(`/kitchen/kitchens/${kitchenId}/active-orders`),
+    activeForKitchen: (kitchenId: string, onlineOnly?: boolean) => {
+      const q = onlineOnly ? '?onlineOnly=true' : '';
+      return apiFetch<KitchenOrder[]>(`/kitchen/kitchens/${kitchenId}/active-orders${q}`);
+    },
     transition: (id: string, status: KitchenOrderStatus) =>
       apiFetch<KitchenOrder>(`/kitchen/orders/${id}/transition`, {
         method: 'POST', body: { status },
@@ -498,45 +497,388 @@ export const sponsorsApi = {
  * Football endpoints
  */
 export const footballApi = {
+  overview: (token: string, torneoId?: string) => {
+    const q = torneoId ? `?torneoId=${torneoId}` : '';
+    return apiFetch<FootballOverview>(`/football/overview${q}`, { token });
+  },
+  torneos: (token: string) => apiFetch<FootballTorneo[]>('/football/torneos', { token }),
+  createTorneo: (
+    data: { campeonatoId: string; categoriaId: string; nombre?: string },
+    token: string,
+  ) => apiFetch<FootballTorneo>('/football/torneos', { method: 'POST', token, body: data }),
+  bootstrapTorneos: (token: string, campeonatoId?: string) =>
+    apiFetch<{ campeonatoId: string; created: number; categorias: string[] }>(
+      '/football/torneos/bootstrap',
+      { method: 'POST', token, body: { campeonatoId } },
+    ),
+  updateTorneo: (
+    id: string,
+    data: { publicado?: boolean; activo?: boolean; nombre?: string },
+    token: string,
+  ) => apiFetch<FootballTorneo>(`/football/torneos/${id}`, { method: 'PUT', token, body: data }),
+  canchas: (token: string) => apiFetch<FootballCancha[]>('/football/canchas', { token }),
+  categorias: {
+    list: (token: string) => apiFetch<FootballCategoriaConfig[]>('/football/categorias', { token }),
+    create: (
+      data: {
+        codigo: string;
+        nombre: string;
+        genero: 'hombres' | 'mujeres';
+        maxPlantel?: number;
+        maxIncorporaciones?: number;
+        minJugadoresInicio?: number;
+        grupoCanchasId?: string;
+        colorHex?: string;
+      },
+      token: string,
+    ) => apiFetch<FootballCategoriaConfig>('/football/categorias', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: Partial<{
+        codigo: string;
+        nombre: string;
+        genero: 'hombres' | 'mujeres';
+        maxPlantel: number;
+        maxIncorporaciones: number;
+        minJugadoresInicio: number;
+        grupoCanchasId: string;
+        colorHex: string;
+      }>,
+      token: string,
+    ) =>
+      apiFetch<FootballCategoriaConfig>(`/football/categorias/${id}`, {
+        method: 'PUT',
+        token,
+        body: data,
+      }),
+    remove: (id: string, token: string) =>
+      apiFetch<{ ok: boolean }>(`/football/categorias/${id}`, { method: 'DELETE', token }),
+  },
   teams: {
-    list: () => apiFetch<FootballTeam[]>('/football/teams'),
-    create: (data: { name: string; shortName?: string; logo?: string }, token: string) =>
+    list: (token: string) => apiFetch<FootballTeam[]>('/football/teams', { token }),
+    create: (data: { name: string; shortName?: string; logo?: string; color?: string }, token: string) =>
       apiFetch<FootballTeam>('/football/teams', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; logo?: string }, token: string) =>
+      apiFetch<FootballTeam>(`/football/teams/${id}`, { method: 'PUT', token, body: data }),
+  },
+  inscriptions: {
+    list: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<FootballInscription[]>(`/football/inscriptions${q}`, { token });
+    },
+    create: (
+      data: {
+        torneoId: string;
+        equipoId?: string;
+        name?: string;
+        shortName?: string;
+        color?: string;
+        abbr?: string;
+      },
+      token: string,
+    ) => apiFetch<FootballInscription>('/football/inscriptions', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: {
+        abbr?: string;
+        color?: string;
+        activo?: boolean;
+        descuentoPuntosWO?: number;
+        torneoId?: string;
+      },
+      token: string,
+    ) => apiFetch<FootballInscription>(`/football/inscriptions/${id}`, { method: 'PUT', token, body: data }),
+  },
+  captains: {
+    list: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<FootballCaptain[]>(`/football/captains${q}`, { token });
+    },
+    create: (
+      data: { email: string; dni: string; torneoId: string; equipoInscripcionId: string },
+      token: string,
+    ) => apiFetch<FootballCaptain>('/football/captains', { method: 'POST', token, body: data }),
+    update: (id: string, data: { email?: string; dni?: string; activo?: boolean }, token: string) =>
+      apiFetch<FootballCaptain>(`/football/captains/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<{ ok: boolean }>(`/football/captains/${id}`, { method: 'DELETE', token }),
+  },
+  roster: {
+    get: (inscripcionId: string, token: string) =>
+      apiFetch<FootballRoster>(`/football/roster/${inscripcionId}`, { token }),
+    listaBuenaFeUrl: (inscripcionId: string) =>
+      `${resolveApiBaseUrl()}/football/roster/${inscripcionId}/lista-buena-fe`,
+  },
+  jornadas: {
+    list: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<FootballJornada[]>(`/football/jornadas${q}`, { token });
+    },
+    create: (data: { torneoId: string; numero: number; fecha: string }, token: string) =>
+      apiFetch<FootballJornada>('/football/jornadas', { method: 'POST', token, body: data }),
+    suspendRain: (jornadaId: string, token: string) =>
+      apiFetch<{
+        recoveryJornadaId: string;
+        recoveryNumero: number;
+        movedMatches: number;
+      }>(`/football/jornadas/${jornadaId}/suspend-rain`, { method: 'POST', token }),
+    publish: (jornadaId: string, token: string) =>
+      apiFetch<{ jornadaId: string; publicada: boolean }>(
+        `/football/jornadas/${jornadaId}/publish`,
+        { method: 'POST', token },
+      ),
   },
   matches: {
-    list: (status?: string) => {
-      const q = status ? `?status=${status}` : '';
-      return apiFetch<FootballMatch[]>(`/football/matches${q}`);
+    list: (token: string, filters?: { status?: string; torneoId?: string; jornadaId?: string }) => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.set('status', filters.status);
+      if (filters?.torneoId) params.set('torneoId', filters.torneoId);
+      if (filters?.jornadaId) params.set('jornadaId', filters.jornadaId);
+      const q = params.toString();
+      return apiFetch<FootballMatch[]>(`/football/matches${q ? `?${q}` : ''}`, { token });
     },
-    create: (data: { homeTeamId: string; awayTeamId: string; date: string; venue?: string }, token: string) =>
-      apiFetch<FootballMatch>('/football/matches', { method: 'POST', token, body: data }),
-    updateScore: (id: string, homeGoals: number, awayGoals: number, token: string) =>
+    create: (
+      data: {
+        homeTeamId: string;
+        awayTeamId: string;
+        date: string;
+        venue?: string;
+        torneoId?: string;
+        jornadaId?: string;
+        homeInscripcionId?: string;
+        awayInscripcionId?: string;
+        canchaId?: string;
+        horaInicio?: string;
+      },
+      token: string,
+    ) => apiFetch<FootballMatch>('/football/matches', { method: 'POST', token, body: data }),
+    updateSchedule: (
+      id: string,
+      data: {
+        canchaId?: string | null;
+        horaInicio?: string | null;
+        jornadaId?: string | null;
+        bloqueadoManual?: boolean;
+        venue?: string | null;
+      },
+      token: string,
+    ) =>
+      apiFetch<{ match: FootballMatch; warnings: string[] }>(
+        `/football/matches/${id}/schedule`,
+        { method: 'PUT', token, body: data },
+      ),
+    updateScore: (
+      id: string,
+      homeGoals: number,
+      awayGoals: number,
+      token: string,
+      events?: { personaId: string; tipo: string; minuto?: number }[],
+    ) =>
       apiFetch<FootballMatch>(`/football/matches/${id}/score`, {
-        method: 'PUT', token, body: { homeGoals, awayGoals },
+        method: 'PUT',
+        token,
+        body: { homeGoals, awayGoals, events },
+      }),
+    listEvents: (matchId: string, token: string) =>
+      apiFetch<FootballMatchEvent[]>(`/football/matches/${matchId}/events`, { token }),
+    addEvent: (
+      matchId: string,
+      data: { personaId: string; tipo: string; minuto?: number; articuloRef?: string },
+      token: string,
+    ) =>
+      apiFetch<FootballMatchEvent>(`/football/matches/${matchId}/events`, {
+        method: 'POST',
+        token,
+        body: data,
+      }),
+    deleteEvent: (eventId: string, token: string) =>
+      apiFetch<void>(`/football/events/${eventId}`, { method: 'DELETE', token }),
+    suspend: (id: string, token: string, motivo?: string) =>
+      apiFetch<{
+        originalMatchId: string;
+        recoveryJornadaId: string;
+        recoveryFecha: string;
+        match: FootballMatch;
+      }>(`/football/matches/${id}/suspend`, { method: 'POST', token, body: { motivo } }),
+  },
+  standings: (token: string, torneoId?: string) => {
+    const q = torneoId ? `?torneoId=${torneoId}` : '';
+    return apiFetch<StandingRow[]>(`/football/standings${q}`, { token });
+  },
+  scheduling: {
+    saturdayGrid: (token: string, fecha: string, campeonatoId?: string) => {
+      const params = new URLSearchParams({ fecha });
+      if (campeonatoId) params.set('campeonatoId', campeonatoId);
+      return apiFetch<SaturdayGridResponse>(`/football/scheduling/saturday?${params}`, { token });
+    },
+    suspendSaturday: (token: string, fecha: string) =>
+      apiFetch<{
+        fecha: string;
+        jornadasSuspendidas: number;
+        detalle: {
+          jornadaId: string;
+          torneoId: string;
+          categoriaNombre: string;
+          jornadaRecuperacionId: string;
+          movedMatches: number;
+        }[];
+      }>('/football/scheduling/suspend-saturday', { method: 'POST', token, body: { fecha } }),
+  },
+  planillas: {
+    get: (token: string, fecha: string) =>
+      apiFetch<FootballPlanillasResponse>(`/football/planillas?fecha=${fecha}`, { token }),
+  },
+  suspensions: {
+    list: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<FootballSuspension[]>(`/football/suspensions${q}`, { token });
+    },
+    update: (
+      id: string,
+      data: { fechasRestantes?: number; activa?: boolean; motivo?: string },
+      token: string,
+    ) => apiFetch<FootballSuspension>(`/football/suspensions/${id}`, { method: 'PUT', token, body: data }),
+    // Nota: al enviar `fechasRestantes`, el backend marca automaticamente
+    // ajustadoManualmente=true y pendienteDefinir=false — es el mecanismo
+    // para "completar a mano" una roja directa (ver SuspendidosPanel).
+    sync: (token: string, torneoId?: string) => {
+      const q = torneoId ? `?torneoId=${torneoId}` : '';
+      return apiFetch<{ updated: number }>(`/football/suspensions/sync${q}`, { method: 'POST', token });
+    },
+  },
+  reglamento: {
+    list: (token: string) => apiFetch<FootballReglamento>('/football/reglamento', { token }),
+    updateArticulo: (
+      id: string,
+      data: { titulo?: string; contenido?: string; aplicable?: boolean },
+      token: string,
+    ) =>
+      apiFetch<FootballReglamentoArticulo>(`/football/reglamento/articulos/${id}`, {
+        method: 'PUT',
+        token,
+        body: data,
       }),
   },
-  standings: () => apiFetch<StandingRow[]>('/football/standings'),
 };
 
 /**
- * Online Catalog endpoints
+ * Online module endpoints (cantina web)
  */
-export const onlineCatalogApi = {
-  products: {
-    list: (active?: boolean, category?: string) => {
+export const onlineApi = {
+  overview: (token: string) => apiFetch<OnlineOverview>('/online/overview', { token }),
+  metrics: (token: string, from?: string, to?: string, range?: '7d' | '30d' | '90d' | 'Año') => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (range) params.set('range', range);
+    const q = params.toString();
+    return apiFetch<OnlineMetrics>(`/online/metrics${q ? `?${q}` : ''}`, { token });
+  },
+  orders: {
+    list: (token: string, status?: string, limit?: number) => {
       const params = new URLSearchParams();
-      if (active !== undefined) params.set('active', String(active));
-      if (category) params.set('category', category);
+      if (status) params.set('status', status);
+      if (limit) params.set('limit', String(limit));
       const q = params.toString();
-      return apiFetch<OnlineProduct[]>(`/online-catalog/products${q ? `?${q}` : ''}`);
+      return apiFetch<OnlinePublicOrder[]>(`/online/orders${q ? `?${q}` : ''}`, { token });
     },
-    get: (id: string) => apiFetch<OnlineProduct>(`/online-catalog/products/${id}`),
-    create: (data: CreateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>('/online-catalog/products', { method: 'POST', token, body: data }),
-    update: (id: string, data: UpdateOnlineProductPayload, token: string) =>
-      apiFetch<OnlineProduct>(`/online-catalog/products/${id}`, { method: 'PUT', token, body: data }),
+  },
+  menu: {
+    list: (token: string, visibleOnly?: boolean) => {
+      const q = visibleOnly ? '?visibleOnly=true' : '';
+      return apiFetch<WebMenuProduct[]>(`/online/menu${q}`, { token });
+    },
+    create: (
+      data: CreateWebMenuProductPayload,
+      token: string,
+    ) => apiFetch<WebMenuProduct>('/online/menu', { method: 'POST', token, body: data }),
+    update: (
+      id: string,
+      data: UpdateWebMenuProductPayload,
+      token: string,
+    ) => apiFetch<WebMenuProduct>(`/online/menu/${id}`, { method: 'PUT', token, body: data }),
+  },
+  categories: {
+    list: (token: string) => apiFetch<WebCategory[]>(`/online/categories`, { token }),
+    create: (data: { name: string; sortOrder?: number }, token: string) =>
+      apiFetch<WebCategory>('/online/categories', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; sortOrder?: number; active?: boolean }, token: string) =>
+      apiFetch<WebCategory>(`/online/categories/${id}`, { method: 'PUT', token, body: data }),
     remove: (id: string, token: string) =>
-      apiFetch<void>(`/online-catalog/products/${id}`, { method: 'DELETE', token }),
+      apiFetch<void>(`/online/categories/${id}`, { method: 'DELETE', token }),
+  },
+  filters: {
+    list: (token: string) => apiFetch<WebFilter[]>(`/online/filters`, { token }),
+    create: (data: { label: string; slug?: string; sortOrder?: number }, token: string) =>
+      apiFetch<WebFilter>('/online/filters', { method: 'POST', token, body: data }),
+    update: (id: string, data: { label?: string; slug?: string; sortOrder?: number; active?: boolean }, token: string) =>
+      apiFetch<WebFilter>(`/online/filters/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/online/filters/${id}`, { method: 'DELETE', token }),
+  },
+  kitchens: {
+    list: (token: string) =>
+      apiFetch<{ id: string; name: string; emoji?: string | null }[]>('/online/kitchens', { token }),
+  },
+  redeemQr: (token: string, authToken: string) =>
+    apiFetch<RedeemQrResponse>('/online/redeem-qr', { method: 'POST', token: authToken, body: { token } }),
+};
+
+/**
+ * Admin settings endpoints (config, printers, sales categories, tables).
+ */
+export const settingsApi = {
+  config: {
+    list: (scope?: string) => {
+      const q = scope ? `?scope=${encodeURIComponent(scope)}` : '';
+      return apiFetch<Array<{ id: string; key: string; scope: string; value: unknown; version?: number }>>(`/settings/config${q}`);
+    },
+    /** `version` opcional: mandar la que se leyó para detectar edición concurrente (409 si no coincide). */
+    upsert: (data: { key: string; scope: string; value: unknown; version?: number }, token: string) =>
+      apiFetch<{ id: string; key: string; scope: string; value: unknown; version?: number }>('/settings/config', {
+        method: 'PUT', token, body: data,
+      }),
+  },
+  salesCategories: {
+    list: () => apiFetch<Array<{ id: string; name: string; emoji: string; sortOrder: number }>>('/settings/sales-categories'),
+    create: (data: { name: string; emoji?: string; sortOrder?: number }, token: string) =>
+      apiFetch<{ id: string; name: string; emoji: string; sortOrder: number }>('/settings/sales-categories', { method: 'POST', token, body: data }),
+    update: (id: string, data: { name?: string; emoji?: string; sortOrder?: number }, token: string) =>
+      apiFetch<{ id: string; name: string; emoji: string; sortOrder: number }>(`/settings/sales-categories/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/sales-categories/${id}`, { method: 'DELETE', token }),
+  },
+  printers: {
+    list: () => apiFetch<Array<{ id: string; name: string; type: string; ip: string; port: number; paperWidth: number; connected: boolean; isDefault: boolean }>>('/settings/printers'),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/printers', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/printers/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/printers/${id}`, { method: 'DELETE', token }),
+  },
+  tables: {
+    list: () => apiFetch<Array<{ id: string; name: string; status: string; currentOrderId?: string | null }>>('/settings/tables'),
+    create: (data: { name: string; status?: string }, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/tables', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/tables/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/tables/${id}`, { method: 'DELETE', token }),
+  },
+  teamAccounts: {
+    list: () => apiFetch<Array<{ id: string; team: string; openedAt: string; status: string; items: unknown }>>('/settings/team-accounts'),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>('/settings/team-accounts', { method: 'POST', token, body: data }),
+    update: (id: string, data: Record<string, unknown>, token: string) =>
+      apiFetch<Record<string, unknown>>(`/settings/team-accounts/${id}`, { method: 'PUT', token, body: data }),
+    remove: (id: string, token: string) =>
+      apiFetch<void>(`/settings/team-accounts/${id}`, { method: 'DELETE', token }),
+  },
+  audit: {
+    list: (limit?: number) => apiFetch<unknown[]>(`/settings/audit${limit ? `?limit=${limit}` : ''}`),
+    create: (data: Record<string, unknown>, token: string) =>
+      apiFetch<unknown>('/settings/audit', { method: 'POST', token, body: data }),
   },
 };
 
@@ -551,6 +893,8 @@ export interface StockProduct {
   unit: string;
   orderUnit?: number;
   image?: string;
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este producto. */
+  version?: number;
   stockLevels: StockLevel[];
   category?: Category;
 }
@@ -586,25 +930,6 @@ export interface ApiStockMovement {
   reference?: string | null;
   operatorId?: string | null;
   operatorName?: string | null;
-}
-
-export interface ApiEmployeeConsumption {
-  id: string;
-  day: string;
-  createdAt: string;
-  productId: string;
-  productName: string;
-  productCode?: string | null;
-  warehouseId: string;
-  warehouseName: string;
-  quantity: number | string;
-  unit: string;
-  previousStock: number | string;
-  newStock: number | string;
-  operatorId?: string | null;
-  operatorName?: string | null;
-  operatorRole?: string | null;
-  note?: string | null;
 }
 
 export interface ApiStockCountEntry {
@@ -651,12 +976,15 @@ export interface ApiPurchaseOrder {
   receivedAt?: string | null;
   createdAt: string;
   items: ApiPurchaseOrderItem[];
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este pedido. */
+  version?: number;
 }
 
 export interface SalesProduct {
   id: string;
   name: string;
-  category: string;
+  categoriaVentaId: string;
+  categoriaVenta?: { name: string } | null;
   kitchenId: string;
   price: number;
   emoji?: string;
@@ -669,6 +997,8 @@ export interface SalesProduct {
     quantity: number;
     componentProduct?: { id: string; name: string; emoji?: string };
   }>;
+  /** Bloqueo optimista: la versión que el servidor tenía al leer este producto. */
+  version?: number;
 }
 
 export interface SalesTicket {
@@ -678,9 +1008,19 @@ export interface SalesTicket {
   status: string;
   total: number;
   operatorId: string;
+  /** 'pos' | 'online' | 'consumo' — un ticket de consumo interno tiene total $0 y no se imprime. */
+  origen?: string;
   note?: string;
   operator?: { username: string };
-  items: { id: string; salesProductId: string; name: string; unitPrice: number; quantity: number }[];
+  items: {
+    id: string;
+    salesProductId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
+  }[];
+  stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
   kitchenOrders?: KitchenOrder[];
 }
 
@@ -700,10 +1040,142 @@ export interface KitchenOrder {
   operatorName: string;
   tableId?: string;
   tableName?: string;
+  pedidoPublicoId?: string | null;
   createdAt: string;
   updatedAt: string;
   kitchen?: Kitchen;
   items: { id: string; salesProductId: string; name: string; quantity: number; emoji?: string }[];
+  pedidoPublico?: {
+    id: string;
+    status: string;
+    tokenRetiro?: { token: string; usadoEn?: string | null } | null;
+  } | null;
+  ticket?: { number: number; status: string; origen?: string; total?: number; createdAt?: string };
+}
+
+export interface OnlineOverview {
+  pedidosTotal: number;
+  recaudacionTotal: number;
+  pedidosHoy: number;
+  recaudacionHoy: number;
+  cocinaActivos: number;
+  menuVisible: number;
+  topItems: { name: string; quantity: number }[];
+}
+
+export interface OnlineMetrics {
+  totalPedidos: number;
+  recaudacion: number;
+  recaudacionHoy: number;
+  ticketPromedio: number;
+  ticketsHoy: number;
+  porEstado: { status: string; count: number }[];
+  topItems: { name: string; quantity: number; revenue: number }[];
+  salesByDay: { id: string; day: string; ventas: number; tickets: number }[];
+  topProductsByKitchen: {
+    kitchen: string;
+    id: string;
+    color: string;
+    products: { id: string; name: string; value: number; revenue: number }[];
+    totalUnits: number;
+    totalRevenue: number;
+  }[];
+  range?: string;
+}
+
+export interface RedeemQrResponse {
+  ok: boolean;
+  pedido: {
+    id: string;
+    status: string;
+    total: number;
+    ticketNumber: number | null;
+    customerName: string;
+    pickupKitchen: string | null;
+    kitchens: { id: string; name: string; emoji?: string | null }[];
+    items: { name: string; quantity: number; unitPrice: number; emoji?: string | null }[];
+    retiradoEn: string;
+  };
+}
+
+export interface OnlinePublicOrder {
+  id: string;
+  status: string;
+  total: number | string;
+  createdAt: string;
+  nota?: string | null;
+  items: { id: string; name: string; quantity: number; unitPrice: number | string }[];
+  tokenRetiro?: { token: string; usadoEn?: string | null } | null;
+  ticketVenta?: { number: number } | null;
+  cuentaPublica?: { email: string };
+}
+
+export interface WebMenuProduct {
+  id: string;
+  name: string;
+  categoriaVentaId: string;
+  categoriaVenta?: { name: string } | null;
+  kitchenId: string;
+  price: number | string;
+  emoji?: string | null;
+  active: boolean;
+  visibleWeb: boolean;
+  descripcionWeb?: string | null;
+  imagenWeb?: string | null;
+  webCategoryId?: string | null;
+  popularWeb?: boolean;
+  webSortOrder?: number;
+  kitchen?: { id: string; name: string; emoji?: string | null };
+  webCategory?: { id: string; name: string; slug: string } | null;
+  filtrosWeb?: { filtro: { id: string; slug: string; label: string } }[];
+}
+
+export interface WebCategory {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  active: boolean;
+  _count?: { productos: number };
+}
+
+export interface WebFilter {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+  active: boolean;
+  _count?: { productos: number };
+}
+
+export interface CreateWebMenuProductPayload {
+  name: string;
+  categoriaVentaId: string;
+  kitchenId: string;
+  price: number;
+  emoji?: string;
+  descripcionWeb?: string;
+  imagenWeb?: string;
+  visibleWeb?: boolean;
+  webCategoryId?: string;
+  popularWeb?: boolean;
+  filterIds?: string[];
+}
+
+export interface UpdateWebMenuProductPayload {
+  name?: string;
+  categoriaVentaId?: string;
+  kitchenId?: string;
+  visibleWeb?: boolean;
+  descripcionWeb?: string | null;
+  imagenWeb?: string | null;
+  emoji?: string | null;
+  price?: number;
+  webCategoryId?: string | null;
+  popularWeb?: boolean;
+  webSortOrder?: number;
+  filterIds?: string[];
+  active?: boolean;
 }
 
 export type KitchenOrderStatus = 'pending' | 'preparing' | 'ready' | 'delivered';
@@ -725,44 +1197,248 @@ export interface Sponsor {
   name: string;
   imageUrl: string;
   placement: string;
+  bannerLabel?: string | null;
+  mediaType?: string;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  sortOrder?: number;
+  durationSeconds?: number;
   active: boolean;
-  linkUrl?: string;
-}
-
-export interface OnlineProduct {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  image?: string;
-  images: string[];
-  category: string;
-  attributes?: Record<string, any>;
-  active: boolean;
-  stockProductId?: string;
+  linkUrl?: string | null;
 }
 
 export interface FootballTeam {
   id: string;
   name: string;
-  shortName?: string;
-  logo?: string;
+  shortName?: string | null;
+  logo?: string | null;
+  color?: string | null;
+}
+
+export interface FootballTorneo {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  publicado: boolean;
+  categoria?: { id: string; nombre: string; codigo: string };
+  campeonato?: { id: string; nombre: string };
+}
+
+export interface FootballInscription {
+  id: string;
+  torneoId: string;
+  equipoId: string;
+  abbr?: string | null;
+  color?: string | null;
+  activo: boolean;
+  equipo: FootballTeam;
+  torneo?: FootballTorneo & { categoria?: { nombre: string } };
+  _count?: { jugadores: number };
+}
+
+export interface FootballCaptain {
+  id: string;
+  email: string;
+  dni: string;
+  activo: boolean;
+  equipoInscripcionId: string;
+  torneoId: string;
+  equipoInscripcion?: { equipo: FootballTeam };
+  torneo?: FootballTorneo;
+}
+
+export interface FootballRosterPlayer {
+  id: string;
+  personaId: string;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  email?: string | null;
+  fechaNacimiento?: string | null;
+  numeroCamiseta?: number | null;
+  rolPlantel: string;
+}
+
+export interface FootballRoster {
+  inscripcion: FootballInscription;
+  jugadores: FootballRosterPlayer[];
+  capitan: FootballRosterPlayer | null;
+}
+
+export interface FootballJornada {
+  id: string;
+  torneoId: string;
+  numero: number;
+  fecha: string;
+  suspendida: boolean;
+  esRecuperacion: boolean;
+  publicada: boolean;
+  equipoLibreId?: string | null;
+  _count?: { partidos: number };
+}
+
+export interface FootballCategoriaConfig {
+  id: string;
+  codigo: string;
+  nombre: string;
+  genero: 'hombres' | 'mujeres';
+  maxPlantel: number;
+  maxIncorporaciones: number;
+  minJugadoresInicio: number;
+  grupoCanchasId?: string | null;
+  colorHex?: string | null;
+  _count?: { torneos: number };
+}
+
+export interface FootballCancha {
+  id: string;
+  numero: number;
+  nombre?: string | null;
+  grupoCanchas?: { codigo: string; nombre: string };
 }
 
 export interface FootballMatch {
   id: string;
   homeTeamId: string;
   awayTeamId: string;
+  homeInscripcionId?: string | null;
+  awayInscripcionId?: string | null;
   date: string;
   status: string;
-  homeGoals?: number;
-  awayGoals?: number;
-  venue?: string;
+  homeGoals?: number | null;
+  awayGoals?: number | null;
+  venue?: string | null;
+  horaInicio?: string | null;
+  canchaId?: string | null;
+  jornadaId?: string | null;
+  bloqueadoManual?: boolean;
   homeTeam?: FootballTeam;
   awayTeam?: FootballTeam;
+  cancha?: FootballCancha | null;
+  jornada?: FootballJornada | null;
+  eventos?: FootballMatchEvent[];
+}
+
+export type FootballEventType =
+  | 'gol'
+  | 'asistencia'
+  | 'amarilla'
+  | 'roja'
+  | 'azul'
+  | 'doble_amarilla'
+  | 'expulsion_directa'
+  | 'gol_en_contra';
+
+export interface FootballMatchEvent {
+  id: string;
+  partidoId: string;
+  personaId: string;
+  tipo: FootballEventType | string;
+  minuto?: number | null;
+  articuloRef?: string | null;
+  persona?: {
+    id: string;
+    nombre: string;
+    apellido: string;
+    dni: string;
+  };
+}
+
+export interface FootballSuspension {
+  id: string;
+  personaId: string;
+  torneoId?: string | null;
+  motivo: string;
+  /** null cuando pendienteDefinir es true (roja directa recien cargada, sin fechas asignadas todavia). */
+  fechasRestantes: number | null;
+  pendienteDefinir: boolean;
+  ajustadoManualmente: boolean;
+  activa: boolean;
+  persona?: { nombre: string; apellido: string; dni: string };
+}
+
+export interface FootballReglamentoArticulo {
+  id: string;
+  numero: string;
+  titulo?: string | null;
+  contenido: string;
+  aplicable: boolean;
+  orden: number;
+}
+
+export interface FootballReglamentoApartado {
+  id: string;
+  numero: number;
+  titulo: string;
+  articulos: FootballReglamentoArticulo[];
+}
+
+export interface FootballReglamento {
+  apartados: FootballReglamentoApartado[];
+  anexos: { id: string; titulo: string; contenido: string }[];
+}
+
+export interface FootballOverview {
+  torneo: FootballTorneo | null;
+  stats: { equipos: number; partidos: number; capitanes: number; jornadas: number } | null;
+  torneos?: FootballTorneo[];
+}
+
+export interface SaturdayGridResponse {
+  fecha: string;
+  campeonato: string;
+  canchas: FootballCancha[];
+  partidos: {
+    id: string;
+    hora: string | null;
+    canchaId: string | null;
+    canchaNumero?: number;
+    categoria: string;
+    categoriaColor?: string | null;
+    genero?: 'hombres' | 'mujeres';
+    local: string;
+    visitante: string;
+    bloqueadoManual: boolean;
+    jornada: number | null;
+  }[];
+}
+
+export interface FootballPlanillaJugador {
+  personaId: string;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  fechaNacimiento: string | null;
+  numeroCamiseta: number | null;
+}
+
+export interface FootballPlanillaEquipo {
+  inscripcionId: string;
+  equipoNombre: string;
+  abbr: string | null;
+  roster: FootballPlanillaJugador[];
+}
+
+export interface FootballPlanillasResponse {
+  fecha: string;
+  categorias: {
+    categoriaId: string;
+    categoriaNombre: string;
+    genero: 'hombres' | 'mujeres';
+    torneoId: string;
+    campeonatoNombre: string;
+    matches: {
+      matchId: string;
+      canchaNumero: number | null;
+      horaInicio: string | null;
+      home: FootballPlanillaEquipo;
+      away: FootballPlanillaEquipo;
+    }[];
+  }[];
 }
 
 export interface StandingRow {
+  inscripcionId?: string;
   teamId: string;
   teamName?: string;
   played: number;
@@ -771,7 +1447,9 @@ export interface StandingRow {
   lost: number;
   goalsFor: number;
   goalsAgainst: number;
+  goalDiff?: number;
   points: number;
+  descuentoPuntosWO?: number;
 }
 
 // ============ Payload types ============
@@ -783,22 +1461,26 @@ export interface CreateProductPayload {
 }
 
 export interface UpdateProductPayload {
-  name?: string; code?: string; description?: string;
-  categoryId?: string; unit?: string; orderUnit?: number; image?: string;
+  name?: string; code?: string; description?: string | null;
+  categoryId?: string; unit?: string; orderUnit?: number | null; image?: string | null;
+  /** Bloqueo optimista: mandar StockProduct.version tal cual se leyó. */
+  version?: number;
 }
 
 export interface CreateSalesProductPayload {
-  name: string; category: string; kitchenId: string; price: number;
+  name: string; categoriaVentaId: string; kitchenId: string; price: number;
   emoji?: string; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
   bundle?: { componentProductId: string; quantity: number }[];
 }
 
 export interface UpdateSalesProductPayload {
-  name?: string; category?: string; kitchenId?: string;
+  name?: string; categoriaVentaId?: string; kitchenId?: string;
   price?: number; emoji?: string; active?: boolean; kind?: string;
   recipe?: { stockProductId: string; quantity: number }[];
   bundle?: { componentProductId: string; quantity: number }[];
+  /** Bloqueo optimista: mandar SalesProduct.version tal cual se leyó. */
+  version?: number;
 }
 
 export interface CheckoutItem {
@@ -901,6 +1583,7 @@ export interface PresignPayload {
 
 export interface PresignResult {
   uploadUrl: string;
+  publicUrl?: string;
   key: string;
   bucket: string;
   method: string;
@@ -908,6 +1591,7 @@ export interface PresignResult {
 }
 
 export interface ConfirmMediaPayload {
+  key: string;
   title: string;
   type: 'image' | 'video';
   url: string;
@@ -917,21 +1601,28 @@ export interface ConfirmMediaPayload {
 }
 
 export interface CreateSponsorPayload {
-  name: string; imageUrl: string; placement?: string; linkUrl?: string;
+  name: string;
+  imageUrl: string;
+  placement?: string;
+  linkUrl?: string;
+  bannerLabel?: string;
+  mediaType?: string;
+  widthPx?: number;
+  heightPx?: number;
+  sortOrder?: number;
+  durationSeconds?: number;
 }
 
 export interface UpdateSponsorPayload {
-  name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string;
-}
-
-export interface CreateOnlineProductPayload {
-  name: string; description?: string; price: number; image?: string;
-  images?: string[]; category: string; attributes?: Record<string, any>;
-  stockProductId?: string;
-}
-
-export interface UpdateOnlineProductPayload {
-  name?: string; description?: string; price?: number; image?: string;
-  images?: string[]; category?: string; attributes?: Record<string, any>;
-  active?: boolean; stockProductId?: string;
+  name?: string;
+  imageUrl?: string;
+  placement?: string;
+  active?: boolean;
+  linkUrl?: string;
+  bannerLabel?: string;
+  mediaType?: string;
+  widthPx?: number;
+  heightPx?: number;
+  sortOrder?: number;
+  durationSeconds?: number;
 }

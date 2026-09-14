@@ -1,0 +1,359 @@
+{
+  "apartados": [
+    {
+      "numeroRomano": "I",
+      "titulo": "APARTADO I: DISPOSICIONES GENERALES",
+      "articulos": [
+        {
+          "numero": "1",
+          "contenido": "Los participantes de los torneos organizados por La Chacra Fútbol reconocen el presente reglamento y se da por conocido por todos ellos. Los capitanes de los equipos serán los responsables de informar a los integrantes de sus respectivos conjuntos las disposiciones aquí establecidas.",
+          "aplicable": true
+        },
+        {
+          "numero": "2",
+          "contenido": "La Chacra Fútbol se reserva el derecho de admisión y permanencia en el predio de los equipos, jugadores y o espectadores a los distintos torneos sin expresión de causa o motivo.",
+          "aplicable": true
+        },
+        {
+          "numero": "3",
+          "contenido": "Se presume que por el sólo hecho de participar en los torneos de La Chacra Fútbol, el reconocimiento por parte de los jugadores de encontrarse en perfecto estado de salud para la práctica del deporte. La Chacra Fútbol cuenta con un servicio de emergencias médicas para lesiones producidas dentro del campo de juego como también las ocurridas dentro del predio. Los jugadores deberán presentar certificado apto médico para la práctica del fútbol.",
+          "aplicable": true
+        },
+        {
+          "numero": "4",
+          "contenido": "El presente reglamento podrá ser modificado por el voto unánime de la de los integrantes de la comisión organizadora.",
+          "aplicable": true
+        },
+        {
+          "numero": "5",
+          "contenido": "Los torneos de La Chacra Fútbol se regirán por las Reglas de Juego FIFA para fútbol 11, con las excepciones detalladas en el presente Reglamento y las establecidas en los Anexos fijadas para cada categoría en particular.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "II",
+      "titulo": "APARTADO II: DESARROLLO DE LOS CAMPEONATOS. DURACION Y MODALIDAD.",
+      "articulos": [
+        {
+          "numero": "6",
+          "contenido": "Se jugarán dos campeonatos por temporada (Apertura y Clausura), los cuales se desarrollarán entre los meses de febrero y diciembre, con un receso entre la finalización y el comienzo de aquéllos. Las fechas específicas de inicio de cada campeonato quedarán a criterio de la organización.",
+          "aplicable": true
+        },
+        {
+          "numero": "7",
+          "contenido": "Los equipos se enfrentarán todos contra todos en una vuelta en los torneos en los que participen diez equipos o más. En caso de que alguna categoría no alcanzare dicha cantidad, la organización dispondrá la modalidad que considere más apropiado teniendo en cuenta el calendario.\nInciso 1º) TORNEOS HOMBRES: Se dividirán en cinco Categorías: Categorías Libre A, B, C y Categorías SUPERLIGA A y B.\nLos equipos jugarán todos contra todos en una vuelta. Se proclamará campeón de cada categoría el equipo que cuente con mayor cantidad de puntos a la finalización del campeonato.\nHabrá ascensos directos y partidos de promociones para determinar la permanencia de los equipos en las categorías (ver Anexos, Apartado IV).\nInciso 2º) TORNEO MUJERES: El campeonato se dividirá en Categorías A, B y C, los cuales jugarán todos contra todos.\nEl mejor equipo de cada Categoría se proclamará Campeón. Habrá ascensos directos y partidos de promociones para determinar la permanencia de los equipos en las categorías (ver Anexos, Apartado IV).\nInciso 3º) En el caso que dos equipos finalizaran el campeonato con igualdad de puntos en la primera posición se jugará un partido definitorio entre ambos para erigir al campeón. Si persistiera la igualdad en el partido definitorio, se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos.\nSi la igualdad de puntos en el primer puesto se diera entre más de dos equipos, disputarán la final aquéllos dos equipos con mejor diferencia de goles a favor.\nSi la igualdad de puntos entre dos o más equipos se diera en otra posición de la tabla, el equipo mejor de ellos se determinará de la siguiente manera:\na) Mayor diferencia de goles a favor.\nb) Menor cantidad de goles en contra.\nc) El resultado entre los equipos empatados.\nd) Mejor posición en la tabla “Fair Play”.\ne) Menor cantidad de expulsados.\nf) Si persistiera la igualdad, la mejor posición se definirá por sorteo, el que se llevará a cabo por representantes de La Chacra Fútbol ante la presencia de los capitanes de los equipos empatados.\nInciso 4°) Se otorgarán tres puntos por partido ganado, un punto por partido empatado y cero puntos por partido perdido.",
+          "aplicable": true
+        },
+        {
+          "numero": "8",
+          "contenido": "La organización podrá determinar que los fines de semana largos se jueguen dos fechas en caso de que, por razones climáticas, se debieran suspender la disputa de los partidos previstos. También podrá disponer que se juegue en día feriado o domingo, en casos excepcionales.",
+          "aplicable": true
+        },
+        {
+          "numero": "9",
+          "contenido": "Si el calendario anual lo permitiera, la organización propondrá a los capitanes la realización de partidos amistosos y o torneos de verano, los cuales se regirán por las cláusulas del presente reglamento.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "III",
+      "titulo": "APARTADO III: LISTA DE BUENA FE. PLANILLAS DE CAMPO. SUSTITUCIONES. VEEDORES.",
+      "articulos": [
+        {
+          "numero": "10",
+          "contenido": "Todos los equipos deberán presentar antes del inicio de cada campeonato una Lista de Buena Fe en la forma y plazo establecidos por la organización. El máximo de participantes es de 21 en Superliga, 20 en Hombres y 16 en Mujeres. Todos deberán contar con 18 años cumplidos al momento del inicio del campeonato. No podrán participar de los Campeonatos jugadores/as que no estén incluidos/as en ella. Tampoco podrán inscribirse en dos o más equipos, aún cuando éstos participaren en categorías diferentes.\nEl incumplimiento de esta disposición se sancionará de conformidad con el Artículo 38.",
+          "aplicable": true
+        },
+        {
+          "numero": "10 bis",
+          "contenido": "En las categorías Hombres Libre y Mujeres se permitirá un máximo de 3 nuevas incorporaciones en la Lista de Buena Fe al inicio de cada Torneo.",
+          "aplicable": true
+        },
+        {
+          "numero": "11",
+          "contenido": "La Lista de Buena Fe deberá ser completada con los siguientes datos personales de cada participante: nombre, apellido, DNI y correo electrónico. En el caso de capitán y sub capitán, además, deberán consignar los teléfonos celulares, particulares y laborales.",
+          "aplicable": true
+        },
+        {
+          "numero": "12",
+          "contenido": "Una vez iniciado el campeonato la Lista de Buena Fe no podrá modificarse, excepto en los siguientes casos:\n1°) Si un equipo no completara los cupos disponibles, podrá agregar jugadores hasta la 3° fecha inclusive, no pudiendo exceder la cantidad de 20 jugadores en Libre, 21 jugadores en Superliga o 16 jugadoras en Mujeres. Las incorporaciones deberán ser informadas a la organización con 48 horas de antelación al partido. En caso de ser informada con pasado ese término, la incorporación quedará habilitada para el partido a disputarse la siguiente semana. Es responsabilidad de los capitanes la carga de datos en caso de altas y o bajas.\n2°) Se podrá reemplazar participantes en caso de lesión grave que implique 3 meses o más de recuperación si la misma se hubiere producido participando en LA CHACRA.\n3°) Para los partidos de Promociones o Finales establecidas en el artículo 7 inc. 3) no se podrá reemplazar participantes comprendidos en el inciso anterior.\nLos capitanes de cada equipo son los responsables de informar a la organización los cambios de la Lista de Buena Fe.\n4°) INSCRIPCION DE EQUIPOS PREVIAMENTE CONFIRMADOS:\nSe enviará a los capitanes de cada equipo un link con usuario y contraseña para inscribir a los jugadores que disputarán el torneo próximo y/o en curso . \n5°) MODIFICACIONES A LA LISTA DE BUENA FE: \nPara realizar modificaciones de acuerdo a lo establecido en los incs. 1°) y 2°) de este artículo, ingresar con el usuario y contraseña al link proporcionados y realizar la modificación.",
+          "aplicable": true
+        },
+        {
+          "numero": "13",
+          "contenido": "Previo al comienzo de cada partido, el capitán deberá controlar la Planilla de Campo de su equipo y corroborar los datos de los jugadores listados. Luego deberá firmar la misma como responsable del equipo.\nTodos los jugadores de campo deberán firmar la planilla e identificarse con número de camiseta previamente al comienzo del partido. Si hubiera D.T., también deberá identificarse en la planilla con nombre y apellido.\nLos jugadores que llegaren una vez comenzado el partido, podrán participar del mismo, siempre y cuando hubieren firmado la planilla de campo previo a su ingreso.",
+          "aplicable": true
+        },
+        {
+          "numero": "14",
+          "contenido": "Corresponde a los capitanes y o responsables de cada equipo controlar la Planilla de Campo una vez finalizado el partido y corroborar que lo asentado por el Árbitro en cuanto a goles, amonestados y expulsados sea correcto. En caso de advertir algún error, deberán hacerlo notar al Árbitro y al veedor del partido, quienes salvarán el error si correspondiere. En caso de no hacerlo, lo asentado en la Planilla de Campo será definitivo y no podrá modificarse.",
+          "aplicable": true
+        },
+        {
+          "numero": "15",
+          "contenido": "Los veedores tienen la facultad de requerir a los participantes que figuran en la Planilla de Campo que presenten documento que acredite su identidad (D.N.I., C.I., Registro de Conducir, etc.).",
+          "aplicable": true
+        },
+        {
+          "numero": "16",
+          "contenido": "En caso de negativa injustificada por parte de algún jugador a acreditar su identidad, la Organización presumirá su incorrecta inclusión en la Planilla de Campo y, consecuentemente, aplicará las sanciones previstas en el Artículo 38 incisos 1°) y 2°).",
+          "aplicable": true
+        },
+        {
+          "numero": "17",
+          "contenido": "Los equipos podrán realizar sustituciones de participantes de manera ilimitada.",
+          "aplicable": true
+        },
+        {
+          "numero": "18",
+          "contenido": "Habrá un Veedor en cada partido. Las funciones de los Veedores son las siguientes:\n1°) controlar el correcto llenado de las Planillas de Campo.\n2°) observar que se encuentren dadas las condiciones necesarias para el inicio de los partidos (que esté presente el Árbitro, que haya dos pelotas, proveer las pecheras en caso de ser necesario, etc.).\n3°) solicitar a los participantes que acrediten identidad para contrastar con lo expuesto en la Planilla de Campo y, eventualmente, informar lo que corresponda a la Organización.\n4°) entregar a la Organización la Planilla de Campo con el detalle de las incidencias del partido observado, teniendo en cuenta -si lo hubiere- el informe del Árbitro, luego de finalizado el juego.",
+          "aplicable": true
+        },
+        {
+          "numero": "18 bis",
+          "contenido": "Si la Planila de Campo fuere modificada o adulterada -durante o finalizado el partido- por algún integrante de un equipo se aplicarán las sanciones previstas en el art. 31 bis.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "IV",
+      "titulo": "APARTADO IV: INDUMENTARIA. INSCRIPCIONES. COMUNICACIONES.",
+      "articulos": [
+        {
+          "numero": "19",
+          "contenido": "Los equipos deberán contar al inicio de cada partido con un juego de camisetas idénticas y con numeración distinta en la totalidad de sus jugadores.",
+          "aplicable": true
+        },
+        {
+          "numero": "20",
+          "contenido": "Si los equipos que se enfrentaren tuvieren indumentaria similar o que pueda a llevar a confusión a los jugadores o al Árbitro durante el partido, la organización proveerá un juego de pecheras sin costo alguno. El uso de las mismas se determinará por sorteo que realizará el Árbitro ante la presencia de los capitanes.",
+          "aplicable": true
+        },
+        {
+          "numero": "21",
+          "contenido": "En caso de que algún equipo no cumpla con lo dispuesto en el primer párrafo del Artículo 19, el veedor de la cancha proveerá un juego de pecheras numeradas, en cuyo caso tendrá un costo que determinará la Organización.",
+          "aplicable": true
+        },
+        {
+          "numero": "21 bis",
+          "contenido": "Es obligatorio el uso de canilleras de protección por parte de todos los jugadores que se encuentren dentro del campo de juego disputando un partido. El Arbitro sancionará con amonestación a todos los jugadores que incumplan esta disposición; y con doble amonestación en caso de persistir el incumplimiento.",
+          "aplicable": true
+        },
+        {
+          "numero": "22",
+          "contenido": "La inscripción de los equipos a cualquiera de las categorías de La Chacra Fútbol se efectuará mediante el pago del importe por Inscripción que la Organización determine previo a la iniciación del campeonato. De no cumplirse con el pago correspondiente, el equipo perderá la vacante en el torneo.\nSi el campeonato se encontrare en curso, la organización podrá suspender al capitán y subcapitán del equipo para jugar las fechas siguientes al incumplimiento, suspender al equipo para continuar participando en el campeonato, y o descontar puntos una vez finalizado el Torneo en curso.\nEn caso de abono parcial o total en concepto de Inscripción, la misma no será reintegrada en caso de cierre temporal de actividades por motivos ajenos a la Organización.",
+          "aplicable": true
+        },
+        {
+          "numero": "23",
+          "contenido": "La comunicación entre la Organización y los equipos se efectuará a través de correo electrónico a torneos@lachacrafutbol.com.ar. El sitio www.lachacrafutbol.com.ar se actualizará en días hábiles posteriores a cada fecha disputada y mediante ese medio se informarán las noticias relacionadas con el desarrollo de los diversos torneos y actividades.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "V",
+      "titulo": "APARTADO V: PUNTUALIDAD. ASISTENCIA. SANCIONES POR FALTAS ADMINISTRATIVAS. POSTERGACIONES.",
+      "articulos": [
+        {
+          "numero": "24",
+          "contenido": "La organización publicará en la página web el Fixture de cada categoría con anterioridad al inicio de cada campeonato, con indicación de fecha, hora y rival. El mismo, podrá ser modificado por razones climáticas, en cuyo caso se dará previo aviso a todos los equipos.",
+          "aplicable": true
+        },
+        {
+          "numero": "25",
+          "contenido": "Todos los equipos se deben presentar a disputar el partido correspondiente en la fecha, hora y cancha indicadas en el Fixture. El número de participantes presentes con el cual se dará comienzo al partido es de seis (arquero más cinco jugadores de campo) en el caso de hombres y de cinco (arquera más cuatro jugadoras de campo) en el caso de mujeres.",
+          "aplicable": true
+        },
+        {
+          "numero": "26",
+          "contenido": "La Organización otorgará un Plazo de Tolerancia de 10 minutos para el comienzo del partido. Cumplido dicho plazo, si el equipo demorado no cuenta con la cantidad mínima de jugadores establecida en el artículo 25, el Árbitro informará a los capitanes presentes la suspensión del encuentro y dejará asentado el motivo en el informe.\nLos equipos que cuenten con ocho (8) jugadores -hombres- o cinco (5) jugadoras -mujeres- en el horario establecido para el comienzo del partido no podrán hacer uso del plazo de tolerancia.",
+          "aplicable": true
+        },
+        {
+          "numero": "27",
+          "contenido": "En caso de ausencia de un equipo sin previo aviso, se le dará por perdido el partido y se aplicará descuento de 6 puntos en la Tabla de Posiciones una vez finalizado el torneo. Asimismo, al equipo puntual se le dará por ganado el partido por Walk Over (W.O). El resultado será de 3 – 0. En caso de reiteración, el equipo será desafectado del LCH.",
+          "aplicable": true
+        },
+        {
+          "numero": "28",
+          "contenido": "En caso de ausencia de un equipo con previo aviso de 24 horas o más a la Organización, se le dará por perdido el partido y se aplicará descuento de 3 puntos en la Tabla de Posiciones una vez finalizado el torneo. Asimismo, al equipo puntual se le dará por ganado el partido por Walk Over (W.O). El resultado será de 3 – 0. En caso de reiteración, se aplicará descuento de 6 puntos en la Tabla de Posiciones una vez finalizado el torneo.",
+          "aplicable": true
+        },
+        {
+          "numero": "29",
+          "contenido": "La postergación de los partidos es facultad exclusiva de la Organización. La solicitud de postergación de un partido no es admitida, excepto cuando existan motivos graves por los cuales un equipo no puede presentarse en la fecha y hora establecidas en el Fixture. Aun cuando un capitán demuestre un motivo que justifique la postergación y el equipo rival esté de acuerdo, la misma podrá ser rechazada en caso de que no se pudieran utilizar las canchas o el Fixture no lo permitiera. El pedido de postergación deberá cursarse a la Organización con no menos de 48 horas de antelación.\nEn caso de que el equipo contrario y la Organización accedieran a la postergación del partido, ésta fijará una única fecha para la realización del encuentro. El equipo que no se presentara al partido perderá los puntos aplicándose la regla del Walk Over.\n*",
+          "aplicable": true
+        },
+        {
+          "numero": "30",
+          "contenido": "La Organización impondrá sanciones a los equipos y o sus capitanes cuando se den las siguientes circunstancias:\n1°) No completar correctamente la Planilla de Campo: 1 falta.\n2°) Demorar el inicio del partido: 2 faltas.\n3°) No pagar el canon del partido: 3 faltas.\n4°) No pagar la inscripción en término: 4 faltas.\n5°) W.O. con previo aviso: 6 faltas.\n6°) W.O. Sin aviso.: 8 faltas.\n*",
+          "aplicable": false
+        },
+        {
+          "numero": "31",
+          "contenido": "Luego de la finalización del campeonato, las sanciones a aplicar al equipo o al capitán por las faltas cometidas serán las siguientes:\n– 10 faltas: Advertencia.\n– 15 faltas: Suspensión al capitán por 1 fecha.\n– 18 faltas: Descuento de 3 puntos.\n– 22 faltas: Descuento de 6 puntos.\n*Actualmente no aplicables.",
+          "aplicable": false
+        },
+        {
+          "numero": "31 bis",
+          "contenido": "Se aplicarán hasta 10 fechas de suspensión al capitán, subcapitán, jugador o integrante del equipo que durante o finalizado el partido modificare o adulterare la Planilla de Campo con la intención de beneficiar a su propio conjunto o perjudicar al rival.",
+          "aplicable": false
+        }
+      ]
+    },
+    {
+      "numeroRomano": "VI",
+      "titulo": "APARTADO VI: TRIBUNAL DE DISCIPLINA. SANCIONES DERIVADAS DEL JUEGO.",
+      "articulos": [
+        {
+          "numero": "32",
+          "contenido": "El Tribunal de Disciplina será el encargado de juzgar y aplicar las sanciones previstas para las distintas faltas y las conductas de indisciplina.",
+          "aplicable": true
+        },
+        {
+          "numero": "33",
+          "contenido": "Finalizada cada fecha el Tribunal de Disciplina aplicará las medidas disciplinarias que correspondieren teniendo en cuenta los informes de los Árbitros y de los Veedores. Una vez impuesta una sanción, el Tribunal de Disciplina publicará la misma en www.lachacrafutbol.com.ar, momento desde el que se tendrá por notificada. El fallo del Tribunal de Disciplina se podrá apelar mediante descargo -vía correo electrónico a torneos@lachacrafutbol.com.ar– realizado dentro de las 24 horas de publicada la sanción.",
+          "aplicable": true
+        },
+        {
+          "numero": "34",
+          "contenido": "Las sanciones previstas en este Capítulo son las derivadas por las conductas del juego establecidas en este Reglamento. No obstante, el Tribunal de Disciplina juzgará e impondrá sanciones por faltas disciplinarias cometidas antes y después de los partidos siempre que se den dentro del predio de La Chacra Fútbol, y tendrá en cuenta los informes del Árbitro, del veedor o de cualquier integrante de la Organización en caso que la conducta se produjera previa o posteriormente al partido.",
+          "aplicable": true
+        },
+        {
+          "numero": "35",
+          "contenido": "Las faltas cometidas durante el partido serán sancionadas de conformidad con el Reglamento FIFA, el cual queda a exclusiva interpretación del Árbitro.",
+          "aplicable": true
+        },
+        {
+          "numero": "36",
+          "contenido": "Lo previsto en el Artículo precedente queda exceptuado por las siguientes disposiciones, que regulan las conductas entre jugadores, tanto del mismo equipo como de equipos rivales:\n1°) Actitud antideportiva: amonestación – 3 fechas.\n2°) Exceso verbal y o gestos agraviantes a un rival: 1 – 4 fechas.\n3°) Empujones, manoteos entre jugadores sin intento de agresión: amonestación – 6 fechas.\n4°) Juego brusco que implique expulsión directa: 2 fechas.\n5°) Juego brusco grave implique expulsión directa: 3 fechas – 12 fechas.\n6°) Intento de agresión física y golpes que no llegaren a destino: 3 – 12 fechas.\n7°) Agresión física y o golpes que llegaren a destino: 4 fechas – suspensión por tiempo indeterminado.\n8°) Riña entre jugadores (peleas o agresiones físicas entre 3 o más jugadores: Expulsión definitiva a quien/es se identificara/n como el/los responsable/s y suspensión por tiempo indeterminado a quien/es respondieran la agresión; expulsión definitiva del/los equipo/s que participaren en la riña.\n9°) Destruir o dañar intencionalmente mobiliario del predio 1 – 13 fechas; y o sanción económica al equipo al cual pertenece el responsable; y o suspensión del torneo por tiempo indeterminado al equipo en caso de haber participado 2 o más jugadores/as.\n10°) Evitar deliberadamente una oportunidad manifiesta de gol con la mano implicará la expulsión del partido. Al jugador expulsado por este motivo se le computará una amonestación al finalizar el encuentro.\nEsta sanción no implica la suspensión de fechas subsiguientes, excepto cuando el jugador haya sido amonestado previamente a la expulsión. En ese caso, el jugador deberá cumplir 1 fecha de suspensión por doble amonestación.",
+          "aplicable": true
+        },
+        {
+          "numero": "37",
+          "contenido": "Lo previsto en el Artículo 35 queda exceptuado por las siguientes disposiciones, que regulan las inconductas de jugadores para con los Árbitros, Veedores e integrantes de la Organización:\n1°) Insultar y o agredir verbalmente a los veedores u organizadores en cumplimiento de sus funciones: 2 – 13 fechas.\n2°) Exceso verbal al árbitro antes, durante o finalizado el partido: 1 – 4 fechas.\n3°) Insultar y o amenazar al árbitro antes, durante o finalizado el partido: 2 – 13 fechas. \n4°) Intentar agredir, empujar, manotear al árbitro, veedores u organizadores: 5 fechas – expulsión definitiva del torneo.\n5°) Agredir físicamente, golpes que llegaren a destino al árbitro, veedores u organizadores: expulsión definitiva de todo evento organizado por La Chacra Fútbol.\nLas sanciones podrán ser colectivas si en la agresión participaren 2 o más integrantes de un equipo.",
+          "aplicable": true
+        },
+        {
+          "numero": "38",
+          "contenido": "La incorrecta inclusión de un jugador en la Planilla de Campo será pasible de las siguientes sanciones:\n1°) Pérdida de los puntos del partido, que serán atribuidos al equipo contrario; el resultado del juego será de 3 – 0 a favor de éste último.\n2°) Suspensión de 1 – 3 fechas para el capitán, sub capitán o, en su defecto, a quien firmare la Planilla de Campo como representante del equipo.\n3°) Suspensión de 1 – 4 fechas en caso de adulteración de la Planilla de Campo para el capitán, sub capitán, o a quien firmare la misma.\nSe entiende por incorrecta inclusión de un jugador en la Planilla de Campo la participación de un jugador que no se encuentre identificado en la Lista de Buena Fe, o que si bien esté inscripto, se halle cumpliendo una suspensión.\nSe considera incorrecta la inclusión de uno o más jugadores cuando ingresaren al campo de juego sin observar lo dispuesto en los arts. 13, segundo párrafo, y 41.",
+          "aplicable": true
+        },
+        {
+          "numero": "38 bis",
+          "contenido": "No se permitirá la inscripción de jugadores/as que participen en Clubes de la Liga Tandilense de Fútbol -o de otra Localidad-. \nEsta disposición rige a partir del 1° de enero de 2026.\nI.- Este impedimento se establece para las siguientes situaciones:\na) si un/a jugador/a juega en LA CHACRA con posterioridad a haberlo hecho en algún Club asociado a una Liga de Fútbol.\nb) si un/a jugador/a se encuentra participando en LA CHACRA y decidiera comenzar a jugar en un Club asociado a una Liga de Fútbol.\nc) si un/a jugador/a se encontrase comprendido/a en el punto III de este artículo, y volviera a jugar en LA CHACRA antes del término allí previsto.\nII.- El incumplimiento de esta disposición se sancionará: \na) descuento de hasta 36 puntos en la Tabla de Posiciones una vez finalizado el torneo en curso; \nb) suspensión de hasta 13 fechas para el/la capitán/a del equipo al cual perteneciere el/la jugadora impedido/a.\nIII. Aquellos jugadores que participen del Apertura 2026 de LA CHACRA, y luego de finalizado éste comiencen a jugar en un Club asociado a una Liga, no podrán inscribirse en LA CHACRA hasta el Torneo Clausura 2027.\nIV. Aquellos jugadores que participaron del Apertura 2025 de LA CHACRA, y luego de finalizado éste comenzaron a jugar en un Club asociado a una Liga, no podrán inscribirse en LA CHACRA hasta el Torneo Clausura 2026.  \nV. El equipo que incumpla por segunda vez esta disposición, podrá ser excluido de los Torneos de manera definitiva.",
+          "aplicable": true
+        },
+        {
+          "numero": "39",
+          "contenido": "Las amonestaciones se eliminan una vez finalizado el campeonato, de manera que no se tendrán en cuenta para el siguiente. \nLa acumulación de 4 amonestaciones recibidas en distintos partidos se sanciona con 1 fecha de suspensión.\nLa acumulación de 8 amonestaciones recibidas en distintos partidos se sanciona con 2 fecha de suspensión.\nLos jugadores que finalizaren un Torneo suspendidos por acumulación de amonestaciones -en la última fecha o en promoción- estarán habilitados para jugar el siguiente Torneo.\nLos jugadores suspendidos por cualquier otro motivo -doble amonestación, expulsión directa o informe-, deberán cumplir de manera continuada la sanción impuesta, aun cuando la misma abarcare más de un campeonato.",
+          "aplicable": true
+        },
+        {
+          "numero": "40",
+          "contenido": "El Tribunal de Disciplina tendrá en cuenta la Reincidencia, entendida ésta como la reiteración de conductas de indisciplina cometidas por un mismo jugador.\nSi un jugador fuere reincidente el Tribunal de Disciplina podrá sancionarlo hasta con el doble de pena prevista para la conducta cometida.\nEsta regla se aplicará también a los equipos que en forma reiterada cometan actos de indisciplina de manera reiterada, en cuyo caso la Organización podrá excluirlos en cualquier momento.",
+          "aplicable": true
+        },
+        {
+          "numero": "41",
+          "contenido": "El Árbitro utilizará la Tarjeta Azul si algún participante se excediera verbalmente sin llegar a insultos, o si advirtiera un estado de nerviosismo tal que pudiera acrecentarse durante el correr del partido.\nDicha sanción implica la expulsión del participante por un lapso de 5 minutos en el fútbol femenino y 10 minutos en fútbol masculino, transcurridos los cuales podrá ingresar nuevamente.\nDurante ese lapso el equipo disputará el encuentro con un jugador/a menos.\nEn caso que el participante sancionado con Tarjeta Azul reingresare al campo de juego y continúe con la misma actitud, deberá ser expulsado del partido con tarjeta roja.",
+          "aplicable": true
+        },
+        {
+          "numero": "41 bis",
+          "contenido": "Si por alguna de las circunstancias previstas en los artículos 36 o 37 el Arbitro decidiera la suspensión del partido, se dará por perdido el partido por 3 a 0 al equipo que haya provocado la suspensión si éste fuera ganando o empatando el encuentro. En caso de que el equipo que fuera ganando el partido no hubiera provocado la suspensión, se tendrá en cuenta ese resultado, computándose los puntos a su favor y goles convertidos por lo jugadores de ambos equipos. En cualquier caso, se tendrán en cuenta las amonestaciones o expulsiones sucedidas previamente a la suspensión.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "VII",
+      "titulo": "APARTADO VII: FAIR PLAY. PREMIOS.",
+      "articulos": [
+        {
+          "numero": "42",
+          "contenido": "Todos los equipos competirán además en la tabla de Fair Play, en la que se tendrá cuenta de la cantidad de expulsados y amonestados de cada equipo.\nAl finalizar el campeonato, el equipo que obtenga la menor cantidad de puntos en dicha tabla, se le otorgará el Premio Fair Play. En caso de igualdad en dicha posición, se valorará las siguientes circunstancias para desempatar:\n1°) menor cantidad de expulsados.\n2°) menor puntaje por faltas graves, entendidas éstas como aquéllas previstas en el Artículo 36 incisos 5°, 6° y 7°, y 37.\nA la finalización de cada campeonato, el equipo que obtenga menos puntos en dicha tabla será ganador del Premio Fair Play.\n*Actualmente no aplicable.",
+          "aplicable": false
+        },
+        {
+          "numero": "43",
+          "contenido": "A los efectos del cómputo de puntos en la Tabla Fair Play, la Organización establece la siguiente puntuación:\n1°) Expulsión directa equivale a 4 puntos.\n2°) Amonestación equivale a 1 punto.\n3°) Doble Amonestación 3 puntos.\n4°) Conducta prevista en el Artículo 36 inciso 5°) equivale a 6 puntos.\n5°) Conducta prevista en el Artículo 36 inciso 6°) equivale a 12 puntos.\n6°) Conducta prevista en el Artículo 36 inciso 7°) equivale a 12 puntos –esta sanción es para el equipo en el que participen el/los jugador/es que respondieran a la agresión.\n7°) Conducta prevista en el Artículo 37 incisos 1°) y 2°) equivale a 7 puntos.\n8°) Conducta prevista en el Artículo 37 inciso 3°) equivale a 12 puntos.\n9°) Inclusión incorrecta de un jugador de manera deliberada equivale a 5 puntos.\n*Actualmente no aplicable.",
+          "aplicable": false
+        },
+        {
+          "numero": "44",
+          "contenido": "Al equipo que obtenga 30 puntos o más en la Tabla de Fair Play se le descontará 1 punto en la Tabla de Posiciones.\nSi obtuviera 35 puntos o más se le descontarán 3 puntos en la Tabla de Posiciones.\nEn caso de obtener 40 puntos o más se le descontarán 6 puntos de la Tabla de Posiciones.\nSi un equipo obtuviera 45 puntos o más, se le descontarán 9 puntos en la Tabla de Posiciones. Además, su permanencia en los torneos de La Chacra Fútbol será decisión exclusiva de la Organización, pudiendo consultar a los capitanes del mismo torneo su opinión al respecto, la cual no será vinculante.\n*Actualmente no aplicable.",
+          "aplicable": false
+        },
+        {
+          "numero": "45",
+          "contenido": "Además del Premio Fair Play, la Organización hará entrega de los siguientes Premios:\n1°) Equipo Campeón.\n2°) Goleador.\n3°) Valla Menos Vencida.",
+          "aplicable": true
+        },
+        {
+          "numero": "46",
+          "contenido": "En caso de empate en el rubro Goleador, se otorgará el premio al jugador cuyo equipo finalizara en mejor posición en la Tabla de Posiciones. Si subsistiera la igualdad, se premiará a quien haya convertido el mayor porcentaje de goles del total de su equipo.",
+          "aplicable": true
+        },
+        {
+          "numero": "47",
+          "contenido": "En caso empate en el rubro Valla Menos Vencida, se premiará al arquero cuyo equipo finalizara en mejor posición en la Tabla de Posiciones. Si persistiera la igualdad, se premiará al arquero del equipo que haya convertido más goles a favor.",
+          "aplicable": true
+        }
+      ]
+    },
+    {
+      "numeroRomano": "VIII",
+      "titulo": "APARTADO VIII: DISPOSICIONES FINALES.",
+      "articulos": [
+        {
+          "numero": "48",
+          "contenido": "Si se produjeran vacantes durante el transcurso de algún campeonato en alguna de las categorías, la Organización tendrá la potestad de cubrir o no la misma.",
+          "aplicable": true
+        },
+        {
+          "numero": "49",
+          "contenido": "Las decisiones del Tribunal de Disciplina sólo serán revisadas en las condiciones y por las causas establecidas en el Apartado VI.",
+          "aplicable": true
+        },
+        {
+          "numero": "50",
+          "contenido": "Las disposiciones establecidas en este Reglamento General se complementan con los Anexos. Por ello, las reglas se presumen conocidas por todos.\nLa información brindada en www.lachacrafutbol.com.ar se entiende que es conocida por todos los participantes, de manera que no se admitirán reclamos acerca de cuestiones allí publicadas.\n \nANEXOS\nANEXO I: CATEGORÍA MUJERES.\nREGLA 1: Los equipos podrán inscribir un máximo de dieciseis (16) jugadoras. Si bien no es obligatorio completar esa cantidad, una vez presentada la Lista de Buena Fe, no se podrá modificar durante el transcurso del campeonato, excepto en los casos previstos en el art. 12 del Reglamento.\nLas jugadoras deberán haber cumplido dieciocho (18) años de edad para poder participar en LA CHACRA FÚTBOL.\nREGLA 2: La cantidad mínima de jugadoras en cancha es de 5 (4 + arquera). Ningún equipo podrá empezar el partido con menos de 5 jugadoras y si a lo largo del mismo un equipo quedara, por expulsión o por lesiones, con menos de 5 jugadores, se le aplicará la ley de Walk Over y perderá los puntos.\nREGLA 3: Los partidos se dividirán en dos tiempos de 25 minutos con un intervalo de 5 minutos.\nREGLA 4: El gol es válido desde cualquier lugar de la cancha.\nREGLA 5: La reanudación del juego desde los laterales se realizará con la mano. No es válido el gol de lateral, excepto que se desvíe o roce en alguna jugadora. Es válido el saque lateral directo al área.\nREGLA 6: La reanudación del juego por parte de la arquera, ya sea con las manos -pelota en juego- o con el pie -saque de meta-, podrá pasar la mitad de campo.\nNo podrá sacar de sobre pique o de volea, aunque sí podrá realizar auto pase en la reposición con las manos -no así en saque de meta-. Una vez efectuado el auto pase no podrá tomar nuevamente la pelota con las manos.\nREGLA 7: La arquera, ante un pase intencional de una compañera, no podrá tomar la pelota con sus manos.\nREGLA 8: No se podrá disputar la pelota desde el piso y/o “barrer” con una rival cerca, haya o no contacto con la misma. En caso de ocurrir esta infracción, que corre por cuenta de la interpretación del árbitro, se sancionará tiro libre indirecto. Dicha acción está permitida si no hay alguna jugadora cerca con la que pudiere haber contacto físico.\nLa arquera puede ir al piso sólo dentro del área. Al salir fuera del área deberá respetar aquélla regla. Si una jugadora que no sea la arquera fuera al piso en el área se cobrará tiro libre indirecto.\nREGLA 9: No se cobrará falta si la pelota diera en la mano de una jugadora cuando ésta se cubra la cara y/o pecho.\nREGLA 10: En los tiros libres se deberá respetar una distancia de 5 metros.\nREGLA 11: En un saque lateral, tiro libre o tiro de esquina deberá haber automáticamente y como mínimo 3 metros de distancia, los mismos no necesariamente deberán ser pedidos por el equipo ejecutante o el árbitro y aquella jugadora que no cumpla con esta distancia podrá ser amonestada.\nREGLA 12: Los tiros libres serán directos o indirectos según la naturaleza de la falta, en todo el campo de juego.\nREGLA 13: Ley de Ventaja: se puede aplicar.\nREGLA 14: El tiro libre penal se ejecutará con carrera y el resto de las jugadoras deberán ubicarse donde el árbitro lo indique.\nREGLA 15: Cada equipo podrá realizar cambios ilimitados, y las jugadoras que hayan sido sustituidas podrán reingresar.\nREGLA 16: La aplicación de «último recurso» será sancionada con Tarjeta Azul.\nREGLA 17: Las disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL.\nANEXO II: CATEGORIA LIBRE:\nREGLA 1: Duración del Partido.\nLos partidos se jugarán en 2 tiempos de 40 minutos, con un intervalo de 10 minutos.\nREGLA 2: Sustituciones.\nSe podrán realizar sustituciones ilimitadas de jugadores por partido. Los jugadores sustituidos podrán reingresar todas las veces que se considere conveniente.\nREGLA 3: Cantidad de Jugadores.\nLos equipos contarán con 8 (ocho) jugadores para el comienzo del partido.\nEl mínimo de jugadores para poder comenzar a disputar un partido será de 5 jugadores de campo y 1 arquero.\nLos jugadores deberán haber cumplido dieciocho (18) años de edad para poder participar en LA CHACRA FÚTBOL.\nREGLA 4: En los tiros libres se deberá respetar una distancia de 7 metros.\n*REGLA 5: Acumulación de faltas.\nSe sancionará con tiro libre penal cuando un equipo acumulare, durante el transcurso del partido, 10 faltas. Esa penalidad se aplicará nuevamente a la 16° y 20° falta cometida por el mismo equipo. Posteriormente, cada falta será sancionada con tiro libre penal.\nSi el Árbitro aplicare la ley de ventaja, la falta se computará. Si en consecuencia de la ley de ventaja se convirtiera gol y la falta fuere la 10°, 16° o 20°, el penal no será otorgado y se computará como falta 11°, 17° o 21°.\nLo mismo ocurrirá en caso de cometerse penal y la falta sea la 10°, 16° o 20°.\n*NO SE APLICARÁ A PARTIR DEL TORNEO CLAUSURA 2017.\nREGLA 6: Cumplimiento de sanciones en torneos diferentes.\nA partir del APERTURA 2017 los jugadores cumplirán las sanciones impuestas de manera continuada, aun cuando debiera disputar partidos de diferentes campeonatos (Torneo regular y Copa de Campeones).\nREGLA 7: Reglas complementarias.\nLas disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL.\n ANEXO III: CATEGORÍA SUPERLIGA.\nLa Categoría Superliga se rige por el presente Reglamento, y los requisitos para participar de la misma son los siguientes:\nREGLA 1: Los jugadores deberán ser Categoría 1988 o inferior.\nREGLA 2: Se podrá inscribir un (1) jugador Categoría 1989 a 1993.\nREGLA 3: Ningún jugador podrá integrar otra Lista de Buena Fe de equipos que disputen las Categorías Libres.\nREGLA 4: Los equipos podrán inscribir hasta 21 jugadores en la Lista de Buena Fe, incluyendo al jugador referido en el punto 2).\nREGLA 5: En los tiros libres se deberá respetar una distancia de 7 metros.\nREGLA 6: Las disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL.\nANEXO IV: ASCENSOS, DESCENSOS Y PROMOCIONES.\na) HOMBRES LIBRE.\nASCENSOS DIRECTOS: Los equipos de las Categorías C y B que finalizaren en el puesto 1° ascenderán en forma directa a las Categorías B y A, respectivamente.\nDESCENSOS DIRECTOS: Los equipos de las Categorías A y B que finalizaren en el puesto 13° descenderán en forma directa a las Categorías B y C, respectivamente.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 9° y 12° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5). Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nDisputarán promoción para Categoría B los equipos que finalizaren en los puestos 9° y 12° de la Categoría B y los que finalizaren 2° y 5° de la Categoría C. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la B y los peores puestos de la C.\nb) HOMBRES SUPERLIGA.\nASCENSO DIRECTO: El equipo campeón de la Categoría B ascenderá en forma directa a la Categoría A.\nDESCENSO DIRECTO: El equipo que finalizare en el puesto 11° de la Categoría A descenderá en forma directa a la Categoría B.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 7° y 10° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5). Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nc) MUJERES.\nASCENSOS DIRECTOS: \nLos equipos de las Categorías C y B que finalizaren en el puesto 1° ascenderán en forma directa a las Categorías B y A, respectivamente.\nDESCENSOS DIRECTOS: Los equipos de las Categorías A y B que finalizaren en el puesto 12° descenderán en forma directa a las Categorías B y C, respectivamente.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 8° y 11° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nDisputarán promoción para Categoría B los equipos que finalizaren en los puestos 8° y 11° de la Categoría B y los que finalizaren 2° y 5° de la Categoría C. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la B y los peores puestos de la C.\nd) ASCENSO POR VACANTE: En caso de liberarse una vacante en cualquier categoría,  la misma se reemplazará con el equipo mejor posicionado en la categoría inmediata inferior.\nANEXO V: COPA DE CAMPEONES.\nSe jugará una vez por año, en las fechas que la Organización disponga según la conveniencia del calendario. Tendrán prioridad los campeonatos regulares de la temporada en caso de que las condiciones climáticas hagan imposible la realización de aquéllos y de la Copa de Campeones.\nLos equipos que participarán en la Copa de Campeones serán aquéllos que han sido campeones hasta la actualidad, y se sumarán todos los que se clasificaren campeones en todas las Categorías de Hombres.\nLa Organización podrá invitar a uno o más equipos si fuere necesario para completar el Fixture de la Copa de Campeones.4IS\n\n</user_query>",
+          "aplicable": true
+        }
+      ]
+    }
+  ],
+  "anexos": [
+    {
+      "numero": 1,
+      "titulo": "ANEXO I: CATEGORÍA MUJERES.",
+      "contenido": "REGLA 1: Los equipos podrán inscribir un máximo de dieciseis (16) jugadoras. Si bien no es obligatorio completar esa cantidad, una vez presentada la Lista de Buena Fe, no se podrá modificar durante el transcurso del campeonato, excepto en los casos previstos en el art. 12 del Reglamento.\nLas jugadoras deberán haber cumplido dieciocho (18) años de edad para poder participar en LA CHACRA FÚTBOL.\nREGLA 2: La cantidad mínima de jugadoras en cancha es de 5 (4 + arquera). Ningún equipo podrá empezar el partido con menos de 5 jugadoras y si a lo largo del mismo un equipo quedara, por expulsión o por lesiones, con menos de 5 jugadores, se le aplicará la ley de Walk Over y perderá los puntos.\nREGLA 3: Los partidos se dividirán en dos tiempos de 25 minutos con un intervalo de 5 minutos.\nREGLA 4: El gol es válido desde cualquier lugar de la cancha.\nREGLA 5: La reanudación del juego desde los laterales se realizará con la mano. No es válido el gol de lateral, excepto que se desvíe o roce en alguna jugadora. Es válido el saque lateral directo al área.\nREGLA 6: La reanudación del juego por parte de la arquera, ya sea con las manos -pelota en juego- o con el pie -saque de meta-, podrá pasar la mitad de campo.\nNo podrá sacar de sobre pique o de volea, aunque sí podrá realizar auto pase en la reposición con las manos -no así en saque de meta-. Una vez efectuado el auto pase no podrá tomar nuevamente la pelota con las manos.\nREGLA 7: La arquera, ante un pase intencional de una compañera, no podrá tomar la pelota con sus manos.\nREGLA 8: No se podrá disputar la pelota desde el piso y/o “barrer” con una rival cerca, haya o no contacto con la misma. En caso de ocurrir esta infracción, que corre por cuenta de la interpretación del árbitro, se sancionará tiro libre indirecto. Dicha acción está permitida si no hay alguna jugadora cerca con la que pudiere haber contacto físico.\nLa arquera puede ir al piso sólo dentro del área. Al salir fuera del área deberá respetar aquélla regla. Si una jugadora que no sea la arquera fuera al piso en el área se cobrará tiro libre indirecto.\nREGLA 9: No se cobrará falta si la pelota diera en la mano de una jugadora cuando ésta se cubra la cara y/o pecho.\nREGLA 10: En los tiros libres se deberá respetar una distancia de 5 metros.\nREGLA 11: En un saque lateral, tiro libre o tiro de esquina deberá haber automáticamente y como mínimo 3 metros de distancia, los mismos no necesariamente deberán ser pedidos por el equipo ejecutante o el árbitro y aquella jugadora que no cumpla con esta distancia podrá ser amonestada.\nREGLA 12: Los tiros libres serán directos o indirectos según la naturaleza de la falta, en todo el campo de juego.\nREGLA 13: Ley de Ventaja: se puede aplicar.\nREGLA 14: El tiro libre penal se ejecutará con carrera y el resto de las jugadoras deberán ubicarse donde el árbitro lo indique.\nREGLA 15: Cada equipo podrá realizar cambios ilimitados, y las jugadoras que hayan sido sustituidas podrán reingresar.\nREGLA 16: La aplicación de «último recurso» será sancionada con Tarjeta Azul.\nREGLA 17: Las disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL."
+    },
+    {
+      "numero": 2,
+      "titulo": "ANEXO II: CATEGORIA LIBRE:",
+      "contenido": "REGLA 1: Duración del Partido.\nLos partidos se jugarán en 2 tiempos de 40 minutos, con un intervalo de 10 minutos.\nREGLA 2: Sustituciones.\nSe podrán realizar sustituciones ilimitadas de jugadores por partido. Los jugadores sustituidos podrán reingresar todas las veces que se considere conveniente.\nREGLA 3: Cantidad de Jugadores.\nLos equipos contarán con 8 (ocho) jugadores para el comienzo del partido.\nEl mínimo de jugadores para poder comenzar a disputar un partido será de 5 jugadores de campo y 1 arquero.\nLos jugadores deberán haber cumplido dieciocho (18) años de edad para poder participar en LA CHACRA FÚTBOL.\nREGLA 4: En los tiros libres se deberá respetar una distancia de 7 metros.\n*REGLA 5: Acumulación de faltas.\nSe sancionará con tiro libre penal cuando un equipo acumulare, durante el transcurso del partido, 10 faltas. Esa penalidad se aplicará nuevamente a la 16° y 20° falta cometida por el mismo equipo. Posteriormente, cada falta será sancionada con tiro libre penal.\nSi el Árbitro aplicare la ley de ventaja, la falta se computará. Si en consecuencia de la ley de ventaja se convirtiera gol y la falta fuere la 10°, 16° o 20°, el penal no será otorgado y se computará como falta 11°, 17° o 21°.\nLo mismo ocurrirá en caso de cometerse penal y la falta sea la 10°, 16° o 20°.\n*NO SE APLICARÁ A PARTIR DEL TORNEO CLAUSURA 2017.\nREGLA 6: Cumplimiento de sanciones en torneos diferentes.\nA partir del APERTURA 2017 los jugadores cumplirán las sanciones impuestas de manera continuada, aun cuando debiera disputar partidos de diferentes campeonatos (Torneo regular y Copa de Campeones).\nREGLA 7: Reglas complementarias.\nLas disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL."
+    },
+    {
+      "numero": 3,
+      "titulo": "ANEXO III: CATEGORÍA SUPERLIGA.",
+      "contenido": "La Categoría Superliga se rige por el presente Reglamento, y los requisitos para participar de la misma son los siguientes:\nREGLA 1: Los jugadores deberán ser Categoría 1988 o inferior.\nREGLA 2: Se podrá inscribir un (1) jugador Categoría 1989 a 1993.\nREGLA 3: Ningún jugador podrá integrar otra Lista de Buena Fe de equipos que disputen las Categorías Libres.\nREGLA 4: Los equipos podrán inscribir hasta 21 jugadores en la Lista de Buena Fe, incluyendo al jugador referido en el punto 2).\nREGLA 5: En los tiros libres se deberá respetar una distancia de 7 metros.\nREGLA 6: Las disposiciones del presente ANEXO son complementarias al REGLAMENTO GENERAL."
+    },
+    {
+      "numero": 4,
+      "titulo": "ANEXO IV: ASCENSOS, DESCENSOS Y PROMOCIONES.",
+      "contenido": "a) HOMBRES LIBRE.\nASCENSOS DIRECTOS: Los equipos de las Categorías C y B que finalizaren en el puesto 1° ascenderán en forma directa a las Categorías B y A, respectivamente.\nDESCENSOS DIRECTOS: Los equipos de las Categorías A y B que finalizaren en el puesto 13° descenderán en forma directa a las Categorías B y C, respectivamente.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 9° y 12° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5). Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nDisputarán promoción para Categoría B los equipos que finalizaren en los puestos 9° y 12° de la Categoría B y los que finalizaren 2° y 5° de la Categoría C. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la B y los peores puestos de la C.\nb) HOMBRES SUPERLIGA.\nASCENSO DIRECTO: El equipo campeón de la Categoría B ascenderá en forma directa a la Categoría A.\nDESCENSO DIRECTO: El equipo que finalizare en el puesto 11° de la Categoría A descenderá en forma directa a la Categoría B.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 7° y 10° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5). Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nc) MUJERES.\nASCENSOS DIRECTOS: \nLos equipos de las Categorías C y B que finalizaren en el puesto 1° ascenderán en forma directa a las Categorías B y A, respectivamente.\nDESCENSOS DIRECTOS: Los equipos de las Categorías A y B que finalizaren en el puesto 12° descenderán en forma directa a las Categorías B y C, respectivamente.\nPROMOCIONES: Disputarán promoción para Categoría A los equipos que finalizaren en los puestos 8° y 11° de la Categoría A y los que finalizaren 2° y 5° de la Categoría B. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la A y los peores puestos de la B.\nDisputarán promoción para Categoría B los equipos que finalizaren en los puestos 8° y 11° de la Categoría B y los que finalizaren 2° y 5° de la Categoría C. En caso de empate se definirá por tiros desde el punto penal, al mejor de cinco (5) disparos. Los cruces serán entre los mejores puestos de la B y los peores puestos de la C.\nd) ASCENSO POR VACANTE: En caso de liberarse una vacante en cualquier categoría,  la misma se reemplazará con el equipo mejor posicionado en la categoría inmediata inferior."
+    },
+    {
+      "numero": 5,
+      "titulo": "ANEXO V: COPA DE CAMPEONES.",
+      "contenido": "Se jugará una vez por año, en las fechas que la Organización disponga según la conveniencia del calendario. Tendrán prioridad los campeonatos regulares de la temporada en caso de que las condiciones climáticas hagan imposible la realización de aquéllos y de la Copa de Campeones.\nLos equipos que participarán en la Copa de Campeones serán aquéllos que han sido campeones hasta la actualidad, y se sumarán todos los que se clasificaren campeones en todas las Categorías de Hombres.\nLa Organización podrá invitar a uno o más equipos si fuere necesario para completar el Fixture de la Copa de Campeones.4IS\n\n</user_query>"
+    }
+  ]
+}

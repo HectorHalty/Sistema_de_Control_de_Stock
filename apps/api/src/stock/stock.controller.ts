@@ -6,10 +6,14 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StockService } from './stock.service';
-import { CreateProductDto, UpdateProductDto, AdjustStockDto, CreateEmployeeConsumptionDto, CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto, CreatePurchaseOrderDto, ReceivePurchaseOrderDto } from './dto';
+import {
+  CreateProductDto, UpdateProductDto, AdjustStockDto,
+  CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto,
+  CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
+  CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
+} from './dto';
 import {
   STOCK_COUNT_ROLES,
-  STOCK_CONSUMPTION_ROLES,
   STOCK_MUTATION_ROLES,
   STOCK_READ_ROLES,
 } from '../common/roles';
@@ -21,8 +25,12 @@ export class StockController {
 
   @Get('products')
   @Roles(...STOCK_READ_ROLES)
-  findAll(@Query('categoryId') categoryId?: string) {
-    return this.stockService.findAllProducts(categoryId);
+  findAll(
+    @Query('categoryId') categoryId?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockService.findAllProducts(categoryId, cursor, limit ? Number(limit) : undefined);
   }
 
   @Get('products/:id')
@@ -69,13 +77,13 @@ export class StockController {
 
   @Post('warehouses')
   @Roles(...STOCK_MUTATION_ROLES)
-  createWarehouse(@Body() dto: { name: string; location: string; icon?: string }) {
+  createWarehouse(@Body() dto: CreateWarehouseDto) {
     return this.stockService.createWarehouse(dto);
   }
 
   @Put('warehouses/:id')
   @Roles(...STOCK_MUTATION_ROLES)
-  updateWarehouse(@Param('id') id: string, @Body() dto: { name?: string; location?: string; icon?: string }) {
+  updateWarehouse(@Param('id') id: string, @Body() dto: UpdateWarehouseDto) {
     return this.stockService.updateWarehouse(id, dto);
   }
 
@@ -93,13 +101,13 @@ export class StockController {
 
   @Post('categories')
   @Roles(...STOCK_MUTATION_ROLES)
-  createCategory(@Body() dto: { name: string; icon?: string }) {
+  createCategory(@Body() dto: CreateCategoryDto) {
     return this.stockService.createCategory(dto);
   }
 
   @Put('categories/:id')
   @Roles(...STOCK_MUTATION_ROLES)
-  updateCategory(@Param('id') id: string, @Body() dto: { name?: string; icon?: string }) {
+  updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.stockService.updateCategory(id, dto);
   }
 
@@ -127,20 +135,6 @@ export class StockController {
     });
   }
 
-  @Get('employee-consumptions')
-  @Roles(...STOCK_READ_ROLES)
-  findAllEmployeeConsumptions(@Query('limit') limit?: string) {
-    return this.stockService.findAllEmployeeConsumptions(
-      limit ? parseInt(limit, 10) : undefined,
-    );
-  }
-
-  @Post('employee-consumptions')
-  @Roles(...STOCK_CONSUMPTION_ROLES)
-  createEmployeeConsumption(@Body() dto: CreateEmployeeConsumptionDto) {
-    return this.stockService.createEmployeeConsumption(dto);
-  }
-
   @Get('count-sessions')
   @Roles(...STOCK_READ_ROLES)
   findAllCountSessions(@Query('limit') limit?: string) {
@@ -157,8 +151,8 @@ export class StockController {
 
   @Get('suppliers')
   @Roles(...STOCK_READ_ROLES)
-  findAllSuppliers() {
-    return this.stockService.findAllSuppliers();
+  findAllSuppliers(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+    return this.stockService.findAllSuppliers(cursor, limit ? Number(limit) : undefined);
   }
 
   @Post('suppliers')
@@ -181,8 +175,12 @@ export class StockController {
 
   @Get('purchase-orders')
   @Roles(...STOCK_READ_ROLES)
-  findAllPurchaseOrders(@Query('status') status?: string) {
-    return this.stockService.findAllPurchaseOrders(status);
+  findAllPurchaseOrders(
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockService.findAllPurchaseOrders(status, cursor, limit ? Number(limit) : undefined);
   }
 
   @Get('purchase-orders/:id')
@@ -195,6 +193,12 @@ export class StockController {
   @Roles(...STOCK_MUTATION_ROLES)
   createPurchaseOrder(@Body() dto: CreatePurchaseOrderDto) {
     return this.stockService.createPurchaseOrder(dto);
+  }
+
+  @Put('purchase-orders/:id')
+  @Roles(...STOCK_MUTATION_ROLES)
+  updatePurchaseOrder(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto) {
+    return this.stockService.updatePurchaseOrder(id, dto);
   }
 
   @Post('purchase-orders/:id/receive')

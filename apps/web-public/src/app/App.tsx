@@ -1,11 +1,32 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
-import { PublicSite } from './components/public/PublicSite';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { PublicRouter } from './components/public/PublicRouter';
+import { PublicAuthProvider } from './components/public/auth/PublicAuthContext';
+import { googleEnabled } from './components/public/auth/auth-helpers';
+import { CartProvider } from './components/public/cart/CartContext';
 
-export default function App() {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      retry: 1,
+    },
+  },
+});
+
+function PublicAppShell() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+
+    void SplashScreen.hide();
+    void StatusBar.setStyle({ style: Style.Dark });
+    void StatusBar.setBackgroundColor({ color: '#111111' });
+
     const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
       if (canGoBack) {
         window.history.back();
@@ -13,8 +34,28 @@ export default function App() {
         void CapApp.exitApp();
       }
     });
-    return () => { void listener.then(l => l.remove()); };
+    return () => {
+      void listener.then((l) => l.remove());
+    };
   }, []);
 
-  return <PublicSite />;
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  const tree = (
+    <QueryClientProvider client={queryClient}>
+      <PublicAuthProvider>
+        <CartProvider>
+          <PublicRouter />
+        </CartProvider>
+      </PublicAuthProvider>
+    </QueryClientProvider>
+  );
+
+  return googleEnabled(googleClientId)
+    ? <GoogleOAuthProvider clientId={googleClientId!} locale="es">{tree}</GoogleOAuthProvider>
+    : tree;
+}
+
+export default function App() {
+  return <PublicAppShell />;
 }

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
+# LEGACY — no usar. Preferí: deploy/server-bootstrap.sh (GCP / VPS).
 # Bootstrap inicial en una VM Oracle Cloud (Ubuntu 22.04).
-# Ejecutar como usuario ubuntu después del primer SSH:
-#   curl -fsSL <raw-url>/deploy/oracle-bootstrap.sh | bash
-#   — o, con el repo clonado:
 #   bash deploy/oracle-bootstrap.sh
 set -euo pipefail
 
-echo "=== LCH — Bootstrap Oracle Cloud ==="
+echo "ADVERTENCIA: Oracle quedó descartado. Usá deploy/server-bootstrap.sh (ver deploy/GCP.md)."
+echo "=== LCH — Bootstrap Oracle Cloud (LEGACY) ==="
 
 if [[ $EUID -eq 0 ]]; then
   echo "No ejecutar como root. Usá el usuario ubuntu."

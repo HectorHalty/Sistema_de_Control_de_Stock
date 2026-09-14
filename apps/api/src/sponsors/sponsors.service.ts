@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { PlacementPatrocinador, TipoMedioPatrocinador } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
@@ -9,9 +10,9 @@ export class SponsorsService {
     return this.prisma.patrocinador.findMany({
       where: {
         ...(active !== undefined ? { active } : {}),
-        ...(placement ? { placement } : {}),
+        ...(placement ? { placement: placement as PlacementPatrocinador } : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
@@ -21,21 +22,60 @@ export class SponsorsService {
     return sponsor;
   }
 
-  async create(data: { name: string; imageUrl: string; placement?: string; linkUrl?: string }) {
+  async create(data: {
+    name: string;
+    imageUrl: string;
+    placement?: string;
+    linkUrl?: string;
+    bannerLabel?: string;
+    mediaType?: string;
+    widthPx?: number;
+    heightPx?: number;
+    sortOrder?: number;
+    durationSeconds?: number;
+  }) {
     return this.prisma.patrocinador.create({
       data: {
         name: data.name,
         imageUrl: data.imageUrl,
-        placement: data.placement || 'banner',
+        placement: (data.placement as PlacementPatrocinador) || 'banner',
         linkUrl: data.linkUrl,
+        bannerLabel: data.bannerLabel,
+        mediaType: (data.mediaType as TipoMedioPatrocinador) || 'image',
+        widthPx: data.widthPx,
+        heightPx: data.heightPx,
+        sortOrder: data.sortOrder ?? 0,
+        durationSeconds: data.durationSeconds ?? 5,
         active: true,
       },
     });
   }
 
-  async update(id: string, data: { name?: string; imageUrl?: string; placement?: string; active?: boolean; linkUrl?: string }) {
+  async update(
+    id: string,
+    data: {
+      name?: string;
+      imageUrl?: string;
+      placement?: string;
+      active?: boolean;
+      linkUrl?: string;
+      bannerLabel?: string;
+      mediaType?: string;
+      widthPx?: number;
+      heightPx?: number;
+      sortOrder?: number;
+      durationSeconds?: number;
+    },
+  ) {
     await this.findById(id);
-    return this.prisma.patrocinador.update({ where: { id }, data });
+    return this.prisma.patrocinador.update({
+      where: { id },
+      data: {
+        ...data,
+        placement: data.placement as PlacementPatrocinador | undefined,
+        mediaType: data.mediaType as TipoMedioPatrocinador | undefined,
+      },
+    });
   }
 
   async delete(id: string) {

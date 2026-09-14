@@ -399,7 +399,12 @@ function WarehouseProductsPanel({
 }
 
 function WarehouseForm({ initial, onSave, onCancel }: { initial: WarehouseType | null; onSave: (w: WarehouseType) => void; onCancel: () => void }) {
-  const [form, setForm] = useState<WarehouseType>(initial || { id: '', name: '', location: '', icon: 'Warehouse' });
+  const [form, setForm] = useState<WarehouseType>(() => ({
+    id: initial?.id ?? '',
+    name: initial?.name ?? '',
+    location: initial?.location ?? '',
+    icon: initial?.icon || 'Warehouse',
+  }));
 
   return (
     <div className="px-6 py-4 space-y-4">
@@ -430,7 +435,11 @@ function WarehouseForm({ initial, onSave, onCancel }: { initial: WarehouseType |
       </div>
       <div className="flex gap-3 justify-end pt-2">
         <button onClick={onCancel} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
-        <button onClick={() => form.name && onSave(form)} className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
+        <button
+          type="button"
+          onClick={() => form.name.trim() && onSave({ ...form, name: form.name.trim(), icon: form.icon || 'Warehouse' })}
+          className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]"
+        >
           {initial ? 'Guardar' : 'Crear'}
         </button>
       </div>

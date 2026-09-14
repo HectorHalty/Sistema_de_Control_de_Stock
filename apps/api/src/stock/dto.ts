@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsInt, IsNumber, IsEnum, Min, IsUUID, MaxLength, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { UnidadMedida } from '@prisma/client';
 
 export class CreateProductDto {
   @IsString()
@@ -19,9 +20,8 @@ export class CreateProductDto {
   categoryId: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  unit?: string;
+  @IsEnum(UnidadMedida)
+  unit?: UnidadMedida;
 
   @IsOptional()
   @IsInt()
@@ -55,24 +55,35 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsUUID()
   categoryId?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  unit?: string;
+  @IsEnum(UnidadMedida)
+  unit?: UnidadMedida;
 
   @IsOptional()
   @IsInt()
-  orderUnit?: number;
+  orderUnit?: number | null;
 
   @IsOptional()
   @IsString()
-  image?: string;
+  image?: string | null;
+
+  /**
+   * Bloqueo optimista: versión que el cliente tenía al cargar el producto.
+   * Si no coincide con la actual, el update se rechaza con 409 en vez de
+   * pisar silenciosamente la edición de otra persona. Opcional por ahora
+   * para no romper llamadas existentes (scripts, tests) que todavía no la
+   * mandan — sin ella, el update no chequea versión (comportamiento previo).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
 }
 
 export class AdjustStockDto {
@@ -97,37 +108,6 @@ export class AdjustStockDto {
   operatorName?: string;
 }
 
-export class CreateEmployeeConsumptionDto {
-  @IsUUID()
-  productId: string;
-
-  @IsUUID()
-  warehouseId: string;
-
-  @IsNumber()
-  @Min(0.001)
-  quantity: number;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  note?: string;
-
-  @IsOptional()
-  @IsUUID()
-  operatorId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  operatorName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  operatorRole?: string;
-}
-
 export class StockCountEntryDto {
   @IsUUID()
   productId: string;
@@ -136,9 +116,8 @@ export class StockCountEntryDto {
   @MaxLength(200)
   productName: string;
 
-  @IsString()
-  @MaxLength(50)
-  unit: string;
+  @IsEnum(UnidadMedida)
+  unit: UnidadMedida;
 
   @IsNumber()
   expected: number;
@@ -218,6 +197,29 @@ export class CreatePurchaseOrderDto {
   items: PurchaseOrderItemDto[];
 }
 
+export class UpdatePurchaseOrderDto {
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  provider?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderItemDto)
+  items?: PurchaseOrderItemDto[];
+
+  /** Bloqueo optimista — ver UpdateProductDto.version. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
+}
+
 export class ReceiveAllocationDto {
   @IsUUID()
   warehouseId: string;
@@ -255,4 +257,59 @@ export class ReceivePurchaseOrderDto {
   @IsString()
   @MaxLength(120)
   operatorName?: string;
+}
+
+export class CreateCategoryDto {
+  @IsString()
+  @MaxLength(120)
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class CreateWarehouseDto {
+  @IsString()
+  @MaxLength(120)
+  name: string;
+
+  @IsString()
+  @MaxLength(200)
+  location: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
+}
+
+export class UpdateWarehouseDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  icon?: string;
 }

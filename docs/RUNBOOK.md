@@ -34,7 +34,6 @@ Guía de instalación y desarrollo del sistema de gestión para **La Chacra Fút
 │  ├── media       - Real presigned S3 uploads    │
 │  ├── sponsors    - Sponsor CRUD                 │
 │  ├── football    - Teams, matches, standings    │
-│  ├── online-catalog - Online product catalog    │
 │  └── sse         - Server-Sent Events stream    │
 └────────────────┬────────────────────────────────┘
                  │
@@ -79,6 +78,29 @@ npm install
 npx prisma migrate dev
 npm run prisma:seed
 ```
+
+There are two seed scripts:
+
+- `npm run prisma:seed` — reference data (stock categories, warehouses,
+  kitchens, admin user, ticket/order counters, football scheduling
+  config, reglamento, sales categories, web taxonomy). Idempotent: safe
+  to run multiple times, never resets an existing user's password. This
+  is the one Prisma runs automatically after `prisma migrate reset`.
+- `npm run prisma:seed:demo` — optional demo data (inventory items,
+  demo tournament, cantina menu with sponsors, public accounts, sample
+  online orders, demo staff users). Requires the reference seed to have
+  run first; it will throw if the web taxonomy is missing.
+
+### Database commands (`apps/api`)
+
+| Comando | Qué hace |
+|---|---|
+| `npm run db:baseline` | Regenera la migración baseline desde `schema.prisma` |
+| `npm run db:drift` | Falla si el schema y las migraciones no coinciden |
+| `npm run db:reconcile` | Reporta deriva entre datos derivados y su origen |
+| `npm run test:db` | Tests de restricciones contra PostgreSQL real |
+| `npm run prisma:seed` | Datos de referencia (idempotente) |
+| `npm run prisma:seed:demo` | Datos de demostración (opcional) |
 
 ### 3. Run the backend
 
@@ -195,10 +217,11 @@ npm run electron:public   # builds apps/web-public/release/
 ## API Endpoints
 
 ### Health
-- `GET /health` - Health check (used by frontend to detect API availability)
+- `GET /health` - Liveness (proceso vivo; lo usa el frontend y Docker)
+- `GET /health/ready` - Readiness (Postgres OK; smoke / monitoreo)
 
 ### Auth
-- `POST /auth/login` - Login (bcrypt-validated, rate-limited, no auto-provisioning)
+- `POST /auth/login` - Login (bcrypt-validated, rate-limited, no auto-provisioning). Lockout de 5 intentos / 15 min, contador en Postgres (`intentos_login`) — compartido entre instancias de la API.
 
 > **Note**: Users must be created via seed script or admin API. The login endpoint no longer auto-provisions accounts.
 
@@ -252,12 +275,6 @@ npm run electron:public   # builds apps/web-public/release/
 - `PUT /football/matches/:id/score` - Set match score
 - `GET /football/standings` - Get standings (computed)
 
-### Online Catalog
-- `GET /online-catalog/products` - List products
-- `POST /online-catalog/products` - Create product
-- `PUT /online-catalog/products/:id` - Update product
-- `DELETE /online-catalog/products/:id` - Delete product
-
 ## Transactional Guarantees
 
 ### Checkout Flow
@@ -310,7 +327,6 @@ Available adapters:
 - `useKitchenApiAdapter(kitchenId?)` - orders list, transitions, SSE
 - `useMediaApiAdapter()` - presign, confirm, list, delete
 - `useSponsorsApiAdapter()` - CRUD
-- `useOnlineCatalogApiAdapter()` - CRUD
 
 ## Testing
 
@@ -330,14 +346,17 @@ npm run test:public
 
 ## Production deployment
 
+Camino oficial: **Google Cloud / VPS Ubuntu** — ver [deploy/GCP.md](../deploy/GCP.md) y [deploy/CHECKLIST.md](../deploy/CHECKLIST.md).
+
 ```bash
 cp .env.production.example .env.production
 # Completar secretos y dominios
 
 # En VPS Linux:
 chmod +x deploy/*.sh
+bash deploy/server-bootstrap.sh   # una vez (Docker, UFW)
 ./deploy/deploy.sh
-./deploy/seed-prod.sh   # una vez; cambiar admin123
+./deploy/seed-prod.sh             # una vez; cambiar admin123
 
 # HTTPS:
 sudo bash deploy/install-caddy.sh
@@ -348,20 +367,54 @@ sudo systemctl reload caddy
 # 0 3 * * * /opt/lch/deploy/backup-db.sh
 ```
 
-- Admin: `https://admin.tudominio.com` (Caddy → `:8080`)
-- API: `https://api.tudominio.com` (Caddy → `:3001`)
+- Admin: `https://lachacrafutbol.duckdns.org` (Caddy → `:8080`)
+- API: `https://lachacra-api.duckdns.org` (Caddy → `:3001`)
+- Health DB: `GET /health/ready`
 - APK release: `npm run build:apk:release`
 - Test local Docker: `npm run test:deploy`
 
-Ver carpeta `deploy/` para scripts detallados. **Oracle Cloud:** `deploy/ORACLE.md` · **Google Cloud:** `deploy/GCP.md`
+> Nota: scripts `deploy/ORACLE*` quedaron de un intento anterior; **no es el camino actual**.
+
 
 ## Known Limitations
 
-- No pagination on list endpoints yet
+- Pagination por cursor disponible (`?cursor=&limit=`) en `GET /stock/products`,
+  `/stock/suppliers`, `/stock/purchase-orders`, `/kitchen/orders` y
+  `/sales/tickets` — devuelve `{ items, nextCursor }`. Sin esos params cada
+  endpoint sigue devolviendo el array completo (compatibilidad). El admin
+  todavía no la consume: cada `useQuery` de Inventario/Ventas pide la lista
+  completa (ver
+  [2026-09-07-admin-fuente-de-verdad-c.md](superpowers/plans/2026-09-07-admin-fuente-de-verdad-c.md),
+  Task 9/10 de Plan B) — React Query maneja la caché y la revalidación, pero
+  no pagina. Catálogos chicos (mesas, impresoras, configuración) siguen sin
+  límite.
+- **Admin — fuente de lectura (Inventario y Ventas):** React Query
+  (`app/queryClient.ts`), no `localStorage`-first a mano. `localStorage`
+  sigue existiendo sólo como caché de revalidación (persister de
+  `@tanstack/react-query-persist-client`, clave `lch-admin-query-cache`) —
+  al montar, si hay caché persistida se muestra mientras revalida en
+  segundo plano; si no hay red, sigue mostrando la última página buena y un
+  toast avisa que no se pudo conectar. Fútbol/online/cocina/plataforma
+  siguen con el patrón viejo (`useLocalStorage` + hidratación manual) — ver
+  [2026-09-07-admin-fuente-de-verdad-c-design.md](superpowers/specs/2026-09-07-admin-fuente-de-verdad-c-design.md).
+  Mutaciones: optimismo a mano (no `useMutation`) con reconciliación vía
+  `queryClient.refetchQueries` si el servidor rechaza — no se reescribieron
+  porque ya hacían exactamente eso.
+- Bloqueo optimista (`version`) disponible en `Producto`, `ProductoVenta`,
+  `OrdenCompra` y `Configuracion` — opcional en el DTO, 409 si no coincide.
+  El admin ya lo manda en los 3 formularios de edición (Producto,
+  ProductoVenta, OrdenCompra); `Configuracion` lo soporta en el backend pero
+  el frontend (`persistRemoteConfig`, guardado fire-and-forget/debounced en
+  4 pantallas) todavía no lo manda.
 - Stock deduction uses raw SQL for composite key updates (Prisma limitation — now uses parameterized `$queryRaw`/`$executeRaw`)
 - Offline fallback remains for when API health check fails; in production keep API always reachable
-- SSE does not handle reconnection backoff (browser handles basic retry)
-- Login attempt tracking is in-memory (use Redis for multi-instance deployments)
+- SSE se redistribuye entre instancias vía Postgres `LISTEN/NOTIFY` (canal
+  `kitchen_events`); si `DATABASE_URL` falta o la conexión de `LISTEN` falla
+  al arrancar, cae a entrega solo local (misma instancia) sin romper el
+  arranque. No maneja reconexión con backoff del lado del cliente (el
+  navegador hace el retry básico).
+- Login lockout vive en Postgres (`intentos_login`), compartido entre
+  instancias — ya no depende de un `Map` en memoria de proceso.
 - Sales audit log for product/printer config remains device-local; ticket history syncs from API
 - 28 npm audit vulnerabilities remain (mostly in dev dependencies; see `npm audit` output)
 

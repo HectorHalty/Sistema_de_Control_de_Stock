@@ -34,8 +34,20 @@ export function isLocalOnlyTicketId(id: string): boolean {
   return id.startsWith('sale-') || id.startsWith('return-');
 }
 
+/**
+ * Ventas emitidas — excluye anulados/devueltos y, a propósito, los consumos
+ * internos (origen 'consumo'): tienen total $0 y no son ingreso. Todos los
+ * filtros de rango de este archivo pasan por acá, así que excluir consumos
+ * en un solo lugar alcanza para que ningún reporte de ventas los sume.
+ * Ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
+ */
 export function getIssuedSales(tickets: SalesTicket[]): SalesTicket[] {
-  return tickets.filter(t => t.status === 'emitido');
+  return tickets.filter(t => t.status === 'emitido' && t.origen !== 'consumo');
+}
+
+/** Consumos internos emitidos — para mostrarlos aparte, no para sumarlos a ingresos. */
+export function getIssuedConsumption(tickets: SalesTicket[]): SalesTicket[] {
+  return tickets.filter(t => t.status === 'emitido' && t.origen === 'consumo');
 }
 
 export function filterTicketsInRange(

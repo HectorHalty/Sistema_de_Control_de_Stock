@@ -6,6 +6,7 @@ import {
   mapApiCategoryToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
+  mapApiCountSessionToLocal,
   nextProductCode,
 } from '@/features/inventory/api/inventory-mappers';
 import { formatProductCode, getCategoryCodePrefix } from '@/features/inventory/product-codes';
@@ -46,7 +47,7 @@ describe('mapApiProductToLocal', () => {
     });
   });
 
-  it('normaliza unit desconocido a "unidades" y stockLevels ausente a []', () => {
+  it('conserva unit "litros" y normaliza stockLevels ausente a []', () => {
     const api = {
       id: 'uuid-2',
       name: 'Sin stock',
@@ -56,15 +57,43 @@ describe('mapApiProductToLocal', () => {
     } as unknown as StockProduct;
 
     const local = mapApiProductToLocal(api);
-    expect(local.unit).toBe('unidades');
+    expect(local.unit).toBe('litros');
     expect(local.stockByWarehouse).toEqual([]);
     expect(local.category).toBe('');
+  });
+
+  it('conserva unit "cajas"', () => {
+    const api = { id: 'b', name: 'Gaseosa', code: 'GAS-1', categoryId: 'c', unit: 'cajas' } as unknown as StockProduct;
+    expect(mapApiProductToLocal(api).unit).toBe('cajas');
   });
 
   it('respeta unit "kg"', () => {
     const api = { id: 'a', name: 'Carne', code: 'CAR-1', categoryId: 'c', unit: 'kg' } as unknown as StockProduct;
     expect(mapApiProductToLocal(api).unit).toBe('kg');
   });
+});
+
+// El consumo de empleado (mapApiEmployeeConsumptionToLocal) se retiró junto
+// con ConsumoEmpleado — el consumo interno ahora es un TicketVenta más
+// (origen 'consumo'), sin mapper propio. Ver
+// docs/superpowers/plans/2026-09-08-consumo-como-venta.md.
+describe('unidades en conteos', () => {
+  function countSession(unit: string) {
+    return {
+      id: 's1',
+      createdAt: '2026-06-16T12:00:00Z',
+      date: '2026-06-16',
+      dateType: 'regular',
+      entries: [{ productId: 'p1', productName: 'Aceite', unit, expected: 10, counted: 9 }],
+    } as unknown as Parameters<typeof mapApiCountSessionToLocal>[0];
+  }
+
+  it.each(['unidades', 'kg', 'litros', 'cajas'])(
+    'la entrada de conteo conserva la unidad %s',
+    unit => {
+      expect(mapApiCountSessionToLocal(countSession(unit)).entries[0].unit).toBe(unit);
+    },
+  );
 });
 
 describe('mapApiWarehouseToLocal / mapApiCategoryToLocal', () => {
@@ -79,6 +108,11 @@ describe('mapApiWarehouseToLocal / mapApiCategoryToLocal', () => {
 
     const cat = { id: 'c', name: 'Bebidas' } as Category;
     expect(mapApiCategoryToLocal(cat)).toEqual({ id: 'c', name: 'Bebidas', icon: 'Package' });
+  });
+
+  it('conserva el icono persistido del almacén', () => {
+    const wh = { id: 'w', name: 'Heladera', location: 'Bar', icon: 'Refrigerator' } as Warehouse;
+    expect(mapApiWarehouseToLocal(wh).icon).toBe('Refrigerator');
   });
 });
 

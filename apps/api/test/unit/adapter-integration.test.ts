@@ -278,30 +278,4 @@ describe('Adapter integration - media/sponsor CRUD call path', () => {
     const deleteRes = await fetch(`${API_BASE}/sponsors/sp-1`, { method: 'DELETE' });
     expect(deleteRes.ok).toBe(true);
   });
-
-  it('online catalog CRUD calls correct endpoints', async () => {
-    // Create
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ id: 'op-1', name: 'Product A', price: 5000 }),
-    });
-
-    const createRes = await fetch(`${API_BASE}/online-catalog/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Product A', price: 5000, category: 'General' }),
-    });
-    const createResult = await createRes.json();
-    expect(createResult.name).toBe('Product A');
-
-    // List
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([{ id: 'op-1', name: 'Product A', active: true }]),
-    });
-
-    const listRes = await fetch(`${API_BASE}/online-catalog/products?active=true`);
-    const listResult = await listRes.json();
-    expect(listResult).toHaveLength(1);
-  });
 });

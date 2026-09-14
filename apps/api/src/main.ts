@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -73,6 +74,7 @@ async function bootstrap() {
     // Keep rate-limit focused on read traffic; never block writes/mutations.
     req.method !== 'GET'
     || req.path === '/health'
+    || req.path.startsWith('/health/')
     // Auth endpoints have their own dedicated limiter.
     || req.path.startsWith('/auth/')
     // User management is low-traffic and auth/role-protected; avoid lockouts by limiter.
@@ -139,6 +141,7 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   if (isDev) {
     const config = new DocumentBuilder()

@@ -2,14 +2,12 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../common/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { isKnownRole, assertAssignableRole, MIN_PASSWORD_LENGTH } from '../common/roles';
+import { RolUsuario } from '@prisma/client';
+import { isKnownRole, assertAssignableRole, MIN_PASSWORD_LENGTH, ROLES } from '../common/roles';
 
 const SALT_ROUNDS = 10;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-// In-memory attempt tracker (use Redis in production)
-const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
 
 @Injectable()
 export class AuthService {
@@ -22,36 +20,37 @@ export class AuthService {
     if (!username || !password) {
       throw new BadRequestException('Username and password are required');
     }
+    const key = username.toLowerCase();
 
-    // Check lockout
-    const attempts = loginAttempts.get(username.toLowerCase());
+    // Check lockout (contador en Postgres: compartido entre instancias de la API)
+    const attempts = await this.prisma.intentoLogin.findUnique({ where: { username: key } });
     if (attempts && attempts.count >= MAX_LOGIN_ATTEMPTS) {
-      const elapsed = Date.now() - attempts.lastAttempt;
+      const elapsed = Date.now() - attempts.lastAttempt.getTime();
       if (elapsed < LOCKOUT_WINDOW_MS) {
         const remaining = Math.ceil((LOCKOUT_WINDOW_MS - elapsed) / 60000);
         throw new UnauthorizedException(`Too many failed attempts. Try again in ${remaining} minute(s)`);
       }
       // Lockout expired, reset
-      loginAttempts.delete(username.toLowerCase());
+      await this.prisma.intentoLogin.deleteMany({ where: { username: key } });
     }
 
-    const user = await this.prisma.usuario.findUnique({ where: { username: username.toLowerCase() } });
+    const user = await this.prisma.usuario.findUnique({ where: { username: key } });
 
     if (!user) {
-      this.recordFailedAttempt(username, ip);
+      await this.recordFailedAttempt(key);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Reject placeholder hashes (migration safety)
     if (user.password === 'placeholder' || !user.password.startsWith('$2')) {
-      this.recordFailedAttempt(username, ip);
+      await this.recordFailedAttempt(key);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
-      this.recordFailedAttempt(username, ip);
+      await this.recordFailedAttempt(key);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -60,7 +59,7 @@ export class AuthService {
     }
 
     // Reset attempts on success
-    loginAttempts.delete(username.toLowerCase());
+    await this.prisma.intentoLogin.deleteMany({ where: { username: key } });
 
     const payload = { sub: user.id, username: user.username, role: user.role };
     return {
@@ -73,7 +72,7 @@ export class AuthService {
    * Create a new user with hashed password.
    * Used by admin endpoints or seed scripts — NOT auto-provisioned on login.
    */
-  async createUser(username: string, password: string, name: string, role: string = 'Vendedor') {
+  async createUser(username: string, password: string, name: string, role: RolUsuario = ROLES.VENDEDOR) {
     const existing = await this.prisma.usuario.findUnique({ where: { username: username.toLowerCase() } });
     if (existing) {
       throw new BadRequestException(`User ${username} already exists`);
@@ -123,9 +122,12 @@ export class AuthService {
     });
   }
 
-  private recordFailedAttempt(username: string, ip?: string) {
-    const key = username.toLowerCase();
-    const current = loginAttempts.get(key) || { count: 0, lastAttempt: 0 };
-    loginAttempts.set(key, { count: current.count + 1, lastAttempt: Date.now() });
+  /** Upsert atómico: dos intentos fallidos simultáneos incrementan sin pisarse. */
+  private async recordFailedAttempt(key: string) {
+    await this.prisma.intentoLogin.upsert({
+      where: { username: key },
+      create: { username: key, count: 1, lastAttempt: new Date() },
+      update: { count: { increment: 1 }, lastAttempt: new Date() },
+    });
   }
 }

@@ -5,13 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { RolUsuario } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import {
-  assertAssignableRole,
-  MIN_PASSWORD_LENGTH,
-  normalizeApiRole,
-  ROLES,
-} from '../common/roles';
+import { assertAssignableRole, MIN_PASSWORD_LENGTH, ROLES } from '../common/roles';
 import { ChangePasswordDto, CreateUserDto, UpdateUserDto } from './dto';
 
 const SALT_ROUNDS = 10;
@@ -36,9 +32,9 @@ export class UsersService {
       throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     }
 
-    let role: string;
+    let role: RolUsuario;
     try {
-      role = assertAssignableRole(dto.role);
+      role = assertAssignableRole(dto.role ?? '');
     } catch {
       throw new BadRequestException(`Invalid role: ${dto.role}`);
     }
@@ -58,9 +54,9 @@ export class UsersService {
     const user = await this.prisma.usuario.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
-    let role: string;
+    let role: RolUsuario;
     try {
-      role = assertAssignableRole(dto.role);
+      role = assertAssignableRole(dto.role ?? '');
     } catch {
       throw new BadRequestException(`Invalid role: ${dto.role}`);
     }
@@ -103,9 +99,8 @@ export class UsersService {
     await this.prisma.usuario.update({ where: { id: userId }, data: { password } });
   }
 
-  private async assertNotLastSuperAdmin(userId: string, role: string) {
-    const normalized = normalizeApiRole(role);
-    if (normalized !== ROLES.SUPER_ADMIN && normalized !== ROLES.ADMIN) return;
+  private async assertNotLastSuperAdmin(userId: string, role: RolUsuario) {
+    if (role !== ROLES.SUPER_ADMIN && role !== ROLES.ADMIN) return;
 
     const admins = await this.prisma.usuario.count({
       where: {
@@ -120,22 +115,21 @@ export class UsersService {
 
   private async assertCanModifyPrivilegedUser(
     targetId: string,
-    targetRole: string,
+    targetRole: RolUsuario,
     actorId: string,
-    nextRole: string,
+    nextRole: RolUsuario,
   ) {
     const actor = await this.prisma.usuario.findUnique({ where: { id: actorId }, select: { role: true } });
     if (!actor) throw new ForbiddenException('Actor not found');
 
-    const actorNormalized = normalizeApiRole(actor.role);
-    const actorIsSuper = actorNormalized === ROLES.SUPER_ADMIN || actorNormalized === ROLES.ADMIN;
+    const actorIsSuper = actor.role === ROLES.SUPER_ADMIN || actor.role === ROLES.ADMIN;
     if (!actorIsSuper) {
       throw new ForbiddenException('Only Super Admin can manage users');
     }
 
-    const privileged = [ROLES.SUPER_ADMIN, ROLES.ADMIN];
-    const targetIsPrivileged = privileged.includes(normalizeApiRole(targetRole) as typeof ROLES.SUPER_ADMIN);
-    const nextIsPrivileged = privileged.includes(normalizeApiRole(nextRole) as typeof ROLES.SUPER_ADMIN);
+    const privileged: RolUsuario[] = [ROLES.SUPER_ADMIN, ROLES.ADMIN];
+    const targetIsPrivileged = privileged.includes(targetRole);
+    const nextIsPrivileged = privileged.includes(nextRole);
 
     if (targetId === actorId && nextIsPrivileged !== targetIsPrivileged) {
       throw new BadRequestException('You cannot change your own privilege level');

@@ -77,11 +77,13 @@ if (-not $ok) {
 
 Write-Host ">> Smoke tests..." -ForegroundColor Yellow
 $health = (Invoke-WebRequest -Uri "http://127.0.0.1:3001/health" -UseBasicParsing).StatusCode
+$ready = (Invoke-WebRequest -Uri "http://127.0.0.1:3001/health/ready" -UseBasicParsing).StatusCode
 $admin = (Invoke-WebRequest -Uri "http://127.0.0.1:8080/" -UseBasicParsing).StatusCode
-Write-Host "  API /health: $health"
-Write-Host "  Admin /:     $admin"
+Write-Host "  API /health:       $health"
+Write-Host "  API /health/ready: $ready"
+Write-Host "  Admin /:           $admin"
 
-if ($health -ne 200 -or $admin -ne 200) {
+if ($health -ne 200 -or $ready -ne 200 -or $admin -ne 200) {
     throw "Smoke test fallo"
 }
 
@@ -89,6 +91,7 @@ Write-Host ""
 Write-Host "=== Test deploy OK ===" -ForegroundColor Green
 Write-Host "  Admin: http://127.0.0.1:8080"
 Write-Host "  API:   http://127.0.0.1:3001/health"
+Write-Host "  Ready: http://127.0.0.1:3001/health/ready"
 
 if (-not $KeepRunning) {
     Write-Host ">> Deteniendo contenedores..." -ForegroundColor DarkGray

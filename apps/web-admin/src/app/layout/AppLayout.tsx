@@ -2,19 +2,28 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   BarChart3,
+  Calendar,
+  ChefHat,
   CircleDollarSign,
   ClipboardList,
+  Gavel,
   Home,
+  Image,
+  LayoutGrid,
+  ListOrdered,
   LogOut,
   Menu,
   Package,
+  Printer,
   RotateCcw,
   Settings,
   ShoppingBag,
   ShoppingCart,
+  Tags,
   Trophy,
   UserMinus,
   Users,
+  UtensilsCrossed,
   Warehouse,
 } from 'lucide-react';
 import { useAppContext } from '@/app/providers/AppContext';
@@ -26,6 +35,8 @@ import {
   canAccessSettings,
   canAccessStockRoute,
   canAccessVentasTab,
+  canAccessFutbolTab,
+  canAccessOnlineTab,
   getBottomNavModules,
   getInitials,
   getRoleLabel,
@@ -34,6 +45,8 @@ import {
   type ModuleId,
   type StockRoute,
   type VentasTab,
+  type FutbolTab,
+  type OnlineTab,
 } from '@/features/platform/config/modules';
 import { NotificationsMenu } from '@/features/platform/components/NotificationsMenu';
 
@@ -49,7 +62,7 @@ const moduleMeta: Record<ModuleId, { label: string; to: string; icon: ComponentT
   futbol: { label: 'Futbol', to: '/futbol', icon: Trophy },
 };
 
-const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/registrar-consumo', '/reportes'];
+const stockInternalPaths = ['/productos', '/almacenes', '/pedidos', '/proveedores', '/consumo', '/reportes'];
 const BOTTOM_NAV_IDLE_MS = 4000;
 
 /** Misma altura/ancho visual que cada botón del menú colapsado. */
@@ -83,7 +96,6 @@ function buildContextNavItems(
       { route: 'pedidos', label: 'Pedidos', to: '/pedidos', icon: ShoppingCart },
       { route: 'proveedores', label: 'Proveedores', to: '/proveedores', icon: Users },
       { route: 'consumo', label: 'Controlar Stock', to: '/consumo', icon: ClipboardList },
-      { route: 'registrar-consumo', label: 'Registrar Consumo', to: '/registrar-consumo', icon: UserMinus },
       { route: 'reportes', label: 'Reportes', to: '/reportes', icon: BarChart3 },
     ];
 
@@ -108,6 +120,7 @@ function buildContextNavItems(
       { key: 'mostrador' as VentasTab, label: 'Mostrador', icon: CircleDollarSign },
       { key: 'pedidos' as VentasTab, label: 'Mis Pedidos', icon: ShoppingCart },
       { key: 'devoluciones' as VentasTab, label: 'Devoluciones', icon: RotateCcw },
+      { key: 'consumo' as VentasTab, label: 'Registrar Consumo', icon: UserMinus },
       { key: 'productos' as VentasTab, label: 'Productos', icon: Package },
       { key: 'mesas' as VentasTab, label: 'Mesas', icon: Warehouse },
       { key: 'reportes' as VentasTab, label: 'Reportes', icon: BarChart3 },
@@ -117,6 +130,48 @@ function buildContextNavItems(
         label: item.label,
         to: item.key === 'reportes' ? '/ventas?tab=reportes&section=ventas' : `/ventas?tab=${item.key}`,
         active: pathname.startsWith('/ventas') && normalizedTab === item.key,
+        icon: item.icon,
+      }));
+  }
+
+  if (activeModule === 'futbol') {
+    const selectedTab = currentTab || 'inicio';
+    return [
+      { key: 'inicio' as FutbolTab, label: 'Inicio', icon: Home },
+      { key: 'equipos' as FutbolTab, label: 'Equipos', icon: Users },
+      { key: 'categorias' as FutbolTab, label: 'Categorías', icon: Tags },
+      { key: 'fixture' as FutbolTab, label: 'Fixture', icon: Calendar },
+      { key: 'horarios' as FutbolTab, label: 'Horarios y Canchas', icon: LayoutGrid },
+      { key: 'resultados' as FutbolTab, label: 'Resultados', icon: BarChart3 },
+      { key: 'posiciones' as FutbolTab, label: 'Posiciones', icon: ListOrdered },
+      { key: 'planillas' as FutbolTab, label: 'Planillas', icon: Printer },
+      { key: 'reglamento' as FutbolTab, label: 'Reglamento', icon: Gavel },
+      { key: 'suspendidos' as FutbolTab, label: 'Suspendidos', icon: UserMinus },
+      { key: 'media' as FutbolTab, label: 'Media', icon: Image },
+    ]
+      .filter((item) => canAccessFutbolTab(role, item.key))
+      .map((item) => ({
+        label: item.label,
+        to: `/futbol?tab=${item.key}`,
+        active: pathname.startsWith('/futbol') && selectedTab === item.key,
+        icon: item.icon,
+      }));
+  }
+
+  if (activeModule === 'online') {
+    const selectedTab = currentTab || 'inicio';
+    return [
+      { key: 'inicio' as OnlineTab, label: 'Inicio', icon: Home },
+      { key: 'cocina' as OnlineTab, label: 'Cocina', icon: ChefHat },
+      { key: 'menu' as OnlineTab, label: 'Menú web', icon: UtensilsCrossed },
+      { key: 'sponsors' as OnlineTab, label: 'Sponsors', icon: ShoppingBag },
+      { key: 'metricas' as OnlineTab, label: 'Métricas', icon: BarChart3 },
+    ]
+      .filter((item) => canAccessOnlineTab(role, item.key))
+      .map((item) => ({
+        label: item.label,
+        to: `/online?tab=${item.key}`,
+        active: pathname.startsWith('/online') && selectedTab === item.key,
         icon: item.icon,
       }));
   }

@@ -1,33 +1,59 @@
+import { useEffect } from 'react';
 import { useLocalStorage } from '@/shared/hooks/use-local-storage';
 import { storageKeys } from '@/shared/storage/keys';
+import { settingsApi } from '@/app/api/client';
+import { persistRemoteConfig } from '@/shared/utils/remote-config';
 
 export function useOnlineSettings() {
-  const [orderNotifications, setOrderNotifications] = useLocalStorage<boolean>(
+  const [orderNotifications, setOrderNotificationsState] = useLocalStorage<boolean>(
     storageKeys.online.orderNotifications,
     true,
   );
-  const [syncCatalogWithStock, setSyncCatalogWithStock] = useLocalStorage<boolean>(
+  const [syncCatalogWithStock, setSyncCatalogWithStockState] = useLocalStorage<boolean>(
     storageKeys.online.syncCatalogWithStock,
     true,
   );
-  const [webChannelEnabled, setWebChannelEnabled] = useLocalStorage<boolean>(
+  const [webChannelEnabled, setWebChannelEnabledState] = useLocalStorage<boolean>(
     storageKeys.online.webChannelEnabled,
     true,
   );
-  const [appChannelEnabled, setAppChannelEnabled] = useLocalStorage<boolean>(
+  const [appChannelEnabled, setAppChannelEnabledState] = useLocalStorage<boolean>(
     storageKeys.online.appChannelEnabled,
     true,
   );
 
+  useEffect(() => {
+    void settingsApi.config.list('online').then(rows => {
+      for (const row of rows) {
+        if (row.key === 'online.orderNotifications' && typeof row.value === 'boolean') setOrderNotificationsState(row.value);
+        if (row.key === 'online.syncCatalogWithStock' && typeof row.value === 'boolean') setSyncCatalogWithStockState(row.value);
+        if (row.key === 'online.webChannelEnabled' && typeof row.value === 'boolean') setWebChannelEnabledState(row.value);
+        if (row.key === 'online.appChannelEnabled' && typeof row.value === 'boolean') setAppChannelEnabledState(row.value);
+      }
+    }).catch(() => undefined);
+  }, [setOrderNotificationsState, setSyncCatalogWithStockState, setWebChannelEnabledState, setAppChannelEnabledState]);
+
   return {
     orderNotifications,
-    setOrderNotifications,
+    setOrderNotifications: (value: boolean) => {
+      setOrderNotificationsState(value);
+      persistRemoteConfig('online.orderNotifications', 'online', value);
+    },
     syncCatalogWithStock,
-    setSyncCatalogWithStock,
+    setSyncCatalogWithStock: (value: boolean) => {
+      setSyncCatalogWithStockState(value);
+      persistRemoteConfig('online.syncCatalogWithStock', 'online', value);
+    },
     webChannelEnabled,
-    setWebChannelEnabled,
+    setWebChannelEnabled: (value: boolean) => {
+      setWebChannelEnabledState(value);
+      persistRemoteConfig('online.webChannelEnabled', 'online', value);
+    },
     appChannelEnabled,
-    setAppChannelEnabled,
+    setAppChannelEnabled: (value: boolean) => {
+      setAppChannelEnabledState(value);
+      persistRemoteConfig('online.appChannelEnabled', 'online', value);
+    },
   };
 }
 

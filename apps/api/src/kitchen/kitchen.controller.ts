@@ -16,8 +16,20 @@ export class KitchenController {
 
   @Get('orders')
   @Roles(...KITCHEN_READ_ROLES)
-  findAllOrders(@Query('kitchenId') kitchenId?: string, @Query('status') status?: string) {
-    return this.kitchenService.findAllOrders(kitchenId, status);
+  findAllOrders(
+    @Query('kitchenId') kitchenId?: string,
+    @Query('status') status?: string,
+    @Query('onlineOnly') onlineOnly?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.kitchenService.findAllOrders(
+      kitchenId,
+      status,
+      onlineOnly === 'true',
+      cursor,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @Get('orders/:id')
@@ -28,8 +40,14 @@ export class KitchenController {
 
   @Get('kitchens/:kitchenId/active-orders')
   @Roles(...KITCHEN_READ_ROLES)
-  activeOrders(@Param('kitchenId') kitchenId: string) {
-    return this.kitchenService.getActiveOrdersForKitchen(kitchenId);
+  activeOrders(
+    @Param('kitchenId') kitchenId: string,
+    @Query('onlineOnly') onlineOnly?: string,
+  ) {
+    return this.kitchenService.getActiveOrdersForKitchen(
+      kitchenId,
+      onlineOnly === 'true',
+    );
   }
 
   @Post('orders/:id/transition')

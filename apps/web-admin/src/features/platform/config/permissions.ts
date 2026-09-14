@@ -19,7 +19,6 @@ export type StockRoute =
   | 'pedidos'
   | 'proveedores'
   | 'consumo'
-  | 'registrar-consumo'
   | 'reportes';
 
 export type StockReportTab = 'control' | 'movimientos' | 'alertas' | 'historial';
@@ -29,9 +28,31 @@ export type VentasTab =
   | 'mostrador'
   | 'pedidos'
   | 'devoluciones'
+  /** Registrar consumo interno — ver docs/superpowers/plans/2026-09-08-consumo-como-venta.md. */
+  | 'consumo'
   | 'productos'
   | 'mesas'
   | 'reportes';
+
+export type FutbolTab =
+  | 'inicio'
+  | 'equipos'
+  | 'categorias'
+  | 'fixture'
+  | 'horarios'
+  | 'resultados'
+  | 'posiciones'
+  | 'planillas'
+  | 'reglamento'
+  | 'suspendidos'
+  | 'media';
+
+export type OnlineTab =
+  | 'inicio'
+  | 'cocina'
+  | 'menu'
+  | 'sponsors'
+  | 'metricas';
 
 export type VentasReportSection = 'ventas' | 'metricas' | 'historial';
 
@@ -57,7 +78,6 @@ const STOCK_ROUTES: Record<PlatformRole, StockRoute[] | 'all'> = {
     'pedidos',
     'proveedores',
     'consumo',
-    'registrar-consumo',
     'reportes',
   ],
   Vendedor: [],
@@ -74,7 +94,7 @@ const STOCK_REPORT_DENIED: Partial<Record<PlatformRole, StockReportTab[]>> = {
 const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
   SuperAdmin: 'all',
   Operador_Stock: [],
-  Vendedor: ['mostrador', 'pedidos', 'devoluciones'],
+  Vendedor: ['mostrador', 'pedidos', 'devoluciones', 'consumo'],
   Gerente_Ventas: 'all',
   Operador_Futbol: [],
   Operador_Cocina: [],
@@ -82,6 +102,24 @@ const VENTAS_TABS: Record<PlatformRole, VentasTab[] | 'all'> = {
 
 const VENTAS_REPORT_DENIED: Partial<Record<PlatformRole, VentasReportSection[]>> = {
   Vendedor: ['metricas', 'historial', 'ventas'],
+};
+
+const FUTBOL_TABS: Record<PlatformRole, FutbolTab[] | 'all'> = {
+  SuperAdmin: 'all',
+  Operador_Stock: [],
+  Vendedor: [],
+  Gerente_Ventas: [],
+  Operador_Futbol: 'all',
+  Operador_Cocina: [],
+};
+
+const ONLINE_TABS: Record<PlatformRole, OnlineTab[] | 'all'> = {
+  SuperAdmin: 'all',
+  Operador_Stock: [],
+  Vendedor: [],
+  Gerente_Ventas: [],
+  Operador_Futbol: [],
+  Operador_Cocina: 'all',
 };
 
 export const ROLE_LABELS: Record<PlatformRole, string> = {
@@ -102,7 +140,17 @@ export const ASSIGNABLE_ROLES: PlatformRole[] = [
   'Operador_Cocina',
 ];
 
-export function normalizeRole(role: UserRole | string): PlatformRole {
+/**
+ * Reduce los 7 roles de UserRole (espejo del enum RolUsuario del backend) a
+ * los 6 PlatformRole que gobiernan el acceso a módulos. Admin colapsa a
+ * SuperAdmin: es una simplificación deliberada del modelo de permisos del
+ * front, no un alias heredado.
+ *
+ * El switch es exhaustivo a propósito: agregar un rol al backend sin
+ * agregarlo acá rompe la compilación en `_exhaustive: never`, en vez de
+ * caer en un default silencioso que mal-autoriza a un usuario nuevo.
+ */
+export function normalizeRole(role: UserRole): PlatformRole {
   switch (role) {
     case 'SuperAdmin':
     case 'Operador_Stock':
@@ -113,17 +161,11 @@ export function normalizeRole(role: UserRole | string): PlatformRole {
       return role;
     case 'Admin':
       return 'SuperAdmin';
-    case 'Gerente_Operaciones':
-      return 'Gerente_Ventas';
-    case 'Encargado_Stock':
-    case 'Viewer':
+    default: {
+      const _exhaustive: never = role;
+      console.error(`normalizeRole: rol desconocido "${_exhaustive}", usando Operador_Stock`);
       return 'Operador_Stock';
-    case 'Encargado_Futbol':
-      return 'Operador_Futbol';
-    case 'Operador':
-      return 'Vendedor';
-    default:
-      return 'Operador_Stock';
+    }
   }
 }
 
@@ -158,7 +200,6 @@ export function stockRouteFromPath(pathname: string): StockRoute | null {
   if (pathname.startsWith('/pedidos')) return 'pedidos';
   if (pathname.startsWith('/proveedores')) return 'proveedores';
   if (pathname.startsWith('/consumo')) return 'consumo';
-  if (pathname.startsWith('/registrar-consumo')) return 'registrar-consumo';
   if (pathname.startsWith('/reportes')) return 'reportes';
   return null;
 }
@@ -179,6 +220,30 @@ export function getDefaultVentasTab(role: CurrentUser['role']): VentasTab {
   const allowed = VENTAS_TABS[normalizeRole(role)];
   if (allowed === 'all') return 'mostrador';
   return allowed[0] ?? 'mostrador';
+}
+
+export function canAccessFutbolTab(role: CurrentUser['role'], tab: FutbolTab): boolean {
+  if (!canAccessModule(role, 'futbol')) return false;
+  const allowed = FUTBOL_TABS[normalizeRole(role)];
+  return allowed === 'all' || allowed.includes(tab);
+}
+
+export function getDefaultFutbolTab(role: CurrentUser['role']): FutbolTab {
+  const allowed = FUTBOL_TABS[normalizeRole(role)];
+  if (allowed === 'all') return 'inicio';
+  return allowed[0] ?? 'inicio';
+}
+
+export function canAccessOnlineTab(role: CurrentUser['role'], tab: OnlineTab): boolean {
+  if (!canAccessModule(role, 'online')) return false;
+  const allowed = ONLINE_TABS[normalizeRole(role)];
+  return allowed === 'all' || allowed.includes(tab);
+}
+
+export function getDefaultOnlineTab(role: CurrentUser['role']): OnlineTab {
+  const allowed = ONLINE_TABS[normalizeRole(role)];
+  if (allowed === 'all') return 'inicio';
+  return allowed[0] ?? 'inicio';
 }
 
 export function getDefaultStockReportTab(role: CurrentUser['role']): StockReportTab {

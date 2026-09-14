@@ -17,7 +17,10 @@ export interface SalesProductBundleItem {
 export interface SalesProduct {
   id: string;
   name: string;
+  /** Nombre de la categoría de venta, para mostrar/agrupar en la UI. */
   category: string;
+  /** FK real contra CategoriaVenta — lo que efectivamente viaja al backend. */
+  categoriaVentaId: string;
   kitchenId: string;
   price: number;
   emoji: string;
@@ -25,6 +28,8 @@ export interface SalesProduct {
   recipe: { stockProductId: string; quantity: number }[];
   bundle: SalesProductBundleItem[];
   active: boolean;
+  /** Bloqueo optimista: versión leída del servidor (ausente en productos aún no sincronizados). */
+  version?: number;
 }
 
 export interface SalesTicket {
@@ -37,6 +42,10 @@ export interface SalesTicket {
   operatorId: string;
   operatorName: string;
   note?: string;
+  /** 'pos' | 'online' | 'consumo' — un ticket de consumo interno tiene total $0 y no se imprime. */
+  origen?: string;
+  /** Snapshot de descuento por almacén (checkout API o POS local). */
+  stockAllocations?: { stockProductId: string; warehouseId: string; quantity: number }[];
 }
 
 export interface SalesTable {

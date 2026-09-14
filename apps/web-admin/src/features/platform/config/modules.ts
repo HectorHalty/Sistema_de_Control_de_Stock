@@ -4,7 +4,7 @@ import {
   type ModuleId,
 } from '@/features/platform/config/permissions';
 
-export type { ModuleId, PlatformRole, StockRoute, StockReportTab, VentasTab, VentasReportSection, SettingsTab } from '@/features/platform/config/permissions';
+export type { ModuleId, PlatformRole, StockRoute, StockReportTab, VentasTab, VentasReportSection, SettingsTab, FutbolTab, OnlineTab } from '@/features/platform/config/permissions';
 export {
   ASSIGNABLE_ROLES,
   ROLE_LABELS,
@@ -17,6 +17,10 @@ export {
   canAccessVentasTab,
   canAccessVentasReportSection,
   getDefaultVentasTab,
+  canAccessFutbolTab,
+  getDefaultFutbolTab,
+  canAccessOnlineTab,
+  getDefaultOnlineTab,
   getDefaultStockReportTab,
   getDefaultVentasReportSection,
   canAccessSettings,
@@ -38,9 +42,9 @@ export interface ModuleDefinition {
 
 export const platformModules: ModuleDefinition[] = [
   { id: 'ventas', label: 'Ventas Físicas', shortLabel: 'Ventas', route: '/ventas', ready: true },
-  { id: 'online', label: 'Ventas Online', shortLabel: 'Online', route: '/online', ready: false },
+  { id: 'online', label: 'Ventas Online', shortLabel: 'Online', route: '/online', ready: true },
   { id: 'dashboard', label: 'Inicio', shortLabel: 'Inicio', route: '/', ready: true },
-  { id: 'futbol', label: 'Fútbol', shortLabel: 'Fútbol', route: '/futbol', ready: false },
+  { id: 'futbol', label: 'Fútbol', shortLabel: 'Fútbol', route: '/futbol', ready: true },
   { id: 'stock', label: 'Inventario', shortLabel: 'Inventario', route: '/stock', ready: true },
 ];
 

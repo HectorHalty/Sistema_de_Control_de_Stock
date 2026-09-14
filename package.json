@@ -6,6 +6,7 @@
     "apps/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-express-router.cjs",
     "dev:infra": "docker compose up -d postgres redis minio minio-init",
     "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "start:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -Setup",
@@ -21,6 +22,7 @@
     "test:admin": "npm run test --workspace=apps/web-admin",
     "test:public": "npm run test --workspace=apps/web-public",
     "test:api": "npm run test --workspace=apps/api",
+    "smoke:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-public.ps1",
     "build:admin": "npm run build --workspace=apps/web-admin",
     "build:public": "npm run build --workspace=apps/web-public",
     "build:api": "npm run build --workspace=apps/api",
@@ -28,8 +30,9 @@
     "deploy:validate": "bash deploy/validate-env.sh",
     "deploy:smoke": "bash deploy/smoke-test.sh",
     "test:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-deploy-local.ps1",
-    "oracle:retry": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/oracle-retry-saopaulo.ps1 -ReminderOnly -IntervalMinutes 30",
     "build:apk:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-release.ps1",
+    "build:apk:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk-public.ps1",
+    "build:ios:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-ios-public.ps1",
     "security:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/security-audit.ps1",
     "electron:admin": "npm run electron:build --workspace=apps/web-admin",
     "electron:public": "npm run electron:build --workspace=apps/web-public",
@@ -55,7 +58,7 @@
       "js-yaml": "4.2.0"
     },
     "file-type": "^21.3.2",
-    "express": "^4.22.2",
+    "express": "4.18.2",
     "qs": "^6.15.2",
     "body-parser": "^1.20.5",
     "form-data": "^4.0.6",

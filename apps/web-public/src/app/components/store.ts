@@ -57,26 +57,6 @@ export interface Order {
   items: { productId: string; quantityOrdered: number; quantityReceived?: number }[];
 }
 
-export type UserRole =
-  | 'Admin'
-  | 'Operador'
-  | 'Viewer'
-  | 'SuperAdmin'
-  | 'Gerente_Operaciones'
-  | 'Encargado_Stock'
-  | 'Encargado_Futbol';
-
-export interface CurrentUser {
-  username: string;
-  role: UserRole;
-}
-
-export interface AppUser {
-  id: string;
-  name: string;
-  role: UserRole;
-}
-
 export interface AuditEntry {
   id: string;
   date: string;

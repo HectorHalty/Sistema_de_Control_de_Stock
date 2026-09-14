@@ -11,13 +11,12 @@ import type {
   Warehouse as ApiWarehouse,
   Category as ApiCategory,
   ApiStockMovement,
-  ApiEmployeeConsumption,
   ApiStockCountSession,
   ApiSupplier,
   ApiPurchaseOrder,
 } from '@/app/api/client';
 import type {
-  Product, Warehouse, Category, StockMovement, EmployeeConsumptionEntry, StockCountSession,
+  Product, Warehouse, Category, StockMovement, StockCountSession,
   Supplier, Order,
 } from '@/features/inventory/types';
 
@@ -28,13 +27,14 @@ export function mapApiProductToLocal(api: ApiProduct): Product {
     code: api.code,
     description: api.description ?? '',
     category: api.category?.name ?? '',
-    unit: api.unit === 'kg' ? 'kg' : 'unidades',
+    unit: api.unit as Product['unit'],
     orderUnit: api.orderUnit,
     image: api.image ?? '',
     stockByWarehouse: (api.stockLevels ?? []).map(sl => ({
       warehouseId: sl.warehouseId,
       quantity: Number(sl.quantity), // Decimal llega como string por JSON
     })),
+    version: api.version,
   };
 }
 
@@ -69,28 +69,6 @@ export function mapApiMovementToLocal(api: ApiStockMovement): StockMovement {
   };
 }
 
-export function mapApiEmployeeConsumptionToLocal(api: ApiEmployeeConsumption): EmployeeConsumptionEntry {
-  return {
-    id: api.id,
-    date: new Date(api.createdAt).toLocaleString('es-AR'),
-    day: api.day,
-    createdAtISO: api.createdAt,
-    productId: api.productId,
-    productName: api.productName,
-    productCode: api.productCode ?? '',
-    warehouseId: api.warehouseId,
-    warehouseName: api.warehouseName,
-    quantity: Number(api.quantity),
-    unit: api.unit === 'kg' ? 'kg' : 'unidades',
-    previousStock: Number(api.previousStock),
-    newStock: Number(api.newStock),
-    operatorId: api.operatorId ?? undefined,
-    operatorName: api.operatorName ?? undefined,
-    operatorRole: api.operatorRole ?? undefined,
-    note: api.note ?? undefined,
-  };
-}
-
 export function mapApiCountSessionToLocal(api: ApiStockCountSession): StockCountSession {
   return {
     id: api.id,
@@ -102,7 +80,7 @@ export function mapApiCountSessionToLocal(api: ApiStockCountSession): StockCount
     entries: api.entries.map(e => ({
       productId: e.productId,
       productName: e.productName,
-      unit: e.unit === 'kg' ? 'kg' : 'unidades',
+      unit: e.unit as StockCountSession['entries'][number]['unit'],
       expected: Number(e.expected),
       counted: Number(e.counted),
     })),
@@ -129,6 +107,7 @@ export function mapApiPurchaseOrderToLocal(api: ApiPurchaseOrder): Order {
       quantityOrdered: Number(i.quantityOrdered),
       quantityReceived: i.quantityReceived != null ? Number(i.quantityReceived) : undefined,
     })),
+    version: api.version,
   };
 }
 

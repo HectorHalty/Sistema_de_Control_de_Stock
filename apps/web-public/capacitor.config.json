@@ -10,6 +10,14 @@
       "launchShowDuration": 2000,
       "backgroundColor": "#131313",
       "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0e0e0e"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "resizeOnFullScreen": true
     }
   }
 }

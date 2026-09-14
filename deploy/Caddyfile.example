@@ -2,9 +2,10 @@
 #   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
 #   sudo systemctl reload caddy
 #
-# Requiere registros DNS A apuntando al IP del servidor.
+# Requiere registros DNS A (o DuckDNS) apuntando al IP del servidor.
+# Ejemplo con DuckDNS (como en .env.production.example):
 
-admin.lachacra.com {
+lachacrafutbol.duckdns.org {
 	encode gzip zstd
 	reverse_proxy 127.0.0.1:8080
 
@@ -15,7 +16,7 @@ admin.lachacra.com {
 	}
 }
 
-api.lachacra.com {
+lachacra-api.duckdns.org {
 	encode gzip zstd
 	reverse_proxy 127.0.0.1:3001
 

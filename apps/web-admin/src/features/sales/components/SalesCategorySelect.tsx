@@ -94,14 +94,30 @@ export function SalesCategorySelect({
         <div className="absolute z-[100] top-full left-0 right-0 mt-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
             <div className="max-h-48 overflow-y-auto">
               {categories.map(category => (
-                <button
+                <div
                   key={category}
-                  type="button"
-                  onClick={() => pickCategory(category)}
-                  className={`w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors ${!showNewForm && value === category ? 'bg-muted' : 'text-foreground'}`}
+                  className={`flex items-center hover:bg-muted ${!showNewForm && value === category ? 'bg-muted' : ''}`}
                 >
-                  {emojiFor(category)} {category}
-                </button>
+                  <div
+                    className="shrink-0"
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <ProductEmojiPicker
+                      value={emojiFor(category)}
+                      onChange={(emoji) => {
+                        onAddCategory(category, emoji);
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => pickCategory(category)}
+                    className="min-w-0 flex-1 px-3 py-2 text-sm text-left text-foreground"
+                  >
+                    {category}
+                  </button>
+                </div>
               ))}
             </div>
             <div className="border-t border-border">

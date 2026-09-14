@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsNumber, Min, IsArray, ValidateNested, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsNumber, Min, IsArray, ValidateNested, IsUUID, IsBoolean, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CheckoutItemDto {
@@ -73,4 +73,129 @@ export class UpdateTicketItemsDto {
   @IsOptional()
   @IsUUID()
   operatorId?: string;
+}
+
+export class RecipeItemDto {
+  @IsUUID()
+  stockProductId: string;
+
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
+}
+
+export class BundleItemDto {
+  @IsUUID()
+  componentProductId: string;
+
+  @IsInt()
+  @Min(1)
+  quantity: number;
+}
+
+export class CreateSalesProductDto {
+  @IsString()
+  name: string;
+
+  @IsUUID()
+  categoriaVentaId: string;
+
+  @IsUUID()
+  kitchenId: string;
+
+  @IsNumber()
+  @Min(0)
+  price: number;
+
+  @IsOptional()
+  @IsString()
+  emoji?: string;
+
+  @IsOptional()
+  @IsIn(['simple', 'promo'])
+  kind?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecipeItemDto)
+  recipe?: RecipeItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BundleItemDto)
+  bundle?: BundleItemDto[];
+}
+
+export class CreateKitchenDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  emoji?: string;
+}
+
+export class UpdateKitchenDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  emoji?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}
+
+export class UpdateSalesProductDto {
+  /** Bloqueo optimista — ver stock/dto.ts UpdateProductDto.version. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  categoriaVentaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  kitchenId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  price?: number;
+
+  @IsOptional()
+  @IsString()
+  emoji?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsIn(['simple', 'promo'])
+  kind?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecipeItemDto)
+  recipe?: RecipeItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BundleItemDto)
+  bundle?: BundleItemDto[];
 }

@@ -1,14 +1,11 @@
 /**
  * API adapter hooks for critical frontend flows.
- * Each hook provides API-first behavior with graceful localStorage fallback.
- *
- * Pattern: API is tried first. If API is unavailable (null or false),
- * the hook returns safe defaults and the component falls back to localStorage.
+ * API is the source of truth: errors surface to the operator instead of
+ * silently writing to localStorage.
  */
 import { useState, useCallback, useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
 import {
-  salesApi, kitchenApi, mediaApi, sponsorsApi, onlineCatalogApi, printingApi,
+  salesApi, kitchenApi, mediaApi, sponsorsApi, printingApi,
   getApiBaseUrl, getApiErrorMessage, isApiError,
 } from './client';
 import type {
@@ -33,21 +30,6 @@ import {
 let reachabilityCache: { promise: Promise<boolean>; at: number } | null = null;
 const REACHABILITY_TTL_MS = 30_000;
 const HEALTH_TIMEOUT_MS = 5000;
-
-/**
- * Local fallback is useful only while developing on localhost.
- * In production web/APK we keep API as source of truth to avoid silent data divergence.
- */
-export function shouldAllowLocalFallback(): boolean {
-  const forced = (import.meta.env.VITE_ALLOW_LOCAL_FALLBACK as string | undefined)?.trim().toLowerCase();
-  if (forced === 'true') return true;
-  if (forced === 'false') return false;
-
-  if (Capacitor.isNativePlatform()) return false;
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-}
 
 export async function isApiReachable(): Promise<boolean> {
   const now = Date.now();
@@ -77,138 +59,122 @@ export function clearApiReachabilityCache(): void {
 }
 
 /**
- * Fase 2 completa: el catálogo (stock + ventas + recetas) vive en la API con UUIDs
- * reales, así que un error del servidor en checkout/void/return es un error real
- * (validación 400, autorización 401/403, stock insuficiente 409, etc.) y NO debe
- * degradar silenciosamente a una venta local —eso crearía un ticket que el servidor
- * nunca registra (stock no descontado server-side, datos divergentes)—.
- *
- * El modo 100% local solo aplica cuando la API está caída (health check en `false`),
- * caso que se maneja antes de llegar acá (apiAvailable). Por eso nunca degradamos
- * ante un `ApiError`: surfaceamos el mensaje al operador para que reintente.
+ * Checkout/void/return always hit the API. A stale health check must not
+ * skip the request: if the server is down, the real error surfaces.
  */
-function shouldFallbackToLocal(_e: unknown): boolean {
-  return false;
+function mutationError(e: unknown, fallback: string) {
+  return getApiErrorMessage(e, fallback);
 }
 
 // ==================== Sales Adapter ====================
 
 export function useSalesApiAdapter() {
-  const allowLocalFallback = shouldAllowLocalFallback();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(allowLocalFallback ? null : true);
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(true);
 
   useEffect(() => {
-    isApiReachable().then(ok => setApiAvailable(ok || !allowLocalFallback));
-  }, [allowLocalFallback]);
+    isApiReachable().then(ok => setApiAvailable(ok));
+  }, []);
 
   const checkout = useCallback(async (payload: CheckoutPayload) => {
-    if (apiAvailable === false) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     setLoading(true);
     setError(null);
     try {
       const result = await salesApi.checkout(payload, '');
+      setApiAvailable(true);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (shouldFallbackToLocal(e)) {
-        return { ok: false, apiUnavailable: true } as const;
-      }
-      const msg = getApiErrorMessage(e, 'No se pudo completar la venta');
+      const msg = mutationError(e, 'No se pudo completar la venta');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
       setLoading(false);
     }
-  }, [apiAvailable]);
+  }, []);
+
+  /** Consumo interno: mismo payload que checkout, servidor fuerza precio $0 y origen 'consumo'. */
+  const registerConsumption = useCallback(async (payload: CheckoutPayload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await salesApi.consumption(payload, '');
+      setApiAvailable(true);
+      return { ok: true, apiUnavailable: false, result } as const;
+    } catch (e) {
+      const msg = mutationError(e, 'No se pudo registrar el consumo');
+      setError(msg);
+      return { ok: false, apiUnavailable: false, error: msg } as const;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const returnSale = useCallback(async (payload: ReturnPayload) => {
-    if (apiAvailable === false) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     setLoading(true);
     setError(null);
     try {
       const result = await salesApi.returnSale(payload, '');
+      setApiAvailable(true);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (shouldFallbackToLocal(e)) {
-        return { ok: false, apiUnavailable: true } as const;
-      }
-      const msg = getApiErrorMessage(e, 'No se pudo registrar la devolución');
+      const msg = mutationError(e, 'No se pudo registrar la devolución');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
       setLoading(false);
     }
-  }, [apiAvailable]);
+  }, []);
 
   const returnItems = useCallback(async (payload: ReturnItemsPayload) => {
-    if (apiAvailable === false) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     setLoading(true);
     setError(null);
     try {
       const result = await salesApi.returnItems(payload, '');
+      setApiAvailable(true);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (shouldFallbackToLocal(e)) {
-        return { ok: false, apiUnavailable: true } as const;
-      }
-      const msg = getApiErrorMessage(e, 'No se pudo registrar la devolución');
+      const msg = mutationError(e, 'No se pudo registrar la devolución');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
       setLoading(false);
     }
-  }, [apiAvailable]);
+  }, []);
 
   const voidTicket = useCallback(async (ticketId: string, operatorId: string) => {
-    if (apiAvailable === false) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     setLoading(true);
     setError(null);
     try {
       const result = await salesApi.tickets.void(ticketId, operatorId, '');
+      setApiAvailable(true);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (shouldFallbackToLocal(e)) {
-        return { ok: false, apiUnavailable: true } as const;
-      }
-      const msg = getApiErrorMessage(e, 'No se pudo anular el ticket');
+      const msg = mutationError(e, 'No se pudo anular el ticket');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
       setLoading(false);
     }
-  }, [apiAvailable]);
+  }, []);
 
   const updateTicketItems = useCallback(async (ticketId: string, payload: UpdateTicketItemsPayload) => {
-    if (apiAvailable === false) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
     setLoading(true);
     setError(null);
     try {
       const result = await salesApi.tickets.updateItems(ticketId, payload, '');
+      setApiAvailable(true);
       return { ok: true, apiUnavailable: false, result } as const;
     } catch (e) {
-      if (shouldFallbackToLocal(e)) {
-        return { ok: false, apiUnavailable: true } as const;
-      }
-      const msg = getApiErrorMessage(e, 'No se pudo actualizar el ticket');
+      const msg = mutationError(e, 'No se pudo actualizar el ticket');
       setError(msg);
       return { ok: false, apiUnavailable: false, error: msg } as const;
     } finally {
       setLoading(false);
     }
-  }, [apiAvailable]);
+  }, []);
 
-  return { checkout, returnSale, returnItems, voidTicket, updateTicketItems, loading, error, apiAvailable };
+  return { checkout, registerConsumption, returnSale, returnItems, voidTicket, updateTicketItems, loading, error, apiAvailable };
 }
 
 // ==================== Printing Adapter ====================
@@ -520,71 +486,6 @@ export function useSponsorsApiAdapter() {
     if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
     try {
       await sponsorsApi.remove(id, '');
-      return { ok: true, apiUnavailable: false } as const;
-    } catch (e) {
-      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;
-    }
-  }, [apiAvailable]);
-
-  return { list, create, update, remove, loading, error, apiAvailable };
-}
-
-// ==================== Online Catalog Adapter ====================
-
-export function useOnlineCatalogApiAdapter() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    isApiReachable().then(setApiAvailable);
-  }, []);
-
-  const list = useCallback(async (active?: boolean, category?: string) => {
-    if (!apiAvailable) return [];
-    try {
-      return await onlineCatalogApi.products.list(active, category);
-    } catch {
-      return [];
-    }
-  }, [apiAvailable]);
-
-  const create = useCallback(async (data: { name: string; description?: string; price: number; image?: string; images?: string[]; category: string; attributes?: Record<string, any>; stockProductId?: string }) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await onlineCatalogApi.products.create(data, '');
-      return { ok: true, apiUnavailable: false, result } as const;
-    } catch (e) {
-      const msg = getApiErrorMessage(e, 'No se pudo crear');
-      setError(msg);
-      return { ok: false, apiUnavailable: false, error: msg } as const;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiAvailable]);
-
-  const update = useCallback(async (id: string, data: { name?: string; description?: string; price?: number; image?: string; images?: string[]; category?: string; attributes?: Record<string, any>; active?: boolean; stockProductId?: string }) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await onlineCatalogApi.products.update(id, data, '');
-      return { ok: true, apiUnavailable: false, result } as const;
-    } catch (e) {
-      const msg = getApiErrorMessage(e, 'No se pudo actualizar');
-      setError(msg);
-      return { ok: false, apiUnavailable: false, error: msg } as const;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiAvailable]);
-
-  const remove = useCallback(async (id: string) => {
-    if (!apiAvailable) return { ok: false, apiUnavailable: true } as const;
-    try {
-      await onlineCatalogApi.products.remove(id, '');
       return { ok: true, apiUnavailable: false } as const;
     } catch (e) {
       return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo eliminar') } as const;

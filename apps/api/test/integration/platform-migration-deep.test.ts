@@ -8,7 +8,6 @@ import {
   CreateSupplierDto,
   CreatePurchaseOrderDto,
   ReceivePurchaseOrderDto,
-  CreateEmployeeConsumptionDto,
   AdjustStockDto,
 } from '../../src/stock/dto';
 import {
@@ -32,7 +31,6 @@ import {
 
 import {
   hasAnyRole,
-  normalizeApiRole,
   STOCK_MUTATION_ROLES,
   SALES_CATALOG_ROLES,
   FOOTBALL_MUTATION_ROLES,
@@ -82,16 +80,6 @@ describe('Seguridad — validación DTO del módulo stock', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('rechaza consumo empleado con cantidad cero', async () => {
-    const dto = plainToInstance(CreateEmployeeConsumptionDto, {
-      productId: '550e8400-e29b-41d4-a716-446655440000',
-      warehouseId: '550e8400-e29b-41d4-a716-446655440001',
-      quantity: 0,
-    });
-    const errors = await validate(dto);
-    expect(errors.length).toBeGreaterThan(0);
-  });
-
   it('acepta DTOs válidos de proveedor y pedido', async () => {
     const supplier = plainToInstance(CreateSupplierDto, {
       name: 'Distribuidora Norte',
@@ -113,18 +101,15 @@ describe('Seguridad — validación DTO del módulo stock', () => {
 describe('Seguridad — matriz RBAC inventario', () => {
   it('Operador_Stock puede mutar inventario', () => {
     expect(hasAnyRole('Operador_Stock', STOCK_MUTATION_ROLES)).toBe(true);
-    expect(hasAnyRole('Encargado_Stock', STOCK_MUTATION_ROLES)).toBe(true);
     expect(hasAnyRole('SuperAdmin', STOCK_MUTATION_ROLES)).toBe(true);
   });
 
   it('Vendedor no puede mutar catálogo de inventario', () => {
     expect(hasAnyRole('Vendedor', STOCK_MUTATION_ROLES)).toBe(false);
-    expect(hasAnyRole('Operador', STOCK_MUTATION_ROLES)).toBe(false);
   });
 
   it('Gerente_Ventas puede mutar catálogo de ventas', () => {
     expect(hasAnyRole('Gerente_Ventas', SALES_CATALOG_ROLES)).toBe(true);
-    expect(hasAnyRole('Gerente_Operaciones', SALES_CATALOG_ROLES)).toBe(true);
   });
 
   it('Operador_Futbol y Operador_Cocina tienen permisos de panel', () => {
@@ -132,9 +117,10 @@ describe('Seguridad — matriz RBAC inventario', () => {
     expect(hasAnyRole('Operador_Cocina', ONLINE_MUTATION_ROLES)).toBe(true);
   });
 
-  it('normaliza roles legacy en la API', () => {
-    expect(normalizeApiRole('Operador')).toBe('Vendedor');
-    expect(normalizeApiRole('Encargado_Stock')).toBe('Operador_Stock');
+  it('los roles heredados ya no son reconocidos por el RBAC (sin capa de alias)', () => {
+    expect(hasAnyRole('Encargado_Stock', STOCK_MUTATION_ROLES)).toBe(false);
+    expect(hasAnyRole('Gerente_Operaciones', SALES_CATALOG_ROLES)).toBe(false);
+    expect(hasAnyRole('Operador', STOCK_MUTATION_ROLES)).toBe(false);
   });
 });
 
@@ -201,6 +187,8 @@ describe('Integridad — ciclo proveedor → pedido → recepción → stock', (
   });
 
   it('genera números de pedido monótonos sin colisiones', async () => {
+    // El contador es la fuente de verdad (no se infiere del max de orderNumber).
+    state.orderCounters = [{ id: 'default', valor: 3 }];
     state.purchaseOrders.push({
       id: 'old',
       orderNumber: 'PED-003',
@@ -312,45 +300,10 @@ describe('Seguridad — recepción de pedidos (anti-abuso)', () => {
   });
 });
 
-// ============================================================
-// Fase 3.1 — Consumo empleado + movimientos
-// ============================================================
-
-describe('Fase 3.1 — consumo empleado y movimientos server-side', () => {
-  it('descuenta stock y registra movimiento negativo de consumo', async () => {
-    const state = createEmptyStockState();
-    const { p1, whId } = seedBasicCatalog(state);
-    const { service } = createStockService(state);
-
-    await service.createEmployeeConsumption({
-      productId: p1,
-      warehouseId: whId,
-      quantity: 3,
-      operatorName: 'Operador',
-    });
-
-    const level = state.stockLevels.find(s => s.productId === p1 && s.warehouseId === whId)!;
-    expect(level.quantity).toBe(7);
-
-    expect(state.stockMovements).toHaveLength(1);
-    expect(state.stockMovements[0].type).toBe('consumo');
-    expect(state.stockMovements[0].quantity).toBe(-3);
-  });
-
-  it('bloquea consumo que dejaría stock negativo', async () => {
-    const state = createEmptyStockState();
-    const { p1, whId } = seedBasicCatalog(state);
-    const { service } = createStockService(state);
-
-    await expect(
-      service.createEmployeeConsumption({
-        productId: p1,
-        warehouseId: whId,
-        quantity: 999,
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
-});
+// Fase 3.1 (consumo empleado) se retiró: el consumo interno ahora vive en
+// SalesService.registerConsumption (mismo circuito que un checkout, ver
+// docs/superpowers/plans/2026-09-08-consumo-como-venta.md) — sus tests están
+// en test/integration/sales-consumption.test.ts, no acá.
 
 // ============================================================
 // Fase 2.1 — Ajuste manual con movimiento

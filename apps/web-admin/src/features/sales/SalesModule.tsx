@@ -12,6 +12,7 @@ import { POSModule } from './pos/POSModule';
 import { ProductsModule } from './pos/ProductsModule';
 import { MyOrdersModule } from './pos/MyOrdersModule';
 import { ReturnsModule } from './pos/ReturnsModule';
+import { ConsumptionModule } from './pos/ConsumptionModule';
 import { TablesModule } from './pos/TablesModule';
 import { InicioModule } from './pos/InicioModule';
 import { ReportesModule } from './pos/ReportesModule';
@@ -21,6 +22,7 @@ const VALID_TABS: VentasTab[] = [
   'mostrador',
   'pedidos',
   'devoluciones',
+  'consumo',
   'productos',
   'mesas',
   'inicio',
@@ -98,6 +100,7 @@ function VentasPosShell() {
         {tab === 'mostrador' && <POSModule />}
         {tab === 'pedidos' && <MyOrdersModule />}
         {tab === 'devoluciones' && <ReturnsModule />}
+        {tab === 'consumo' && <ConsumptionModule />}
         {tab === 'productos' && <ProductsModule />}
         {tab === 'mesas' && <TablesModule />}
         {tab === 'reportes' && <ReportesModule />}

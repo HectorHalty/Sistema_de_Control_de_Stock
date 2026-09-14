@@ -1,0 +1,106 @@
+/**
+ * Seed de producción / local sin TypeScript (node prisma/seed.cjs).
+ * No resetea la contraseña de admin si el usuario ya existe.
+ */
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcrypt');
+const { seedReglamento } = require('./seeds/reglamento.seed.cjs');
+const { seedScheduling } = require('./seeds/scheduling.seed.cjs');
+const { seedWebTaxonomy } = require('./seeds/web-taxonomy.seed.cjs');
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('Seeding database...');
+
+  await Promise.all([
+    prisma.categoria.upsert({ where: { name: 'Bebidas' }, update: {}, create: { name: 'Bebidas', icon: 'Wine' } }),
+    prisma.categoria.upsert({ where: { name: 'Snacks' }, update: {}, create: { name: 'Snacks', icon: 'Cookie' } }),
+    prisma.categoria.upsert({ where: { name: 'Panadería' }, update: {}, create: { name: 'Panadería', icon: 'Croissant' } }),
+    prisma.categoria.upsert({ where: { name: 'Carnes' }, update: {}, create: { name: 'Carnes', icon: 'Beef' } }),
+    prisma.categoria.upsert({ where: { name: 'Insumos' }, update: {}, create: { name: 'Insumos', icon: 'Wrench' } }),
+  ]);
+
+  await Promise.all([
+    prisma.deposito.upsert({
+      where: { name: 'Depósito Principal' },
+      update: {},
+      create: { name: 'Depósito Principal', location: 'Edificio Central' },
+    }),
+    prisma.deposito.upsert({
+      where: { name: 'Quincho Bar' },
+      update: {},
+      create: { name: 'Quincho Bar', location: 'Zona Quincho' },
+    }),
+    prisma.deposito.upsert({
+      where: { name: 'Kiosco Cancha' },
+      update: {},
+      create: { name: 'Kiosco Cancha', location: 'Cancha 1' },
+    }),
+    prisma.deposito.upsert({
+      where: { name: 'Heladera Vestuarios' },
+      update: {},
+      create: { name: 'Heladera Vestuarios', location: 'Vestuarios' },
+    }),
+  ]);
+
+  await Promise.all([
+    prisma.cocina.upsert({ where: { name: 'Parrilla' }, update: {}, create: { name: 'Parrilla', emoji: '🔥' } }),
+    prisma.cocina.upsert({ where: { name: 'Cocina' }, update: {}, create: { name: 'Cocina', emoji: '🍳' } }),
+    prisma.cocina.upsert({ where: { name: 'Cervecería' }, update: {}, create: { name: 'Cervecería', emoji: '🍺' } }),
+    prisma.cocina.upsert({ where: { name: 'Barra' }, update: {}, create: { name: 'Barra', emoji: '🍹' } }),
+  ]);
+
+  const existingAdmin = await prisma.usuario.findUnique({ where: { username: 'admin' } });
+  if (!existingAdmin) {
+    const adminHash = await bcrypt.hash('admin123', 10);
+    await prisma.usuario.create({
+      data: {
+        username: 'admin',
+        name: 'Super Admin',
+        role: 'SuperAdmin',
+        password: adminHash,
+      },
+    });
+    console.log('Usuario admin creado. Password temporal: admin123 — CAMBIARLA YA.');
+  } else {
+    console.log('Usuario admin ya existe — password no modificada.');
+  }
+
+  await prisma.contadorTicket.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default', valor: 1000 },
+  });
+
+  await prisma.contadorPedido.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default', valor: 0 },
+  });
+
+  await Promise.all([
+    prisma.categoriaVenta.upsert({
+      where: { name: 'Comidas' },
+      update: {},
+      create: { name: 'Comidas', emoji: '🍔', sortOrder: 0 },
+    }),
+    prisma.categoriaVenta.upsert({
+      where: { name: 'Bebidas' },
+      update: {},
+      create: { name: 'Bebidas', emoji: '🥤', sortOrder: 1 },
+    }),
+  ]);
+
+  await seedScheduling(prisma);
+  await seedReglamento(prisma);
+  await seedWebTaxonomy(prisma);
+
+  console.log('Seed complete.');
+  await prisma.$disconnect();
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
