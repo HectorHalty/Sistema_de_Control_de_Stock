@@ -5,10 +5,9 @@ import {
   type FootballCancha,
   type FootballInscription,
   type FootballJornada,
-  type FootballJornadaPreferencias,
   type FootballMatch,
 } from '@/app/api/client';
-import { Calendar, ListPlus } from 'lucide-react';
+import { ListPlus, UserPlus } from 'lucide-react';
 import {
   FutbolError,
   FutbolPanelShell,
@@ -19,290 +18,6 @@ import {
   useFutbolOverview,
 } from '../futbol-shared';
 import { FixtureGridPreview } from './FixtureGridPreview';
-import { SaturdayGridPreview } from './SaturdayGridPreview';
-import type { SaturdayGridResponse } from '@/app/api/client';
-
-function TorneoFixtureWizard({
-  torneoId,
-  onGenerated,
-}: {
-  torneoId: string | null;
-  onGenerated: () => void | Promise<void>;
-}) {
-  const [fechas, setFechas] = useState('10');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const notSaturday = Boolean(fechaInicio) && new Date(`${fechaInicio}T00:00:00`).getDay() !== 6;
-
-  async function generate(e: React.FormEvent) {
-    e.preventDefault();
-    const token = getAccessToken();
-    if (!token || !torneoId || !fechaInicio) return;
-    const fechasNum = Number(fechas);
-    setBusy(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const result = await footballApi.generateFixture(
-        torneoId,
-        { fechas: fechasNum, fechaInicio },
-        token,
-      );
-      setSuccess(`Fixture completo generado: ${result.jornadasCreadas} jornada(s) creadas.`);
-      await onGenerated();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'No se pudo generar el fixture';
-      if (/jornada/i.test(msg) && /ya tiene|existe|cargad/i.test(msg)) {
-        setError(
-          `${msg} — Este torneo ya tiene jornadas cargadas. Usá "Avanzado: agregar jornada suelta" más abajo para casos puntuales.`,
-        );
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={generate}
-      className="space-y-3 rounded-xl border border-[#3d7a3d]/30 bg-[#3d7a3d]/5 p-4"
-    >
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Calendar size={16} className="text-[#3d7a3d]" />
-        Generar fixture completo del torneo
-      </h3>
-      <p className="text-xs text-muted-foreground">
-        Crea todas las jornadas de la temporada en un solo paso. Si la cantidad de fechas supera
-        una vuelta completa, las fechas extra se arman como revancha (ida y vuelta) invirtiendo
-        local/visitante.
-      </p>
-      <div className="grid gap-3 md:grid-cols-3">
-        <label className="space-y-1 text-xs text-muted-foreground">
-          Cantidad de fechas
-          <input
-            className={futbolFieldClass()}
-            type="number"
-            min={1}
-            value={fechas}
-            onChange={(e) => setFechas(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1 text-xs text-muted-foreground">
-          Fecha de inicio
-          <input
-            className={futbolFieldClass()}
-            type="date"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-          />
-        </label>
-        <div className="flex items-end">
-          <button
-            type="submit"
-            disabled={busy || !torneoId || !fechaInicio || !fechas}
-            className={futbolButtonClass()}
-          >
-            Generar fixture completo
-          </button>
-        </div>
-      </div>
-      {notSaturday && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-          ⚠️ Esta fecha no es sábado.
-        </div>
-      )}
-      {!torneoId && (
-        <p className="text-xs text-muted-foreground">
-          Seleccioná un torneo para poder generar su fixture.
-        </p>
-      )}
-      {error && <FutbolError message={error} />}
-      {success && <FutbolSuccess message={success} />}
-    </form>
-  );
-}
-
-function SaturdayMultiCatSection() {
-  const [fecha, setFecha] = useState('');
-  const [grid, setGrid] = useState<SaturdayGridResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function loadGrid() {
-    const token = getAccessToken();
-    if (!token || !fecha) return;
-    setErr(null);
-    try {
-      setGrid(await footballApi.scheduling.saturdayGrid(token, fecha));
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Error');
-    }
-  }
-
-  async function autoSaturday() {
-    const token = getAccessToken();
-    if (!token || !fecha) return;
-    setBusy(true);
-    setErr(null);
-    setMsg(null);
-    try {
-      const r = await footballApi.scheduling.autoSaturday(token, { fecha });
-      setMsg(
-        `Programados ${r.scheduled} partido(s) multi-categoría.` +
-          (r.warnings.length ? ` Avisos: ${r.warnings.slice(0, 3).join('; ')}` : ''),
-      );
-      await loadGrid();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function publishAll() {
-    const token = getAccessToken();
-    if (!token || !fecha) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await footballApi.scheduling.publishFecha(token, { fecha });
-      setMsg(`Publicadas ${r.publicadas} jornada(s) en todas las categorías.`);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className={futbolCardClass('space-y-3 p-4')}>
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Calendar size={16} className="text-muted-foreground" />
-        Programación sábado (multi-categoría)
-      </h3>
-      <p className="text-xs text-muted-foreground">
-        Auto-programa todas las categorías del campeonato activo compartiendo canchas 1–8. Creá
-        jornadas con la misma fecha en cada categoría antes de usar esto.
-      </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <input
-          type="date"
-          className={futbolFieldClass('max-w-[180px]')}
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-        />
-        <button type="button" className={futbolButtonClass()} disabled={!fecha || busy} onClick={() => void autoSaturday()}>
-          Auto-programar sábado
-        </button>
-        <button type="button" className={futbolButtonClass('ghost')} disabled={!fecha || busy} onClick={() => void loadGrid()}>
-          Ver grilla global
-        </button>
-        <button type="button" className={futbolButtonClass('ghost')} disabled={!fecha || busy} onClick={() => void publishAll()}>
-          Publicar todas las jornadas
-        </button>
-      </div>
-      {msg && <FutbolSuccess message={msg} />}
-      {err && <FutbolError message={err} />}
-      {grid && <SaturdayGridPreview data={grid} />}
-    </div>
-  );
-}
-
-function PreferenciasHorarioSection({
-  jornadaId,
-  disabled,
-}: {
-  jornadaId: string;
-  disabled?: boolean;
-}) {
-  const [data, setData] = useState<FootballJornadaPreferencias | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token || !jornadaId) return;
-    setLoading(true);
-    try {
-      setData(await footballApi.jornadas.preferencias.get(jornadaId, token));
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [jornadaId]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  async function save(inscripcionId: string, horaPreferida: string | null) {
-    const token = getAccessToken();
-    if (!token) return;
-    setSavingId(inscripcionId);
-    try {
-      await footballApi.jornadas.preferencias.upsert(jornadaId, inscripcionId, horaPreferida, token);
-      await reload();
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Cargando preferencias...</p>;
-  }
-
-  if (!data?.equipos.length) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Inscribí equipos en el torneo para cargar preferencias de horario.
-      </p>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left">
-          <tr>
-            <th className="px-4 py-3">Equipo</th>
-            <th className="px-4 py-3">Horario preferido</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.equipos.map((eq) => (
-            <tr key={eq.inscripcionId} className="border-t border-border">
-              <td className="px-4 py-3 font-medium">{eq.name}</td>
-              <td className="px-4 py-3">
-                <select
-                  className={futbolFieldClass('max-w-[140px]')}
-                  value={eq.horaPreferida ?? ''}
-                  disabled={disabled || savingId === eq.inscripcionId}
-                  onChange={(e) =>
-                    void save(eq.inscripcionId, e.target.value || null)
-                  }
-                >
-                  <option value="">Sin preferencia</option>
-                  {data.franjas.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export function FixturePanel() {
   const { torneoId } = useFutbolOverview();
@@ -313,6 +28,8 @@ export function FixturePanel() {
   const [selectedJornada, setSelectedJornada] = useState('');
   const [numero, setNumero] = useState('1');
   const [fecha, setFecha] = useState('');
+  const [homeInscripcionId, setHomeInscripcionId] = useState('');
+  const [awayInscripcionId, setAwayInscripcionId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -370,37 +87,35 @@ export function FixturePanel() {
     }
   }
 
-  async function generateRoundRobin() {
+  async function createCruce(e: React.FormEvent) {
+    e.preventDefault();
     const token = getAccessToken();
-    if (!token || !selectedJornada) return;
-    setBusy(true);
-    setSuccess(null);
-    try {
-      const result = await footballApi.jornadas.roundRobin(selectedJornada, token);
-      setSuccess(`Generados ${result.created} cruces.`);
-      await reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo generar fixture');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function autoSchedule() {
-    const token = getAccessToken();
-    if (!token || !selectedJornada) return;
+    const jornada = jornadas.find((j) => j.id === selectedJornada);
+    const home = inscripciones.find((i) => i.id === homeInscripcionId);
+    const away = inscripciones.find((i) => i.id === awayInscripcionId);
+    if (!token || !jornada || !home || !away || home.id === away.id) return;
     setBusy(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await footballApi.jornadas.autoSchedule(selectedJornada, token);
-      let msg = `Programados ${result.scheduled} partido(s).`;
-      if (result.skippedManual) msg += ` ${result.skippedManual} respetados (manual).`;
-      if (result.warnings.length) msg += ` Avisos: ${result.warnings.join('; ')}`;
-      setSuccess(msg);
+      await footballApi.matches.create(
+        {
+          homeTeamId: home.equipoId,
+          awayTeamId: away.equipoId,
+          date: jornada.fecha,
+          torneoId: jornada.torneoId,
+          jornadaId: jornada.id,
+          homeInscripcionId: home.id,
+          awayInscripcionId: away.id,
+        },
+        token,
+      );
+      setSuccess(`Cruce agregado: ${home.equipo.name} vs ${away.equipo.name}.`);
+      setHomeInscripcionId('');
+      setAwayInscripcionId('');
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo auto-programar');
+      setError(err instanceof Error ? err.message : 'No se pudo agregar el cruce');
     } finally {
       setBusy(false);
     }
@@ -468,10 +183,14 @@ export function FixturePanel() {
     }
   }
 
+  const canCreateCruce = Boolean(
+    selectedJornada && homeInscripcionId && awayInscripcionId && homeInscripcionId !== awayInscripcionId,
+  );
+
   return (
     <FutbolPanelShell
       title="Fixture"
-      subtitle="Creá jornadas y cruces, cargá preferencias por equipo, auto-programá canchas/horarios y publicá en la web"
+      subtitle="Creá jornadas, cargá los cruces a mano y asigná cancha/horario partido por partido"
     >
 
       {error && <FutbolError message={error} />}
@@ -487,119 +206,127 @@ export function FixturePanel() {
         </div>
       )}
 
-      <TorneoFixtureWizard torneoId={torneoId} onGenerated={reload} />
-
-      <SaturdayMultiCatSection />
-
-      <details className="group rounded-xl border border-border bg-card open:pb-4">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-foreground marker:hidden">
+      <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <ListPlus size={16} className="text-muted-foreground" />
-          Avanzado: agregar jornada suelta
-          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
-            Mostrar
-          </span>
-          <span className="ml-auto hidden text-xs font-normal text-muted-foreground group-open:inline">
-            Ocultar
-          </span>
-        </summary>
-        <div className="space-y-4 px-4">
-          <form onSubmit={createJornada} className="grid gap-3 md:grid-cols-4">
-            <input
-              className={futbolFieldClass()}
-              type="number"
-              min={1}
-              placeholder="N° jornada"
-              value={numero}
-              onChange={(e) => setNumero(e.target.value)}
-            />
-            <input
-              className={futbolFieldClass()}
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-            />
-            <button type="submit" disabled={busy || !torneoId} className={futbolButtonClass()}>
-              Crear jornada
-            </button>
-            <button
-              type="button"
-              disabled={busy || !selectedJornada}
-              onClick={() => void generateRoundRobin()}
-              className={futbolButtonClass('ghost')}
-            >
-              Generar cruces (round-robin)
-            </button>
-          </form>
+          Jornadas y cruces
+        </h3>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              className={futbolFieldClass('max-w-xs')}
-              value={selectedJornada}
-              onChange={(e) => setSelectedJornada(e.target.value)}
-            >
-              {jornadas.map((j) => (
-                <option key={j.id} value={j.id}>
-                  Jornada {j.numero}
-                  {j.esRecuperacion ? ' (recup.)' : ''}
-                  {j.suspendida ? ' — SUSP.' : ''}
-                  {j.publicada ? ' ✓ pub.' : ''}
-                  — {new Date(j.fecha).toLocaleDateString('es-AR')}
-                  {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-              onClick={() => void autoSchedule()}
-              className={futbolButtonClass()}
-            >
-              Auto-programar canchas
-            </button>
-            <button
-              type="button"
-              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-              onClick={() => void publishJornada()}
-              className={futbolButtonClass('ghost')}
-            >
-              Publicar jornada
-            </button>
-            <button
-              type="button"
-              disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
-              onClick={() => void suspendRain()}
-              className={futbolButtonClass('ghost')}
-            >
-              Suspender por lluvia
-            </button>
-          </div>
+        <form onSubmit={createJornada} className="grid gap-3 md:grid-cols-4">
+          <input
+            className={futbolFieldClass()}
+            type="number"
+            min={1}
+            placeholder="N° jornada"
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+          />
+          <input
+            className={futbolFieldClass()}
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+          />
+          <button type="submit" disabled={busy || !torneoId} className={futbolButtonClass()}>
+            Crear jornada
+          </button>
+        </form>
 
-          {selectedJornadaData?.suspendida && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-              Esta jornada está suspendida.
-            </div>
-          )}
-          {equipoLibreNombre(selectedJornadaData) && (
-            <p className="text-sm text-muted-foreground">
-              Libre esta fecha:{' '}
-              <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
-            </p>
-          )}
-
-          {selectedJornada && (
-            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
-              <h4 className="text-sm font-semibold text-foreground">Preferencias de horario (jornada)</h4>
-              <p className="text-xs text-muted-foreground">
-                El auto-programador intenta respetar estos horarios. Si no hay slot, muestra un aviso.
-              </p>
-              <PreferenciasHorarioSection
-                jornadaId={selectedJornada}
-                disabled={selectedJornadaData?.suspendida}
-              />
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className={futbolFieldClass('max-w-xs')}
+            value={selectedJornada}
+            onChange={(e) => setSelectedJornada(e.target.value)}
+          >
+            {jornadas.map((j) => (
+              <option key={j.id} value={j.id}>
+                Jornada {j.numero}
+                {j.esRecuperacion ? ' (recup.)' : ''}
+                {j.suspendida ? ' — SUSP.' : ''}
+                {j.publicada ? ' ✓ pub.' : ''}
+                — {new Date(j.fecha).toLocaleDateString('es-AR')}
+                {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+            onClick={() => void publishJornada()}
+            className={futbolButtonClass('ghost')}
+          >
+            Publicar jornada
+          </button>
+          <button
+            type="button"
+            disabled={busy || !selectedJornada || selectedJornadaData?.suspendida}
+            onClick={() => void suspendRain()}
+            className={futbolButtonClass('ghost')}
+          >
+            Suspender por lluvia
+          </button>
         </div>
-      </details>
+
+        {selectedJornadaData?.suspendida && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            Esta jornada está suspendida.
+          </div>
+        )}
+        {equipoLibreNombre(selectedJornadaData) && (
+          <p className="text-sm text-muted-foreground">
+            Libre esta fecha:{' '}
+            <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
+          </p>
+        )}
+
+        {selectedJornada && (
+          <form onSubmit={createCruce} className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <UserPlus size={16} className="text-muted-foreground" />
+              Agregar cruce a esta jornada
+            </h4>
+            {!inscripciones.length ? (
+              <p className="text-xs text-muted-foreground">
+                Inscribí al menos 2 equipos en el torneo para poder armar cruces.
+              </p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  className={futbolFieldClass()}
+                  value={homeInscripcionId}
+                  onChange={(e) => setHomeInscripcionId(e.target.value)}
+                >
+                  <option value="">Equipo local...</option>
+                  {inscripciones.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.equipo.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={futbolFieldClass()}
+                  value={awayInscripcionId}
+                  onChange={(e) => setAwayInscripcionId(e.target.value)}
+                >
+                  <option value="">Equipo visitante...</option>
+                  {inscripciones.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.equipo.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  disabled={busy || !canCreateCruce || selectedJornadaData?.suspendida}
+                  className={futbolButtonClass()}
+                >
+                  Agregar cruce
+                </button>
+              </div>
+            )}
+          </form>
+        )}
+      </div>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando partidos...</p>
