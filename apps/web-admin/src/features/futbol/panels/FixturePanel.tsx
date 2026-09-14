@@ -159,12 +159,6 @@ export function FixturePanel() {
 
   const selectedJornadaData = jornadas.find((j) => j.id === selectedJornada);
 
-  function equipoLibreNombre(jornada: FootballJornada | undefined) {
-    if (!jornada?.equipoLibreId) return null;
-    const insc = inscripciones.find((i) => i.id === jornada.equipoLibreId);
-    return insc?.equipo?.name ?? insc?.abbr ?? null;
-  }
-
   async function updateSchedule(matchId: string, canchaId: string, horaInicio: string) {
     const token = getAccessToken();
     if (!token || !canchaId) return;
@@ -185,6 +179,10 @@ export function FixturePanel() {
 
   const canCreateCruce = Boolean(
     selectedJornada && homeInscripcionId && awayInscripcionId && homeInscripcionId !== awayInscripcionId,
+  );
+
+  const scheduledInscripcionIds = new Set(
+    matches.flatMap((m) => [m.homeInscripcionId, m.awayInscripcionId].filter(Boolean)),
   );
 
   return (
@@ -245,7 +243,6 @@ export function FixturePanel() {
                 {j.suspendida ? ' — SUSP.' : ''}
                 {j.publicada ? ' ✓ pub.' : ''}
                 — {new Date(j.fecha).toLocaleDateString('es-AR')}
-                {equipoLibreNombre(j) ? ` — Libre: ${equipoLibreNombre(j)}` : ''}
               </option>
             ))}
           </select>
@@ -272,22 +269,15 @@ export function FixturePanel() {
             Esta jornada está suspendida.
           </div>
         )}
-        {equipoLibreNombre(selectedJornadaData) && (
-          <p className="text-sm text-muted-foreground">
-            Libre esta fecha:{' '}
-            <span className="font-medium text-foreground">{equipoLibreNombre(selectedJornadaData)}</span>
-          </p>
-        )}
-
         {selectedJornada && (
           <form onSubmit={createCruce} className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <UserPlus size={16} className="text-muted-foreground" />
               Agregar cruce a esta jornada
             </h4>
-            {!inscripciones.length ? (
+            {inscripciones.length < 2 ? (
               <p className="text-xs text-muted-foreground">
-                Inscribí al menos 2 equipos en el torneo para poder armar cruces.
+                Elegí un torneo con al menos 2 equipos inscriptos para poder armar cruces.
               </p>
             ) : (
               <div className="grid gap-3 md:grid-cols-3">
@@ -297,11 +287,13 @@ export function FixturePanel() {
                   onChange={(e) => setHomeInscripcionId(e.target.value)}
                 >
                   <option value="">Equipo local...</option>
-                  {inscripciones.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.equipo.name}
-                    </option>
-                  ))}
+                  {inscripciones
+                    .filter((i) => i.id === homeInscripcionId || !scheduledInscripcionIds.has(i.id))
+                    .map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.equipo.name}
+                      </option>
+                    ))}
                 </select>
                 <select
                   className={futbolFieldClass()}
@@ -309,11 +301,13 @@ export function FixturePanel() {
                   onChange={(e) => setAwayInscripcionId(e.target.value)}
                 >
                   <option value="">Equipo visitante...</option>
-                  {inscripciones.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.equipo.name}
-                    </option>
-                  ))}
+                  {inscripciones
+                    .filter((i) => i.id === awayInscripcionId || !scheduledInscripcionIds.has(i.id))
+                    .map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.equipo.name}
+                      </option>
+                    ))}
                 </select>
                 <button
                   type="submit"

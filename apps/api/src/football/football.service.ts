@@ -523,6 +523,55 @@ ${partidoBlock}
     canchaId?: string;
     horaInicio?: string;
   }) {
+    if (
+      data.homeInscripcionId &&
+      data.awayInscripcionId &&
+      data.homeInscripcionId === data.awayInscripcionId
+    ) {
+      throw new BadRequestException('El equipo local y visitante no pueden ser el mismo');
+    }
+
+    let jornada: { id: string; suspendida: boolean; torneoId: string } | null = null;
+    if (data.jornadaId) {
+      jornada = await this.prisma.jornada.findUnique({ where: { id: data.jornadaId } });
+      if (!jornada) throw new NotFoundException('Jornada no encontrada');
+      if (jornada.suspendida) {
+        throw new BadRequestException('No se puede agregar un cruce a una jornada suspendida');
+      }
+    }
+
+    if (data.jornadaId && (data.homeInscripcionId || data.awayInscripcionId)) {
+      const inscripcionIds = [data.homeInscripcionId, data.awayInscripcionId].filter(
+        (id): id is string => Boolean(id),
+      );
+      const existing = await this.prisma.partidoFutbol.findMany({
+        where: {
+          jornadaId: data.jornadaId,
+          OR: [
+            { homeInscripcionId: { in: inscripcionIds } },
+            { awayInscripcionId: { in: inscripcionIds } },
+          ],
+        },
+      });
+      if (existing.length > 0) {
+        throw new ConflictException('Uno de los equipos ya tiene un cruce cargado en esta jornada');
+      }
+    }
+
+    if (data.jornadaId && data.homeInscripcionId && data.awayInscripcionId && jornada) {
+      const inscripciones = await this.prisma.equipoInscripcion.findMany({
+        where: {
+          id: { in: [data.homeInscripcionId, data.awayInscripcionId] },
+          torneoId: jornada.torneoId,
+        },
+      });
+      if (inscripciones.length < 2) {
+        throw new BadRequestException(
+          'Los equipos elegidos no están inscriptos en el torneo de esta jornada',
+        );
+      }
+    }
+
     return this.prisma.partidoFutbol.create({
       data: {
         homeTeamId: data.homeTeamId,

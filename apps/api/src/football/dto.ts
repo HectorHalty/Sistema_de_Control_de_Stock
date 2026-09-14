@@ -197,3 +197,42 @@ export class UpdateReglamentoArticuloDto {
   @IsBoolean()
   aplicable?: boolean;
 }
+
+export class CreateMatchDto {
+  @IsUUID()
+  homeTeamId: string;
+
+  @IsUUID()
+  awayTeamId: string;
+
+  @IsDateString()
+  date: string;
+
+  @IsOptional()
+  @IsString()
+  venue?: string;
+
+  @IsOptional()
+  @IsUUID()
+  torneoId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  jornadaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  homeInscripcionId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  awayInscripcionId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  canchaId?: string;
+
+  @IsOptional()
+  @IsString()
+  horaInicio?: string;
+}

@@ -18,6 +18,7 @@ import { FootballService } from './football.service';
 import { FOOTBALL_MUTATION_ROLES, FOOTBALL_READ_ROLES } from '../common/roles';
 import {
   CreateCategoriaDto,
+  CreateMatchDto,
   SuspendMatchDto,
   SuspendSaturdayDto,
   UpdateCaptainDto,
@@ -233,21 +234,7 @@ export class FootballController {
 
   @Post('matches')
   @Roles(...FOOTBALL_MUTATION_ROLES)
-  createMatch(
-    @Body()
-    body: {
-      homeTeamId: string;
-      awayTeamId: string;
-      date: string;
-      venue?: string;
-      torneoId?: string;
-      jornadaId?: string;
-      homeInscripcionId?: string;
-      awayInscripcionId?: string;
-      canchaId?: string;
-      horaInicio?: string;
-    },
-  ) {
+  createMatch(@Body() body: CreateMatchDto) {
     return this.footballService.createMatch(body);
   }
 
