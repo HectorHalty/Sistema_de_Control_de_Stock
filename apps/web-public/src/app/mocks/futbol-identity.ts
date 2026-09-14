@@ -5,10 +5,12 @@ import type {
 
 /**
  * Bandera del adapter mock de torneo. Tipada como `boolean` (y no como el
- * literal `true`) a propósito: así los dos branches del swap de §7 —el mock y
+ * literal `false`) a propósito: así los dos branches del swap de §7 —el mock y
  * el real— siguen siendo código vivo para TypeScript en vez de ramas muertas.
+ * §7 del spec: el backend real de torneo ya está listo, así que el branch
+ * real de `useFutbolIdentity` queda activo.
  */
-export const USE_MOCK_FUTBOL: boolean = true;
+export const USE_MOCK_FUTBOL: boolean = false;
 
 const FOLLOW_KEY = 'lch_mock_followed_team';
 
