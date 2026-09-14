@@ -9,7 +9,6 @@ import { RolPlantel } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { PublicAuthService } from './public-auth.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
-import { FootballService } from '../football/football.service';
 import type { RosterPlayerDto } from './dto/public-auth.dto';
 
 @Injectable()
@@ -217,10 +216,7 @@ export class PublicMeService {
 
 @Injectable()
 export class PublicCaptainService {
-  constructor(
-    private prisma: PrismaService,
-    private football: FootballService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   private async getCapitanRecord(cuentaId: string) {
     const cap = await this.prisma.capitanAutorizado.findFirst({
@@ -388,11 +384,6 @@ export class PublicCaptainService {
     }
 
     return this.getTeam(cuentaId);
-  }
-
-  async getListaBuenaFeHtml(cuentaId: string) {
-    const cap = await this.getCapitanRecord(cuentaId);
-    return this.football.getListaBuenaFeHtml(cap.equipoInscripcionId);
   }
 
   async removePlayer(cuentaId: string, personaId: string) {
