@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EstadoPartido, TipoEventoPartido } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
+import { pickEnumValue } from '../common/enum-filter';
 import { PrismaService } from '../common/prisma.service';
 import { ReglamentoEngineService } from '../reglamento/reglamento-engine.service';
 import { MatchSuspensionService } from './match-suspension.service';
@@ -500,7 +501,13 @@ ${partidoBlock}
   // Matches
   async findAllMatches(filters?: { status?: string; torneoId?: string; jornadaId?: string }) {
     const where: Record<string, unknown> = {};
-    if (filters?.status) where.status = filters.status as EstadoPartido;
+    if (filters?.status) {
+      const validStatus = pickEnumValue(filters.status, EstadoPartido);
+      // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+      // de dejar que Prisma rechace el valor.
+      if (!validStatus) return [];
+      where.status = validStatus;
+    }
     if (filters?.torneoId) where.torneoId = filters.torneoId;
     if (filters?.jornadaId) where.jornadaId = filters.jornadaId;
 

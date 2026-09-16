@@ -6,6 +6,7 @@ import { PrismaService } from '../common/prisma.service';
 import { SseService } from '../sse/sse.service';
 import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
 import { KitchenOrderStatus } from './dto';
+import { pickEnumValue } from '../common/enum-filter';
 
 /** Tipo de retorno explícito para findAllOrders — ver comentario en Task 9. */
 type KitchenOrderWithDetails = Prisma.OrdenCocinaGetPayload<{
@@ -50,9 +51,15 @@ export class KitchenService {
     limit: number | undefined,
   ): Promise<CursorPage<KitchenOrderWithDetails>>;
   async findAllOrders(kitchenId?: string, status?: string, onlineOnly?: boolean, cursor?: string, limit?: number) {
+    const validStatus = pickEnumValue(status, EstadoOrdenCocina);
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !validStatus) {
+      return cursor === undefined && limit === undefined ? [] : { items: [], nextCursor: null };
+    }
     const where = {
       ...(kitchenId ? { kitchenId } : {}),
-      ...(status ? { status: status as EstadoOrdenCocina } : {}),
+      ...(validStatus ? { status: validStatus } : {}),
       ...(onlineOnly ? { pedidoPublicoId: { not: null } } : {}),
     };
     const include = {

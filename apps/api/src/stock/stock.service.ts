@@ -11,9 +11,7 @@ import { StockMovementsService } from './stock-movements.service';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
 import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
-
-/** Valores del enum, para descartar filtros inválidos sin consultar la base. */
-const ESTADOS_ORDEN_VALIDOS = new Set<string>(Object.values(EstadoOrdenCompra));
+import { pickEnumValue } from '../common/enum-filter';
 
 // Tipos de retorno explícitos para los listados paginables (Task 9): sin
 // overloads, TS infiere el tipo unión `T[] | CursorPage<T>` para TODOS los
@@ -307,12 +305,13 @@ export class StockService {
   async findAllPurchaseOrders(status?: string): Promise<PurchaseOrderWithItems[]>;
   async findAllPurchaseOrders(status: string | undefined, cursor: string | undefined, limit: number | undefined): Promise<CursorPage<PurchaseOrderWithItems>>;
   async findAllPurchaseOrders(status?: string, cursor?: string, limit?: number) {
+    const validStatus = pickEnumValue(status, EstadoOrdenCompra);
     // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
     // de dejar que Prisma rechace el valor.
-    if (status && !ESTADOS_ORDEN_VALIDOS.has(status)) {
+    if (status && !validStatus) {
       return cursor === undefined && limit === undefined ? [] : { items: [], nextCursor: null };
     }
-    const where = status ? { status: status as EstadoOrdenCompra } : undefined;
+    const where = validStatus ? { status: validStatus } : undefined;
     if (cursor === undefined && limit === undefined) {
       return this.prisma.ordenCompra.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' } });
     }

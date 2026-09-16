@@ -3,24 +3,30 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/** Nivel materializado vs suma del libro mayor de movimientos. */
+/**
+ * Nivel materializado vs suma del libro mayor de movimientos.
+ * FULL OUTER JOIN (no LEFT JOIN desde niveles_stock): un par (productId,
+ * warehouseId) puede tener movimientos en movimientos_stock sin que el nivel
+ * se haya materializado nunca en niveles_stock, y ese caso es invisible para
+ * un LEFT JOIN que arranca desde niveles_stock.
+ */
 async function checkStockLevels() {
   const rows = await prisma.$queryRaw`
     SELECT
       p."code"        AS code,
       d."name"        AS warehouse,
-      n."quantity"    AS nivel,
+      COALESCE(n."quantity", 0) AS nivel,
       COALESCE(m.suma, 0) AS movimientos
     FROM "niveles_stock" n
-    JOIN "productos" p ON p."id" = n."productId"
-    JOIN "depositos" d ON d."id" = n."warehouseId"
-    LEFT JOIN (
+    FULL OUTER JOIN (
       SELECT "productId", "warehouseId", SUM("quantity") AS suma
       FROM "movimientos_stock"
       WHERE "warehouseId" IS NOT NULL
       GROUP BY "productId", "warehouseId"
     ) m ON m."productId" = n."productId" AND m."warehouseId" = n."warehouseId"
-    WHERE n."quantity" <> COALESCE(m.suma, 0)
+    JOIN "productos" p ON p."id" = COALESCE(n."productId", m."productId")
+    JOIN "depositos" d ON d."id" = COALESCE(n."warehouseId", m."warehouseId")
+    WHERE COALESCE(n."quantity", 0) <> COALESCE(m.suma, 0)
     ORDER BY p."code"
   `;
 

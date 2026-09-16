@@ -65,6 +65,26 @@ describe('reconciliación de datos derivados', () => {
     expect(result.stdout + result.stderr).toContain('SNK-001');
   });
 
+  it('reporta deriva cuando hay movimientos sin nivel de stock materializado', async () => {
+    const categoria = await prisma.categoria.create({ data: { name: 'Bebidas' } });
+    const deposito = await prisma.deposito.create({
+      data: { name: 'Depósito huérfano', location: 'Anexo' },
+    });
+    const producto = await prisma.producto.create({
+      data: { name: 'Gaseosa', code: 'BEB-002', categoryId: categoria.id },
+    });
+    // Movimientos para (producto, depósito) sin fila correspondiente en
+    // niveles_stock: el nivel nunca se materializó. Un LEFT JOIN que arranca
+    // desde niveles_stock no ve este par; el reconcile tiene que reportarlo.
+    await prisma.movimientoStock.create({
+      data: { type: 'entrada', productId: producto.id, warehouseId: deposito.id, quantity: 10 },
+    });
+
+    const result = runReconcile();
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toContain('BEB-002');
+  });
+
   it('reporta deriva cuando el total del ticket no coincide con sus líneas', async () => {
     const cocina = await prisma.cocina.create({ data: { name: 'Parrilla' } });
     const catVenta = await prisma.categoriaVenta.create({ data: { name: 'Comidas' } });

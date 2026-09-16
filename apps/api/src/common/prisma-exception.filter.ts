@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
+import { extractCheckConstraintName, isPrismaCheckViolation } from './prisma-errors';
 
 const STATUS_BY_CODE: Record<string, { status: number; message: string }> = {
   P2002: {
@@ -23,12 +24,19 @@ const STATUS_BY_CODE: Record<string, { status: number; message: string }> = {
   },
 };
 
-@Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientValidationError)
+@Catch(
+  Prisma.PrismaClientKnownRequestError,
+  Prisma.PrismaClientValidationError,
+  Prisma.PrismaClientUnknownRequestError,
+)
 export class PrismaExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(PrismaExceptionFilter.name);
 
   catch(
-    exception: Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientValidationError,
+    exception:
+      | Prisma.PrismaClientKnownRequestError
+      | Prisma.PrismaClientValidationError
+      | Prisma.PrismaClientUnknownRequestError,
     host: ArgumentsHost,
   ) {
     const response = host.switchToHttp().getResponse<Response>();
@@ -43,6 +51,32 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       response.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
         message: 'Parámetro o dato inválido.',
+      });
+      return;
+    }
+
+    if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
+      // El motor de Prisma no reconoce el error de Postgres como uno de sus
+      // códigos propios (P2xxx), así que llega acá en vez de como
+      // PrismaClientKnownRequestError. El caso que sabemos manejar es una
+      // restricción CHECK (SQLSTATE 23514: stock negativo, cantidad > 0,
+      // goles negativos, método de auth requerido, etc). El mensaje crudo
+      // trae el nombre de la restricción y texto de Postgres: solo al log.
+      if (isPrismaCheckViolation(exception)) {
+        this.logger.warn(
+          `Prisma check constraint violation: ${extractCheckConstraintName(exception) ?? 'desconocida'}`,
+        );
+        response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Parámetro o dato inválido.',
+        });
+        return;
+      }
+
+      this.logger.error(`Prisma unknown request error: ${exception.message}`);
+      response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error interno de base de datos.',
       });
       return;
     }

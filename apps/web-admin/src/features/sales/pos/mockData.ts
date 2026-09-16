@@ -7,6 +7,8 @@ export type Product = {
   name: string;
   price: number;
   category: string;
+  /** FK real contra CategoriaVenta — lo que efectivamente viaja al backend. */
+  categoriaVentaId: string;
   station: Station;
   stock: number;
   emoji: string;

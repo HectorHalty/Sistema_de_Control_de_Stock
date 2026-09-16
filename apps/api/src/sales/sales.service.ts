@@ -5,6 +5,7 @@ import { Prisma, EstadoTicket } from '@prisma/client';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
 import { assertVersionedUpdateApplied } from '../common/optimistic-lock';
 import { normalizeLimit, toCursorPage, type CursorPage } from '../common/pagination';
+import { pickEnumValue } from '../common/enum-filter';
 import { PrismaService } from '../common/prisma.service';
 import { StockMovementsService } from '../stock/stock-movements.service';
 import { CheckoutDto, ReturnDto, ReturnItemsDto, UpdateTicketItemsDto } from './dto';
@@ -839,8 +840,14 @@ export class SalesService {
     limit: number | undefined,
   ): Promise<CursorPage<TicketWithItems>>;
   async findAllTickets(status?: string, operatorId?: string, cursor?: string, limit?: number) {
+    const validStatus = pickEnumValue(status, EstadoTicket);
+    // Un estado fuera del enum no matchea ninguna fila; se responde vacío en vez
+    // de dejar que Prisma rechace el valor.
+    if (status && !validStatus) {
+      return cursor === undefined ? [] : { items: [], nextCursor: null };
+    }
     const where = {
-      ...(status ? { status: status as EstadoTicket } : {}),
+      ...(validStatus ? { status: validStatus } : {}),
       ...(operatorId ? { operatorId } : {}),
     };
     const include = { items: true, operator: { select: { username: true } } } as const;
