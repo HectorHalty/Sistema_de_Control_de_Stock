@@ -5,6 +5,7 @@ import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart, formatPrice } from '../cart/CartContext';
 import { AuthForm } from '../auth/AuthForm';
 import { SafeImage } from '../SafeImage';
+import { cartToCheckoutItems } from '../cart/checkout-items';
 
 export function PaymentPage() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export function PaymentPage() {
     setError(null);
     try {
       const order = await publicApi.orders.checkout(
-        items.map((i) => ({ salesProductId: i.id, quantity: i.qty })),
+        cartToCheckoutItems(items),
         token,
         `checkout-${Date.now()}`,
       );
