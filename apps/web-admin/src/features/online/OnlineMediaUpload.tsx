@@ -45,6 +45,19 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
       if (!presign.publicUrl) {
         throw new Error('URL pública no disponible');
       }
+
+      await mediaApi.confirm(
+        {
+          key: presign.key,
+          title: file.name,
+          type: mediaType,
+          url,
+          mimeType: file.type,
+          size: file.size,
+        },
+        token,
+      );
+
       onChange(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir');
@@ -62,6 +75,7 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
           type="file"
           accept={mediaType === 'video' ? 'video/*' : 'image/*'}
           className="hidden"
+          data-testid="lch-media-file"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void handleFile(file);
@@ -73,6 +87,7 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
           disabled={uploading}
           className={`${onlineButtonClass('ghost')} flex items-center gap-2`}
           onClick={() => inputRef.current?.click()}
+          data-testid="lch-media-upload"
         >
           <Upload size={16} />
           {uploading ? 'Subiendo...' : 'Subir archivo'}

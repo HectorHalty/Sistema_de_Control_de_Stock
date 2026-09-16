@@ -23,7 +23,10 @@ export function ModulePlaceholderPage({
 
   return (
     <section className="mx-auto flex min-h-[55vh] w-full max-w-3xl items-center justify-center">
-      <article className="w-full rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
+      <article
+        className="w-full rounded-3xl border border-border bg-card p-8 text-center shadow-sm"
+        data-testid={denied ? 'lch-module-denied' : undefined}
+      >
         <div className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full ${denied ? 'bg-red-100 text-red-700' : 'bg-[#3d7a3d]/10 text-[#2f5f2f]'}`}>
           {denied ? <LockKeyhole size={28} /> : <Construction size={28} />}
         </div>

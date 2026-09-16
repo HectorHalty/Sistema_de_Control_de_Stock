@@ -31,6 +31,7 @@ export function OnlineKitchenTicket({ order, kitchen, highlight, onAdvance }: Pr
         highlight ? 'ring-2 ring-[#3d7a3d] ring-offset-2 ring-offset-background' : ''
       }`}
       style={{ border: '1px dashed #ccc', padding: '12px' }}
+      data-testid="lch-kds-ticket"
     >
       <div className="mb-1 text-center">
         <img src={logo} alt="La Chacra Fútbol" className="mx-auto block h-10 max-w-full object-contain" />

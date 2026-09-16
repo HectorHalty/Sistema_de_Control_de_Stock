@@ -103,6 +103,7 @@ export function TablesModule() {
           <button
             onClick={() => setShowNew(true)}
             className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-1"
+            data-testid="lch-mesas-nueva"
           >
             <Plus className="w-4 h-4" /> Nueva
           </button>
@@ -162,6 +163,7 @@ export function TablesModule() {
               type="button"
               onClick={() => setShowAddProduct(true)}
               className="bg-muted text-foreground px-3 py-2 rounded-lg flex items-center gap-1"
+              data-testid="lch-mesas-agregar"
             >
               <Plus className="w-4 h-4" /> Producto
             </button>
@@ -209,6 +211,7 @@ export function TablesModule() {
               onClick={() => void closeAccount()}
               disabled={current.items.length === 0 || busy}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
+              data-testid="lch-mesas-cobrar"
             >
               <DollarSign className="w-5 h-5" />
               {busy ? "Cobrando…" : "Cobrar y Cerrar Cuenta"}
@@ -232,11 +235,13 @@ export function TablesModule() {
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Ej: Los Pibes FC"
               className="w-full px-3 py-2 border border-border rounded-lg bg-input-background mb-3"
+              data-testid="lch-mesas-nombre"
             />
             <button
               type="button"
               onClick={openTeam}
               className="w-full bg-emerald-600 text-white py-2 rounded-lg"
+              data-testid="lch-mesas-crear"
             >
               Abrir cuenta
             </button>

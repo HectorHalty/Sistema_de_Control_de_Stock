@@ -111,6 +111,7 @@ export function PaymentPage() {
             disabled={processing}
             onClick={() => void handleConfirm()}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-lch-accent py-3.5 text-sm font-black text-[#0e0e0e] disabled:opacity-50"
+            data-testid="lch-cantina-pagar"
           >
             {processing ? 'Confirmando...' : 'Confirmar pedido'}
           </button>

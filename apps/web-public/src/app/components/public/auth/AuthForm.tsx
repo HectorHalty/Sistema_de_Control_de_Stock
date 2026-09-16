@@ -104,6 +104,7 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
           onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
+          data-testid="lch-public-login-email"
         />
         <input
           type="password"
@@ -113,6 +114,7 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
           onChange={(e) => setPassword(e.target.value)}
           required
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          data-testid="lch-public-login-pass"
         />
         {mode === 'register' && (
           <input
@@ -134,6 +136,7 @@ export function AuthForm({ defaultMode = 'login' }: { defaultMode?: Mode }) {
           type="submit"
           disabled={loading}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-lch-accent py-3 text-sm font-black text-[#0e0e0e] disabled:opacity-50"
+          data-testid="lch-public-login-submit"
         >
           {loading ? <Loader2 className="animate-spin" size={18} /> : null}
           {mode === 'login' ? 'Ingresar' : 'Crear cuenta'}

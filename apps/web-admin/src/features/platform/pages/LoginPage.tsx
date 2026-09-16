@@ -87,6 +87,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 onChange={e => { setUser(e.target.value); setError(''); }}
                 className="w-full px-4 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] focus:ring-2 focus:ring-[#3d7a3d]/20 outline-none transition-all"
                 placeholder="Ingresá tu usuario"
+                data-testid="lch-login-user"
               />
             </div>
 
@@ -99,6 +100,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   onChange={e => { setPassword(e.target.value); setError(''); }}
                   className="w-full px-4 py-2.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] focus:ring-2 focus:ring-[#3d7a3d]/20 outline-none transition-all pr-12"
                   placeholder="Ingresá tu contraseña"
+                  data-testid="lch-login-pass"
                 />
                 <button
                   type="button"
@@ -114,6 +116,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               type="submit"
               disabled={loading}
               className="w-full bg-[#3d7a3d] hover:bg-[#2f5f2f] disabled:opacity-60 disabled:cursor-not-allowed text-white py-3 rounded-lg transition-colors shadow-sm"
+              data-testid="lch-login-submit"
             >
               {loading ? 'Ingresando…' : 'Ingresar'}
             </button>
