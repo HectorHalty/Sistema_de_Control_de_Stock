@@ -319,11 +319,12 @@ SSE broadcast on every successful transition.
 Both frontends use adapter hooks (`src/app/api/adapters.ts`) that:
 - Check API availability via `/health` endpoint
 - Use API endpoints as primary data source
-- Fall back to localStorage if API unreachable
+- Surface API errors instead of silently writing to localStorage
 - Provide loading/error states for UX consistency
 
 Available adapters:
 - `useSalesApiAdapter()` - checkout, return
+- `usePrintingApiAdapter()` - printer testing and ticket printing
 - `useMediaApiAdapter()` - presign, confirm, list, delete
 - `useSponsorsApiAdapter()` - CRUD
 

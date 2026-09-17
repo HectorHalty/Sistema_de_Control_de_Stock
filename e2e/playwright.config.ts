@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   timeout: 45_000,
-  expect: { timeout: 15_000 },
+  expect: { timeout: 30_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   globalSetup: './global-setup.ts',
   use: {

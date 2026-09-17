@@ -39,10 +39,9 @@ test('mesa cobrada habilita devolución y registra consumo', async ({ page }) =>
   await page.getByTestId(ids.mesasCobrar).click();
   await expect(page.getByText(mesaName)).toHaveCount(0);
 
-  // 2) Devolución: el ticket recién cobrado en la mesa queda disponible como
+  // Devolución: el ticket recién cobrado en la mesa queda disponible como
   // producto vendido devolvible. Cambiamos de pestaña por el nav lateral (no
-  // por URL) para no perder el estado en memoria de `ctx.salesTickets` ni
-  // repetir el mount inicial (con su carrera rol/URL) en cada paso.
+  // por URL) para no perder el estado en memoria de `ctx.salesTickets`.
   await page.getByRole('button', { name: 'Devoluciones' }).click();
   await page
     .getByRole('button', {
@@ -58,7 +57,7 @@ test('mesa cobrada habilita devolución y registra consumo', async ({ page }) =>
   // el resto de la UI (incluido el nav lateral); lo cerramos antes de seguir.
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
 
-  // 3) Consumo interno: registrar un producto sin cobrar.
+  // Consumo interno: registrar un producto sin cobrar.
   await page.getByRole('button', { name: 'Registrar Consumo' }).click();
   await pickFirstProduct(page);
   await page.getByTestId(ids.consumoSubmit).click();

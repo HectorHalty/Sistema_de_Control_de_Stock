@@ -15,18 +15,17 @@ export default function AuthenticatedApp({ initialUser, onLogout }: Authenticate
   const appState = useAppState();
   const { currentUser, setCurrentUser } = appState;
   const backfilledRef = useRef(false);
+  const isStale = persistedUserIsStale(currentUser, initialUser);
 
   // Patrón React: ajustar estado durante el render cuando la prop de sesión
-  // no coincide con lo persistido. React descarta este render y reintenta
-  // con el state nuevo; el override del context cubre este render por si
-  // algún hijo se evaluara antes del reintento.
-  if (persistedUserIsStale(currentUser, initialUser)) {
+  // no coincide con lo persistido. React descarta este JSX y vuelve a invocar
+  // este componente antes de evaluar sus hijos; el override del context es
+  // solamente defensivo.
+  if (isStale) {
     setCurrentUser(initialUser);
   }
 
-  const contextValue = persistedUserIsStale(currentUser, initialUser)
-    ? { ...appState, currentUser: initialUser }
-    : appState;
+  const contextValue = isStale ? { ...appState, currentUser: initialUser } : appState;
 
   // Reconstruye el libro de movimientos desde el historial existente (una sola vez).
   useEffect(() => {
