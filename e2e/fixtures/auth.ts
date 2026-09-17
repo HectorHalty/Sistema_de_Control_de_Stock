@@ -25,7 +25,7 @@ export async function loginAdmin(page: Page, role: AdminRole): Promise<void> {
   await page.getByTestId(ids.loginPass).fill(pass);
   await page.getByTestId(ids.loginSubmit).click();
   // El form de login se desmonta al autenticar (AppShell pasa a AuthenticatedApp).
-  await expect(page.getByTestId(ids.loginSubmit)).toHaveCount(0, { timeout: 45_000 });
+  await expect(page.getByTestId(ids.loginSubmit)).toHaveCount(0);
 }
 
 /** Login público: llena `AuthForm` en /#/perfil y espera a que el perfil (con email) reemplace el form. */
@@ -36,5 +36,5 @@ export async function loginPublic(page: Page, who: keyof typeof publicAccounts):
   await page.getByTestId(ids.publicLoginPass).fill(pass);
   await page.getByTestId(ids.publicLoginSubmit).click();
   // El form de login desaparece cuando ProfilePage tiene user+token y muestra el email.
-  await expect(page.getByTestId(ids.publicLoginSubmit)).toHaveCount(0, { timeout: 45_000 });
+  await expect(page.getByTestId(ids.publicLoginSubmit)).toHaveCount(0);
 }

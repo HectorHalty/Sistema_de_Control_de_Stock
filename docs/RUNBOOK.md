@@ -437,7 +437,8 @@ The following security remediations have been applied:
 ## Tests
 
 - `npm test` — Vitest + coverage (sin browser, sin Postgres).
-- `npm run test:db` — constraints en `lch_stock_test` (requiere `npm run dev:infra`).
+- `npm run test:db` — constraints en `lch_stock_test` (requiere `npm run dev:infra`: Postgres, Redis, MinIO).
 - `npm run test:e2e` — reset de `lch_stock_test` + API :3002 + admin :5175 + pública :5176 + Chromium.
+  También requiere `npm run dev:infra` (el `webServer` de Playwright no levanta Docker; habla con Postgres/Redis/MinIO ya arriba).
   No uses 3001/5173/5174. Si un puerto e2e está ocupado, cerrá el e2e anterior.
-- `npm run test:ci` — las tres capas en serie (atajo local; Actions parte unit / integrity).
+- `npm run test:ci` — `npm test && npm run test:db && npm run test:e2e`. Cortocircuita: si Vitest falla, no corre db ni Playwright. Es atajo local; Actions parte `unit` / `integrity` en jobs distintos.

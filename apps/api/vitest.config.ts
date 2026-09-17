@@ -11,7 +11,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
       reportsDirectory: './coverage',
-      exclude: ['test/**', 'dist/**', 'prisma/**', 'scripts/**'],
+      exclude: [
+        ...(configDefaults.coverage.exclude ?? []),
+        'test/**',
+        'dist/**',
+        'prisma/**',
+        'scripts/**',
+      ],
       thresholds: {
         lines: 24,
         'src/auth/**': { lines: -292 },

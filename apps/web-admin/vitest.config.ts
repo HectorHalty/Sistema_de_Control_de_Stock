@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
@@ -16,7 +16,11 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
       reportsDirectory: './coverage',
-      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      exclude: [
+        ...(configDefaults.coverage.exclude ?? []),
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+      ],
       thresholds: { lines: 7 },
     },
   },

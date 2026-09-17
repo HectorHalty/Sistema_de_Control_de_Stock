@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
   workers: 1,
+  forbidOnly: !!process.env.CI,
   timeout: 45_000,
   expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
