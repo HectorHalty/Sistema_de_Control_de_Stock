@@ -10,6 +10,7 @@ export const ids = {
   mesasNombre: 'lch-mesas-nombre',
   mesasCrear: 'lch-mesas-crear',
   mesasAgregar: 'lch-mesas-agregar',
+  mesasModalAgregar: 'lch-mesas-modal-agregar',
   mesasCobrar: 'lch-mesas-cobrar',
   consumoSubmit: 'lch-consumo-submit',
   devolucionSubmit: 'lch-devolucion-submit',

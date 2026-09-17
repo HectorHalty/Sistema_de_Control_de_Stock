@@ -250,7 +250,10 @@ export function TablesModule() {
       )}
 
       {showAddProduct && current && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4"
+          data-testid="lch-mesas-modal-agregar"
+        >
           <div className="bg-card rounded-xl p-4 w-full max-w-md max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center mb-3">
               <h3>Agregar a {current.team}</h3>

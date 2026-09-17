@@ -25,11 +25,8 @@ test('mesa cobrada habilita devolución y registra consumo', async ({ page }) =>
   await expect(page.getByRole('heading', { name: mesaName })).toBeVisible();
 
   await page.getByTestId(ids.mesasAgregar).click();
-  // El modal de "Agregar producto" de la mesa no reusa el picker del POS
-  // (no tiene lch-pos-product): es una grilla propia de TablesModule, cuyos
-  // botones de producto se distinguen del botón de cerrar (ícono X sin
-  // contenido) por tener el emoji dentro de un div.text-2xl.
-  const addProductModal = page.locator('.fixed.inset-0.z-50');
+  const addProductModal = page.getByTestId(ids.mesasModalAgregar);
+  await expect(addProductModal).toBeVisible();
   await addProductModal
     .locator('button')
     .filter({ has: page.locator('div.text-2xl') })
