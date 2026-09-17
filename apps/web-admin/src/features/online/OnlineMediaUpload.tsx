@@ -46,19 +46,28 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
         throw new Error('URL pública no disponible');
       }
 
-      await mediaApi.confirm(
-        {
-          key: presign.key,
-          title: file.name,
-          type: mediaType,
-          url,
-          mimeType: file.type,
-          size: file.size,
-        },
-        token,
-      );
-
+      // El archivo ya se subió a MinIO en este punto (el PUT de arriba fue
+      // 2xx): avisamos al padre ya mismo para no perder una URL válida si
+      // `confirm` (que sólo registra metadata en la base) falla después.
       onChange(url);
+
+      try {
+        await mediaApi.confirm(
+          {
+            key: presign.key,
+            title: file.name,
+            type: mediaType,
+            url,
+            mimeType: file.type,
+            size: file.size,
+          },
+          token,
+        );
+      } catch (confirmErr) {
+        // No fatal: el upload real ya tuvo éxito y el padre ya tiene la URL.
+        // Sólo dejamos constancia de que el registro de metadata falló.
+        console.warn('No se pudo confirmar el media subido en el backend', confirmErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir');
     } finally {
