@@ -6,6 +6,7 @@ on:
 jobs:
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,6 +14,7 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm run prisma:generate --workspace=apps/api
       - run: npm test
       - uses: actions/upload-artifact@v4
         if: always()
@@ -25,6 +27,7 @@ jobs:
 
   integrity:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -36,13 +39,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U lch -d lch_stock"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      minio:
-        image: minio/minio
-        env:
-          MINIO_ROOT_USER: minio_admin
-          MINIO_ROOT_PASSWORD: minio_dev_pass
-        ports: ['9000:9000']
-        command: server /data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,14 +46,25 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm run prisma:generate --workspace=apps/api
       - name: Create lch_stock_test
         env:
           PGPASSWORD: lch_dev_pass
         run: psql -h 127.0.0.1 -U lch -d lch_stock -c "CREATE DATABASE lch_stock_test;"
+      - name: Start MinIO
+        run: docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=minio_admin -e MINIO_ROOT_PASSWORD=minio_dev_pass minio/minio server /data
       - name: MinIO buckets
         run: |
           docker run --rm --network host --entrypoint /bin/sh minio/mc -c "
-            until mc alias set local http://127.0.0.1:9000 minio_admin minio_dev_pass; do sleep 1; done
+            i=0
+            until mc alias set local http://127.0.0.1:9000 minio_admin minio_dev_pass; do
+              i=\$((i+1))
+              if [ \$i -ge 30 ]; then
+                echo 'MinIO no respondio dentro de 30 intentos' >&2
+                exit 1
+              fi
+              sleep 1
+            done
             mc mb local/lch-media || true
             mc mb local/lch-sponsors || true
             mc mb local/lch-football || true
