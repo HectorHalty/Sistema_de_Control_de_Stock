@@ -3,7 +3,8 @@
   "private": true,
   "version": "2.0.0",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "e2e"
   ],
   "scripts": {
     "postinstall": "node scripts/patch-express-router.cjs",
@@ -18,6 +19,9 @@
     "dev:webs": "concurrently -n admin,public -c green,blue \"npm run dev:admin\" \"npm run dev:public\"",
     "dev:all": "concurrently -n infra,api,admin,public -c yellow,magenta,green,blue \"npm run dev:infra\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:public\"",
     "test": "npm run test --workspaces --if-present",
+    "test:db": "npm run test:db --workspace=apps/api",
+    "test:e2e": "npm run test:e2e --workspace=@lch/e2e",
+    "test:ci": "npm test && npm run test:db && npm run test:e2e",
     "test:deep": "npm run test:deep --workspace=apps/api && npm run test:deep --workspace=apps/web-admin",
     "test:admin": "npm run test --workspace=apps/web-admin",
     "test:public": "npm run test --workspace=apps/web-public",
