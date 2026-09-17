@@ -17,6 +17,6 @@ test.describe('capitan', () => {
   test('entra a administrar-equipo', async ({ page }) => {
     await page.goto(`${PUBLIC_URL}/#/administrar-equipo`);
     await expect(page).toHaveURL(/administrar-equipo/);
-    await expect(page.locator('body')).not.toHaveText(/Acceso denegado/i);
+    await expect(page.locator('body')).not.toContainText(/Acceso denegado/i);
   });
 });

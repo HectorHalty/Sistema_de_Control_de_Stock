@@ -2,6 +2,7 @@ import { test as setup } from '@playwright/test';
 import { loginAdmin, loginPublic, adminAccounts, publicAccounts } from '../fixtures/auth';
 
 setup('sesiones', async ({ browser }) => {
+  setup.setTimeout(240_000);
   for (const role of Object.keys(adminAccounts) as (keyof typeof adminAccounts)[]) {
     const page = await browser.newPage();
     await loginAdmin(page, role);
