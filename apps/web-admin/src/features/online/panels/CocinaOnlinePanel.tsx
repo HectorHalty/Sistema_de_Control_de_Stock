@@ -72,12 +72,19 @@ export function CocinaOnlinePanel() {
   // lado del server: sin esto, este panel recibía eventos de *todas* las
   // cocinas, no sólo la seleccionada.
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
     const controller = new AbortController();
     let cancelled = false;
+    let stopRetrying = false;
 
     async function connectOnce() {
+      // Releemos el token en cada intento (no cerramos sobre el valor externo
+      // capturado al montar el efecto): si venció entre reintentos, mandamos
+      // el nuevo y no seguimos golpeando la API con uno vencido.
+      const token = getAccessToken();
+      if (!token) {
+        stopRetrying = true;
+        return;
+      }
       const url = `${getApiBaseUrl()}/sse/events${
         kitchenId ? `?kitchenId=${encodeURIComponent(kitchenId)}` : ''
       }`;
@@ -85,6 +92,15 @@ export function CocinaOnlinePanel() {
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
       });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Token vencido o sin permiso: reintentar cada 3s con el mismo
+          // token vencido nunca va a funcionar, así que cortamos el bucle de
+          // reconexión en vez de martillar al servidor indefinidamente.
+          stopRetrying = true;
+        }
+        throw new Error(`SSE respondió ${res.status}`);
+      }
       const reader = res.body?.getReader();
       if (!reader) return;
       const decoder = new TextDecoder();
@@ -112,13 +128,14 @@ export function CocinaOnlinePanel() {
     // `cancelled` corta el bucle apenas se desmonta o cambia la cocina, y la
     // espera entre intentos evita martillar al servidor.
     async function listen() {
-      while (!cancelled) {
+      while (!cancelled && !stopRetrying) {
         try {
           await connectOnce();
         } catch {
-          // Conexión SSE cerrada/caída (abort en cleanup o error de red).
+          // Conexión SSE cerrada/caída (abort en cleanup, error de red o
+          // respuesta no-2xx manejada arriba).
         }
-        if (cancelled) break;
+        if (cancelled || stopRetrying) break;
         await new Promise((resolve) => setTimeout(resolve, SSE_RECONNECT_DELAY_MS));
       }
     }
