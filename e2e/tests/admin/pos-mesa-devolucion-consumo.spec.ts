@@ -6,15 +6,13 @@ import { pickFirstProduct } from '../../fixtures/pos';
 test.use({ storageState: '.auth/gerente.json' });
 
 test('mesa cobrada habilita devolución y registra consumo', async ({ page }) => {
-  // 1) Mesa: abrir cuenta de equipo, agregar un producto y cobrar.
   const mesaName = `e2e-mesa-${Date.now()}`;
-  // Navegamos a /ventas (tab por defecto) y recién ahí clickeamos "Mesas" en
-  // el nav lateral: si se pide `?tab=mesas` directo por URL, el mount inicial
-  // puede resolver el tab por defecto ("mostrador") antes de que el rol del
-  // usuario esté hidratado y el efecto de sincronización de VentasModule
-  // reemplaza la URL con `tab=mostrador`, dejando la pestaña mesas inalcanzable.
-  await page.goto(`${ADMIN_URL}/#/ventas`);
-  await page.getByRole('button', { name: 'Mesas' }).click();
+  // Deep-link deliberado: si AuthenticatedApp sincroniza el rol en un effect
+  // posterior al primer render, SalesModule reescribe a tab=mostrador y este
+  // expect falla (lch-mesas-nueva no existe en Mostrador).
+  await page.goto(`${ADMIN_URL}/#/ventas?tab=mesas`);
+  await expect(page).toHaveURL(/tab=mesas/);
+  await expect(page.getByTestId(ids.mesasNueva)).toBeVisible();
 
   await page.getByTestId(ids.mesasNueva).click();
   await page.getByTestId(ids.mesasNombre).fill(mesaName);

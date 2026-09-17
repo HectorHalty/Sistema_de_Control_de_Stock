@@ -4,6 +4,7 @@ import { useAppState } from '@/app/providers/use-app-state';
 import { LogoutContext, router, RouterProvider } from '@/app/router';
 import type { CurrentUser } from '@/features/platform/types';
 import { buildBackfillMovements } from '@/features/inventory/backfill-movements';
+import { persistedUserIsStale } from '@/app/sync-session-user';
 
 type AuthenticatedAppProps = {
   initialUser: CurrentUser;
@@ -12,12 +13,20 @@ type AuthenticatedAppProps = {
 
 export default function AuthenticatedApp({ initialUser, onLogout }: AuthenticatedAppProps) {
   const appState = useAppState();
-  const { setCurrentUser } = appState;
+  const { currentUser, setCurrentUser } = appState;
   const backfilledRef = useRef(false);
 
-  useEffect(() => {
+  // Patrón React: ajustar estado durante el render cuando la prop de sesión
+  // no coincide con lo persistido. React descarta este render y reintenta
+  // con el state nuevo; el override del context cubre este render por si
+  // algún hijo se evaluara antes del reintento.
+  if (persistedUserIsStale(currentUser, initialUser)) {
     setCurrentUser(initialUser);
-  }, [initialUser, setCurrentUser]);
+  }
+
+  const contextValue = persistedUserIsStale(currentUser, initialUser)
+    ? { ...appState, currentUser: initialUser }
+    : appState;
 
   // Reconstruye el libro de movimientos desde el historial existente (una sola vez).
   useEffect(() => {
@@ -42,7 +51,7 @@ export default function AuthenticatedApp({ initialUser, onLogout }: Authenticate
 
   return (
     <LogoutContext.Provider value={onLogout}>
-      <AppContext.Provider value={appState}>
+      <AppContext.Provider value={contextValue}>
         <RouterProvider router={router} />
       </AppContext.Provider>
     </LogoutContext.Provider>
