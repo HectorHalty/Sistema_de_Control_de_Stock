@@ -17,8 +17,14 @@ import { fileURLToPath } from 'node:url';
 // ERR_UNKNOWN_FILE_EXTENSION. Mantener estos valores en sync con
 // `e2e/constants.ts` si cambian.
 const API_URL = 'http://127.0.0.1:3002';
+// Igual que apps/api/scripts/reset-test-db.mjs: leemos TEST_DATABASE_URL del
+// entorno antes que nada. `localhost` resuelve IPv4+IPv6 y en CI (Actions +
+// Docker) el contenedor de Postgres sólo publica IPv4, así que el reset y la
+// API podían terminar hablando con hosts distintos — de ahí el fallback
+// literal en 127.0.0.1 en vez de localhost.
 const TEST_DATABASE_URL =
-  'postgresql://lch:lch_dev_pass@localhost:5432/lch_stock_test?schema=public';
+  process.env.TEST_DATABASE_URL ??
+  'postgresql://lch:lch_dev_pass@127.0.0.1:5432/lch_stock_test?schema=public';
 const JWT_SECRET = 'lch-e2e-jwt-secret-not-for-production';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
