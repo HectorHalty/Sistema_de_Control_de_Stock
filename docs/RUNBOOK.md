@@ -435,3 +435,10 @@ The following security remediations have been applied:
 - `PUT /settings/config` manda `version` cuando el front ya leyó la fila. Un 409 significa que otro operador guardó la misma clave: recargar.
 - Ventas → Reportes → Historial pide páginas de 50 tickets (`?limit=50&cursor=`). El mostrador sigue hidratando los últimos 100 sin cursor, para el dashboard del día.
 
+## Tests
+
+- `npm test` — Vitest + coverage (sin browser, sin Postgres).
+- `npm run test:db` — constraints en `lch_stock_test` (requiere `npm run dev:infra`).
+- `npm run test:e2e` — reset de `lch_stock_test` + API :3002 + admin :5175 + pública :5176 + Chromium.
+  No uses 3001/5173/5174. Si un puerto e2e está ocupado, cerrá el e2e anterior.
+- `npm run test:ci` — las tres capas en serie (atajo local; Actions parte unit / integrity).
