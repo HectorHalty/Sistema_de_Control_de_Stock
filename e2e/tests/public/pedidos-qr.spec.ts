@@ -18,8 +18,8 @@ test('pedidos y qr', async ({ page }) => {
   await expect(page).toHaveURL(/qr/);
 
   await page.goto(`${PUBLIC_URL}/#/pedidos`);
-  await expect(page.locator('body')).toContainText(/pedido|retiro|qr|#/i);
+  await expect(page.getByRole('heading', { name: 'Mis Pedidos' })).toBeVisible();
 
   await page.goto(`${PUBLIC_URL}/#/qr`);
-  await expect(page.locator('body')).toContainText(/qr|retiro|pedido/i);
+  await expect(page.getByRole('heading', { name: 'Tu código de retiro está listo' })).toBeVisible();
 });

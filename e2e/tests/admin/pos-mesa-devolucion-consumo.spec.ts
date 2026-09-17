@@ -27,11 +27,12 @@ test('mesa cobrada habilita devolución y registra consumo', async ({ page }) =>
   await page.getByTestId(ids.mesasAgregar).click();
   const addProductModal = page.getByTestId(ids.mesasModalAgregar);
   await expect(addProductModal).toBeVisible();
-  await addProductModal
+  const productBtn = addProductModal
     .locator('button')
     .filter({ has: page.locator('div.text-2xl') })
-    .first()
-    .click();
+    .first();
+  const productName = (await productBtn.locator('.text-sm.text-foreground').innerText()).trim();
+  await productBtn.click();
   await addProductModal.locator('svg.lucide-x').click();
 
   page.once('dialog', dialog => dialog.accept());
@@ -43,7 +44,11 @@ test('mesa cobrada habilita devolución y registra consumo', async ({ page }) =>
   // por URL) para no perder el estado en memoria de `ctx.salesTickets` ni
   // repetir el mount inicial (con su carrera rol/URL) en cada paso.
   await page.getByRole('button', { name: 'Devoluciones' }).click();
-  await page.getByRole('button', { name: /Pendiente de devolver/ }).first().click();
+  await page
+    .getByRole('button', {
+      name: new RegExp(productName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    })
+    .click();
   await page.getByTestId(ids.devolucionSubmit).click();
   // El comprobante de devolución también contiene "Devolución" en el texto,
   // así que matcheamos por el toast de confirmación puntualmente para evitar

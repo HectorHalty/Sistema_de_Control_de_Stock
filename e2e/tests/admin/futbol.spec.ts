@@ -9,8 +9,10 @@ test.use({ storageState: '.auth/futbol.json' });
 // spec únicamente navega y verifica texto visible.
 test('equipos y fixture', async ({ page }) => {
   await page.goto(`${ADMIN_URL}/#/futbol?tab=equipos`);
-  await expect(page.locator('body')).toContainText(/equipo/i);
+  await expect(page).toHaveURL(/tab=equipos/);
+  await expect(page.getByRole('heading', { name: 'Equipos' })).toBeVisible();
 
   await page.goto(`${ADMIN_URL}/#/futbol?tab=fixture`);
-  await expect(page.locator('body')).toContainText(/fixture|jornada|fecha/i);
+  await expect(page).toHaveURL(/tab=fixture/);
+  await expect(page.getByRole('heading', { name: 'Fixture' })).toBeVisible();
 });

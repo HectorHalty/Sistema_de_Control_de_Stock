@@ -13,5 +13,5 @@ test('productos, almacenes y pedidos listan seed', async ({ page }) => {
 
   await page.goto(`${ADMIN_URL}/#/pedidos`);
   await expect(page.getByRole('heading', { name: 'Pedidos' })).toBeVisible();
-  await expect(page.locator('body')).toContainText(/Pedido|Proveedor|Borrador|Recibido/i);
+  await expect(page.getByRole('columnheader', { name: 'Proveedor' })).toBeVisible();
 });
