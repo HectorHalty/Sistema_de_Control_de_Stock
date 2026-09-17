@@ -1,7 +1,9 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_URL, API_URL, PUBLIC_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
 import { adminAccounts } from '../../fixtures/auth';
+import { login } from '../../fixtures/api';
+import { dismissRepeatOrderModal } from '../../fixtures/cantina';
 
 type SalesProduct = {
   id: string;
@@ -11,21 +13,6 @@ type SalesProduct = {
   kitchenId: string;
 };
 
-/** El seed de demo deja un pedido previo para `jugador@lachacra.test`, así que
- *  `CantinaPage` abre el modal "¿Repetimos?" apenas hay orders + carrito vacío
- *  (ver `RepeatOrderModal` en CantinaPage.tsx). Lo cerramos si aparece para no
- *  bloquear los clicks de "agregar" con su overlay. Mismo patrón que
- *  `public/cantina-checkout.spec.ts`. */
-async function dismissRepeatOrderModal(page: Page) {
-  const skip = page.getByRole('button', { name: 'No, gracias' });
-  try {
-    await skip.waitFor({ state: 'visible', timeout: 3000 });
-    await skip.click();
-  } catch {
-    // No había modal de "repetir pedido" pendiente.
-  }
-}
-
 /** `lch-cantina-add` sólo existe en el botón "+" mientras `qty === 0`
  *  (CantinaPage.tsx) y ese botón no contiene el nombre del producto como
  *  texto propio — es hermano del <p> con el nombre, ambos dentro del mismo
@@ -34,15 +21,6 @@ async function dismissRepeatOrderModal(page: Page) {
 async function addProductToCart(page: Page, name: string) {
   const nameEl = page.getByText(name, { exact: true }).first();
   await nameEl.locator('..').getByTestId(ids.cantinaAdd).click();
-}
-
-async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
-  const res = await request.post(`${API_URL}/auth/login`, {
-    data: { username: user, password: pass },
-  });
-  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
-  const body = (await res.json()) as { access_token: string };
-  return body.access_token;
 }
 
 test('pedido pública aparece en KDS sin reload', async ({ browser, request }) => {
@@ -96,7 +74,7 @@ test('pedido pública aparece en KDS sin reload', async ({ browser, request }) =
   // polling de respaldo del panel es de 15s; el timeout de abajo es más
   // corto a propósito para no dejar que una coincidencia de polling lo
   // disfrace de éxito.
-  await expect(kdsPage.getByText(padded)).toBeVisible({ timeout: 8_000 });
+  await expect(kdsPage.getByTestId(ids.kdsTicket).getByText(padded)).toBeVisible({ timeout: 8_000 });
 
   await kds.close();
   await pub.close();

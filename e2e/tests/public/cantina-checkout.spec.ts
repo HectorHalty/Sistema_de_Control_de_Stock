@@ -1,22 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { PUBLIC_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
+import { dismissRepeatOrderModal } from '../../fixtures/cantina';
 
 test.use({ storageState: '.auth/jugador.json' });
-
-/** El seed de demo deja un pedido previo para `jugador@lachacra.test`, así que
- *  `CantinaPage` abre el modal "¿Repetimos?" apenas hay orders + carrito vacío
- *  (ver `RepeatOrderModal` en CantinaPage.tsx). Lo cerramos si aparece para no
- *  bloquear los clicks de "agregar" con su overlay. */
-async function dismissRepeatOrderModal(page: Page) {
-  const skip = page.getByRole('button', { name: 'No, gracias' });
-  try {
-    await skip.waitFor({ state: 'visible', timeout: 3000 });
-    await skip.click();
-  } catch {
-    // No había modal de "repetir pedido" pendiente.
-  }
-}
 
 test('add carrito pago pedido', async ({ page }) => {
   await page.goto(`${PUBLIC_URL}/#/cantina`);

@@ -1,12 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { ADMIN_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
+import { pickFirstProduct } from '../../fixtures/pos';
 
 test.use({ storageState: '.auth/vendedor.json' });
-
-async function pickFirstProduct(page: Page) {
-  await page.getByTestId(ids.posProduct).first().click();
-}
 
 test('cobra un item sin imprimir', async ({ page }) => {
   await page.goto(`${ADMIN_URL}/#/ventas?tab=mostrador`);

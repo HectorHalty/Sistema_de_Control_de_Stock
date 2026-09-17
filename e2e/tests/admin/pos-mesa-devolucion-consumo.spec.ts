@@ -1,12 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { ADMIN_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
+import { pickFirstProduct } from '../../fixtures/pos';
 
 test.use({ storageState: '.auth/gerente.json' });
-
-async function pickFirstProduct(page: Page) {
-  await page.getByTestId(ids.posProduct).first().click();
-}
 
 test('mesa cobrada habilita devolución y registra consumo', async ({ page }) => {
   // 1) Mesa: abrir cuenta de equipo, agregar un producto y cobrar.

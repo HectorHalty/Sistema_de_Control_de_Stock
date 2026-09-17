@@ -1,32 +1,12 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_URL, API_URL, PUBLIC_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
 import { adminAccounts } from '../../fixtures/auth';
-
-/** Mismo helper que public/cantina-checkout.spec.ts y cross/cantina-kds-sse:
- *  el seed deja un pedido previo para jugador@lachacra.test que dispara el
- *  modal "¿Repetimos?" apenas se entra a /cantina con carrito vacío. */
-async function dismissRepeatOrderModal(page: Page) {
-  const skip = page.getByRole('button', { name: 'No, gracias' });
-  try {
-    await skip.waitFor({ state: 'visible', timeout: 3000 });
-    await skip.click();
-  } catch {
-    // No había modal de "repetir pedido" pendiente.
-  }
-}
+import { login } from '../../fixtures/api';
+import { dismissRepeatOrderModal } from '../../fixtures/cantina';
 
 async function addFirstProductToCart(page: Page) {
   await page.getByTestId(ids.cantinaAdd).first().click();
-}
-
-async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
-  const res = await request.post(`${API_URL}/auth/login`, {
-    data: { username: user, password: pass },
-  });
-  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
-  const body = (await res.json()) as { access_token: string };
-  return body.access_token;
 }
 
 test.use({ storageState: '.auth/jugador.json' });
@@ -65,7 +45,7 @@ test('pedido público queda visible para cocina en el admin', async ({ page, req
   await adminPage.locator('select').first().selectOption(kitchenOrder!.kitchenId);
 
   const padded = String(ticketNumber).padStart(6, '0');
-  await expect(adminPage.getByText(padded)).toBeVisible();
+  await expect(adminPage.getByTestId(ids.kdsTicket).getByText(padded)).toBeVisible();
 
   await admin.close();
 });

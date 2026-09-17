@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { API_URL, ADMIN_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
 import { adminAccounts } from '../../fixtures/auth';
+import { login } from '../../fixtures/api';
 
 type SalesProduct = {
   id: string;
@@ -26,15 +27,6 @@ async function clickPosProductByExactName(page: Page, name: string) {
   const nameEl = page.getByText(name, { exact: true }).first();
   await expect(nameEl).toBeVisible();
   await nameEl.locator('xpath=ancestor::button[@data-testid="lch-pos-product"]').first().click();
-}
-
-async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
-  const res = await request.post(`${API_URL}/auth/login`, {
-    data: { username: user, password: pass },
-  });
-  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
-  const body = (await res.json()) as { access_token: string };
-  return body.access_token;
 }
 
 /** Suma niveles de stock de un insumo en todos los almacenes. `quantity` viaja

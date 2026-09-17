@@ -1,21 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { PUBLIC_URL } from '../../constants';
 import { ids } from '../../fixtures/ids';
+import { dismissRepeatOrderModal } from '../../fixtures/cantina';
 
 test.use({ storageState: '.auth/jugador.json' });
-
-/** Igual que en cantina-checkout.spec.ts: el seed de demo deja un pedido
- *  previo para `jugador@lachacra.test`, que dispara el modal "¿Repetimos?"
- *  en CantinaPage. Lo cerramos si aparece antes de tocar "agregar". */
-async function dismissRepeatOrderModal(page: Page) {
-  const skip = page.getByRole('button', { name: 'No, gracias' });
-  try {
-    await skip.waitFor({ state: 'visible', timeout: 3000 });
-    await skip.click();
-  } catch {
-    // No había modal de "repetir pedido" pendiente.
-  }
-}
 
 // Playwright no garantiza el orden de ejecución entre specs de archivos
 // distintos dentro del mismo worker, así que este test arma su propio
