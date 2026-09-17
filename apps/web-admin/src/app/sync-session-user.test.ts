@@ -24,6 +24,14 @@ describe('persistedUserIsStale', () => {
     ).toBe(true);
   });
 
+  it('es true si cambia solo el role', () => {
+    expect(persistedUserIsStale({ ...gerente, role: 'Vendedor' }, gerente)).toBe(true);
+  });
+
+  it('es true si cambia solo el username', () => {
+    expect(persistedUserIsStale({ ...gerente, username: 'otro' }, gerente)).toBe(true);
+  });
+
   it('es false cuando id, role y username coinciden', () => {
     expect(persistedUserIsStale(gerente, { ...gerente })).toBe(false);
   });
