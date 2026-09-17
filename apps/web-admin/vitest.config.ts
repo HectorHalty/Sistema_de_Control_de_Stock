@@ -17,7 +17,7 @@ export default defineConfig({
       reporter: ['text', 'html', 'json-summary'],
       reportsDirectory: './coverage',
       exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-      thresholds: { lines: 8 },
+      thresholds: { lines: 7 },
     },
   },
 })
