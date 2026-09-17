@@ -211,10 +211,152 @@ por el brief, "no necesita ser sofisticado", con el polling de 15s como red
 de contención).
 
 - Task 8: complete (commits 8467a68..912c035, fix round 1/5, review clean)
-- Task 9: pendiente
+- Task 9: complete (commit `461ee33`, review Approved). 2 minor (deferred):
+  1. Step 4 del brief pedía `git add + git commit`, el commit ya existia como
+     WIP y se cerro con `git commit --amend` en su lugar (mismo resultado,
+     un solo commit limpio con el mensaje correcto).
+  2. RUNBOOK no documenta la nota del brief de que los 2 jobs no pueden
+     auto-marcarse `required` en branch protection.
+
+- Task 9: implementado (commit `461ee33`, DONE_WITH_CONCERNS), en revisión.
+  Retomado tras un corte de sesión: un implementer previo había dejado
+  `.github/workflows/test.yml` y el diff de `docs/RUNBOOK.md` sin commitear
+  (idénticos a los Steps 1-2 del brief); se preservaron en un commit WIP
+  (`45f5c0d`) antes de limpiar el worktree viejo, y el implementer de esta
+  ronda los verificó carácter por carácter contra el brief, corrió Step 3
+  completo (`npm test`, `npm run test:db`, `npm run test:e2e`) contra infra
+  Docker real, y cerró Step 4 con `git commit --amend` sobre el WIP (un solo
+  commit para la task, sin squash necesario).
+  Resultados: `npm run test:db` 76/76 PASS; `npm run test:e2e` 23/23 PASS.
+  `npm test`: 424/429 — 5 fallos preexistentes fuera del alcance de archivos
+  de Task 9 (1 test roto en `suspension.engine.test.ts`, no relacionado con
+  este plan; 4 umbrales de coverage de Task 1 no cumplidos en api/web-admin/
+  web-public). Ninguno de los 5 está en `.github/workflows/test.yml`,
+  `docs/RUNBOOK.md` ni `package.json`.
+  Concern principal: el job `unit` del CI recién agregado va a fallar en el
+  primer push por estos 5 fallos preexistentes — no introducidos por Task 9,
+  pero si no se resuelven el CI queda rojo desde el día uno. Candidato a
+  revisión final de rama / spawn_task, no bloqueante para Task 9 en sí.
 
 ## Fuera de alcance encontrado durante Task 5 (spawn_task)
 
 - `task_ce97f599`: carrera rol/URL en tabs de Ventas (`SalesModule.tsx`).
 - `task_6de4ab5b`: testid faltante en modal de productos de Mesas
   (`TablesModule.tsx`).
+
+## Revisión final de rama (MERGE_BASE 5638194..461ee33, modelo Opus)
+
+Veredicto: **With fixes** (no listo para merge tal cual). 3 Critical, 8 Important,
+varios Minor. La sustancia del trabajo se calificó como sólida (specs e2e sin
+mocks, dos bugs reales de producción encontrados y arreglados en Task 8 con
+RED→GREEN real), pero `npm test` está roto en HEAD y el job `integrity` no
+arrancaría en un runner Ubuntu limpio.
+
+### Critical
+1. 6 de 7 fallos de `npm test` son los propios umbrales de coverage que este
+   plan introdujo en Task 1 (`apps/api|web-admin|web-public/vitest.config.ts`),
+   puestos por encima de lo que la suite mide de verdad — no son rot
+   preexistente como decía el ledger antes de esta revisión. La regla
+   `piso + 1` del plan (`docs/superpowers/plans/2026-09-11-red-seguridad-tests.md:170`)
+   falla por construcción. Solo `suspension.engine.test.ts` es preexistente real.
+2. `.github/workflows/test.yml:45` — `command: server /data` no es una key
+   válida de service container; MinIO nunca arranca y el step de buckets
+   queda en loop infinito sin `timeout-minutes`.
+3. Ningún job de CI corre `prisma generate`; en un runner limpio ambos jobs
+   rompen al importar `@prisma/client`.
+
+### Important
+4. `e2e/tests/auth.setup.ts` — 8 logins secuenciales en un test de 45s;
+   altísimo riesgo de timeout en un runner frío sin caché de Vite.
+5. `e2e/tests/public/auth-password.spec.ts:20` — `not.toHaveText(regex)`
+   nunca puede fallar (compara contra el texto completo). Debe ser
+   `not.toContainText`.
+6. Helpers duplicados 9 veces entre Tasks 5-8 (`dismissRepeatOrderModal` x4,
+   `login` x3, `pickFirstProduct` x2) — extraer a `e2e/fixtures/`.
+7. `CocinaOnlinePanel.tsx` — el loop de reconexión SSE no chequea `res.ok`
+   ni relee el token; un 401/403 se convierte en martilleo cada 3s para
+   siempre.
+8. `apps/api/vitest.config.ts` — `src/auth/**: { lines: 0 }` es un no-op,
+   la única carpeta sin ratchet real pese a ser la más sensible.
+9. `e2e/start-stack.mjs` ignora `TEST_DATABASE_URL` (usa `localhost`
+   hardcodeado); en CI el reset y la API pueden terminar hablando con
+   hosts distintos (`localhost` resuelve IPv4+IPv6, Docker publica solo
+   IPv4) — mismo hallazgo que el "acoplamiento implícito" ya diferido en
+   el ledger de Task 4, agravado ahora que CI es quien lo consume.
+10. `OnlineMediaUpload.tsx` — si `confirm()` falla después de un upload
+    exitoso a MinIO, se descarta la URL ya válida en vez de propagarla.
+11. `lch-kds-ticket` (testid) se agregó y nunca se usó; las specs de KDS
+    cruzadas assertan sobre `<body>` sin scopear — mismo hallazgo visto
+    desde ambos lados.
+
+### Minor (deferred, no entran al fix wave)
+- Aserciones casi tautológicas en 3 specs (`futbol.spec.ts`, `pedidos-qr.spec.ts`,
+  `reportes-config.spec.ts`).
+- Posible orden-dependencia en `pos-mesa-devolucion-consumo.spec.ts:56`.
+- Hook `EventSource` muerto en `adapters.ts:337`.
+- Higiene del workflow: sin filtro de rama, sin `concurrency`, sin
+  `forbidOnly` en `playwright.config.ts`.
+- `coverage.exclude` pisa los defaults de Vitest en vez de extenderlos.
+- Timeouts redundantes en `fixtures/auth.ts`.
+- RUNBOOK no menciona que `test:e2e` también requiere `dev:infra`, ni que
+  `test:ci` corta corto si `npm test` falla.
+- 3357 líneas de artefactos SDD commiteados en `2862d87` (diffs de review
+  crudos) — no recuperan nada que git no tenga ya.
+
+### Triage del ledger (pedido explícito a la revisión)
+1. Minors diferidos de Tasks 4/6/8/9: la mayoría se confirma diferible.
+   **Se promueve a Important** el acoplamiento implícito de
+   `reset-test-db.mjs`/`TEST_DATABASE_URL` (era inocuo siendo solo local;
+   deja de serlo con CI real) — es el ítem 9 de arriba.
+2. Las dos Rulings de Task 4 (mover el reset a `start-stack.mjs`;
+   `taskkill /T /F` en Windows) se reconfirman correctas con contexto de
+   rama completa — sin cambios.
+3. El concern "CI rojo desde el día uno" (Task 9) — la revisión corrige el
+   diagnóstico: **no** son 4 fallos preexistentes sin relación, son 6 de 7
+   fallos de umbrales que este mismo plan fijó mal en Task 1 (nunca
+   revisados — el ledger ya lo señalaba en la sección "Estado heredado").
+   Bloqueante para el merge; se corrige en el fix wave, no se difiere.
+
+**Ruling:** se acepta el veredicto "With fixes" — se despacha UNA ronda de
+fix con los 3 Critical + 8 Important (nunca los Minor, quedan diferidos
+arriba), una re-review acotada del diff del fix, y adjudicación de
+residuales al tope (máximo una ronda, sin segunda vuelta, por texto de la
+skill de revisión final).
+
+## Fix wave de la revisión final (commits 461ee33..eb9bd4c) y re-review acotada
+
+9 commits: umbrales de coverage al piso real + auth con ratchet negativo +
+test de suspensiones corregido (C1/C1b/C1c); MinIO como step de `docker run`
++ timeouts de job + loop de mc acotado + `prisma generate` en ambos jobs de
+CI (C2/C3); timeout ampliado en auth.setup + assertion que sí puede fallar
+(I4/I5); 3 helpers de e2e deduplicados a `e2e/fixtures/` (I6); SSE del KDS
+relee token y corta en 401/403 (I7); start-stack/constants leen
+`TEST_DATABASE_URL` con fallback a 127.0.0.1 (I9); upload de media no pierde
+la URL si falla el confirm (I10); aserciones del ticket KDS escopeadas a
+`data-testid` + ids muertos podados (I11).
+
+Verificado localmente tras el fix: `npm test` 477/477 PASS (0 umbrales
+rotos), `npm run test:db` 76/76 PASS, `npm run test:e2e` 23/23 PASS.
+
+Re-review acotada (modelo Sonnet, diff 461ee33..eb9bd4c): **los 12 hallazgos
+(C1/C1b/C1c/C2/C3/I4/I5/I6/I7/I9/I10/I11) verificados ADDRESSED de forma
+independiente** — incluyendo una verificación propia de la semántica de
+threshold negativo de Vitest (leyó el código fuente instalado de
+`vitest/dist/chunks/coverage.*.js` para confirmar que `lines: -292` es un
+ratchet real contra regresión, no otro no-op) y un re-parseo de YAML con
+`js-yaml` para el workflow de CI. Sin breakage nuevo introducido por el fix.
+Sin observaciones fuera de alcance.
+
+**Ruling:** revisión final cerrada limpia — no hace falta una segunda
+ronda de fix. Los hallazgos Minor de la revisión final (aserciones
+tautológicas, orden-dependencia posible, hook EventSource muerto, higiene
+del workflow, coverage.exclude vs defaults, timeouts redundantes, huecos de
+RUNBOOK, tamaño de los artefactos SDD commiteados) quedan diferidos tal
+como se registró arriba — ninguno es bloqueante para el merge.
+
+- Task 9: complete (commits 45f5c0d..461ee33, review Approved, 2 minor deferred)
+- Revisión final de rama: complete (commits 5638194..eb9bd4c vs main,
+  1 ronda de fix, re-review clean — 12/12 hallazgos ADDRESSED, sin
+  breakage nuevo)
+- Plan `2026-09-11-red-seguridad-tests`: COMPLETO. Todas las 9 tasks +
+  revisión final cerradas. Sigue finishing-a-development-branch.
