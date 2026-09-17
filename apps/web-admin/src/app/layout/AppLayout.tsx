@@ -316,6 +316,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                   setDrawerOpen(false);
                 }}
                 className={sidebarItemClass(collapsed, `${active ? 'bg-[#3d7a3d] text-white' : 'text-foreground hover:bg-muted'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`)}
+                data-testid={`lch-nav-${moduleId}`}
               >
                 <Icon size={24} />
                 {!collapsed && <span>{item.label}</span>}
@@ -331,6 +332,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
               to="/configuracion"
               onClick={() => setDrawerOpen(false)}
               className={sidebarItemClass(collapsed, 'text-foreground hover:bg-muted')}
+              data-testid="lch-nav-settings"
             >
               <Settings size={24} />
               {!collapsed && <span>Configuracion</span>}
@@ -423,6 +425,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
                   key={moduleId}
                   type="button"
                   onClick={() => handleModuleNavigation(moduleId)}
+                  data-testid={`lch-nav-${moduleId}`}
                   className={`relative flex flex-col items-center justify-center rounded-xl px-2 text-[11px] transition-all duration-300 ${
                     isCenter
                       ? bottomNavCompact

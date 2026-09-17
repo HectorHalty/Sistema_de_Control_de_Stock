@@ -4,6 +4,7 @@ import {
   kitchenApi,
   onlineApi,
   getAccessToken,
+  getApiBaseUrl,
   type Kitchen,
   type KitchenOrder,
   type RedeemQrResponse,
@@ -19,6 +20,9 @@ import {
   onlineCardClass,
   onlineFieldClass,
 } from '../online-shared';
+
+/** Espera entre reintentos de conexión SSE tras un corte no deliberado. */
+const SSE_RECONNECT_DELAY_MS = 3000;
 
 export function CocinaOnlinePanel() {
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
@@ -55,6 +59,93 @@ export function CocinaOnlinePanel() {
     const t = setInterval(() => void reload(), 15000);
     return () => clearInterval(t);
   }, [reload]);
+
+  // Empuje en tiempo real vía SSE (GET /sse/events, LISTEN/NOTIFY del lado API).
+  // No usamos el `EventSource` nativo del browser porque no permite mandar
+  // headers propios y esta ruta exige `Authorization: Bearer <token>` (RBAC);
+  // en su lugar leemos el body como stream con `fetch`, que sí acepta headers.
+  // El polling de 15s de arriba queda como red de contención si esta conexión
+  // se cae (proxy que bufferea, token vencido, etc.) o mientras se reconecta.
+  //
+  // `kitchenId` va como query param igual que `useKitchenApiAdapter` (el hook
+  // muerto en adapters.ts:336) para que `SseService.deliverLocally` filtre del
+  // lado del server: sin esto, este panel recibía eventos de *todas* las
+  // cocinas, no sólo la seleccionada.
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    let stopRetrying = false;
+
+    async function connectOnce() {
+      // Releemos el token en cada intento (no cerramos sobre el valor externo
+      // capturado al montar el efecto): si venció entre reintentos, mandamos
+      // el nuevo y no seguimos golpeando la API con uno vencido.
+      const token = getAccessToken();
+      if (!token) {
+        stopRetrying = true;
+        return;
+      }
+      const url = `${getApiBaseUrl()}/sse/events${
+        kitchenId ? `?kitchenId=${encodeURIComponent(kitchenId)}` : ''
+      }`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Token vencido o sin permiso: reintentar cada 3s con el mismo
+          // token vencido nunca va a funcionar, así que cortamos el bucle de
+          // reconexión en vez de martillar al servidor indefinidamente.
+          stopRetrying = true;
+        }
+        throw new Error(`SSE respondió ${res.status}`);
+      }
+      const reader = res.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!cancelled) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sepIndex = buffer.indexOf('\n\n');
+        while (sepIndex !== -1) {
+          const frame = buffer.slice(0, sepIndex);
+          buffer = buffer.slice(sepIndex + 2);
+          if (frame.includes('event: kitchen-order-updated')) {
+            void reload();
+          }
+          sepIndex = buffer.indexOf('\n\n');
+        }
+      }
+    }
+
+    // Bucle de reconexión: si el stream se corta por algo que no sea el abort
+    // deliberado del cleanup (idle-timeout de un proxy, restart de la API,
+    // token vencido, blip de red), reintentamos tras una espera corta en vez
+    // de degradar silenciosamente a sólo polling por el resto del montaje.
+    // `cancelled` corta el bucle apenas se desmonta o cambia la cocina, y la
+    // espera entre intentos evita martillar al servidor.
+    async function listen() {
+      while (!cancelled && !stopRetrying) {
+        try {
+          await connectOnce();
+        } catch {
+          // Conexión SSE cerrada/caída (abort en cleanup, error de red o
+          // respuesta no-2xx manejada arriba).
+        }
+        if (cancelled || stopRetrying) break;
+        await new Promise((resolve) => setTimeout(resolve, SSE_RECONNECT_DELAY_MS));
+      }
+    }
+
+    void listen();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [reload, kitchenId]);
 
   const activeKitchen = kitchens.find((k) => k.id === kitchenId);
   const active = orders.filter((o) => o.status !== 'delivered');

@@ -12,5 +12,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      reportsDirectory: './coverage',
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      thresholds: { lines: 7 },
+    },
   },
 })

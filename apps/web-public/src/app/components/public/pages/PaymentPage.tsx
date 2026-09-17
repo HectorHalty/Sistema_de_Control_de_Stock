@@ -5,6 +5,7 @@ import { usePublicAuth } from '../auth/PublicAuthContext';
 import { useCart, formatPrice } from '../cart/CartContext';
 import { AuthForm } from '../auth/AuthForm';
 import { SafeImage } from '../SafeImage';
+import { cartToCheckoutItems } from '../cart/checkout-items';
 
 export function PaymentPage() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export function PaymentPage() {
     setError(null);
     try {
       const order = await publicApi.orders.checkout(
-        items.map((i) => ({ salesProductId: i.id, quantity: i.qty })),
+        cartToCheckoutItems(items),
         token,
         `checkout-${Date.now()}`,
       );
@@ -110,6 +111,7 @@ export function PaymentPage() {
             disabled={processing}
             onClick={() => void handleConfirm()}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-lch-accent py-3.5 text-sm font-black text-[#0e0e0e] disabled:opacity-50"
+            data-testid="lch-cantina-pagar"
           >
             {processing ? 'Confirmando...' : 'Confirmar pedido'}
           </button>

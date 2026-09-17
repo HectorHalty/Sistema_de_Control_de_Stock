@@ -539,6 +539,7 @@ function MenuCard({
               onClick={onAdd}
               style={{ background: '#6BFF9E', color: '#0e0e0e' }}
               className="flex h-8 w-8 items-center justify-center rounded-xl font-bold transition-all hover:scale-105"
+              data-testid="lch-cantina-add"
             >
               <IconPlus />
             </button>

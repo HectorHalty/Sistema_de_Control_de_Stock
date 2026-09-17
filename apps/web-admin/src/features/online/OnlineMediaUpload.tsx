@@ -45,7 +45,29 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
       if (!presign.publicUrl) {
         throw new Error('URL pública no disponible');
       }
+
+      // El archivo ya se subió a MinIO en este punto (el PUT de arriba fue
+      // 2xx): avisamos al padre ya mismo para no perder una URL válida si
+      // `confirm` (que sólo registra metadata en la base) falla después.
       onChange(url);
+
+      try {
+        await mediaApi.confirm(
+          {
+            key: presign.key,
+            title: file.name,
+            type: mediaType,
+            url,
+            mimeType: file.type,
+            size: file.size,
+          },
+          token,
+        );
+      } catch (confirmErr) {
+        // No fatal: el upload real ya tuvo éxito y el padre ya tiene la URL.
+        // Sólo dejamos constancia de que el registro de metadata falló.
+        console.warn('No se pudo confirmar el media subido en el backend', confirmErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir');
     } finally {
@@ -62,6 +84,7 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
           type="file"
           accept={mediaType === 'video' ? 'video/*' : 'image/*'}
           className="hidden"
+          data-testid="lch-media-file"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void handleFile(file);
@@ -73,6 +96,7 @@ export function OnlineMediaUpload({ value, onChange, mediaType = 'image', label 
           disabled={uploading}
           className={`${onlineButtonClass('ghost')} flex items-center gap-2`}
           onClick={() => inputRef.current?.click()}
+          data-testid="lch-media-upload"
         >
           <Upload size={16} />
           {uploading ? 'Subiendo...' : 'Subir archivo'}

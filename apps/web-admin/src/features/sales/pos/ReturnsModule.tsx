@@ -200,6 +200,7 @@ export function ReturnsModule() {
             onClick={confirm}
             disabled={items.length === 0}
             className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white py-2.5 rounded-lg flex items-center justify-center gap-2"
+            data-testid="lch-devolucion-submit"
           >
             <Printer className="w-4 h-4" />
             Confirmar e imprimir

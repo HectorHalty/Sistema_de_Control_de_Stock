@@ -41,8 +41,8 @@ describe('SuspensionEngine', () => {
   it('calcula fechas restantes tras partidos jugados', () => {
     expect(remainingFechas(2, 1)).toBe(1);
     expect(remainingFechas(1, 2)).toBe(0);
-    expect(inferInitialFechas('Tarjeta roja directa')).toBe(2);
-    expect(inferInitialFechas('Doble amarilla')).toBe(1);
+    expect(inferInitialFechas('Tarjeta roja directa')).toEqual({ fechasIniciales: null, pendienteDefinir: true });
+    expect(inferInitialFechas('Doble amarilla')).toEqual({ fechasIniciales: 1, pendienteDefinir: false });
   });
 
   it('cuenta goles por plantel local/visitante', () => {

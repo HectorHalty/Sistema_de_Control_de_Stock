@@ -116,6 +116,7 @@ export function ConsumptionModule() {
           onClick={submit}
           disabled={cart.length === 0 || saleBusy}
           className="w-full rounded-lg bg-orange-600 py-2.5 text-white disabled:opacity-50"
+          data-testid="lch-consumo-submit"
         >
           {saleBusy ? 'Registrando…' : 'Registrar Consumo'}
         </button>

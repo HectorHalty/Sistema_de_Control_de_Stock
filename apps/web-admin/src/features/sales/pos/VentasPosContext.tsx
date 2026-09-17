@@ -184,7 +184,7 @@ export function ticketToPos(ticket: SalesTicket, operatorName: string, kitchens:
  * Construye los asientos del libro de movimientos a partir de líneas de venta.
  * `direction` = -1 para salidas (venta) y +1 para reposiciones (anulación/devolución).
  */
-function buildStockMovementsFromCart(
+export function buildStockMovementsFromCart(
   cartLines: SalesCartLine[],
   salesProducts: SalesProduct[],
   type: StockMovement['type'],

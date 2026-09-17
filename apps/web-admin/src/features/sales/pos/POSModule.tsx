@@ -211,6 +211,7 @@ export function POSModule() {
             onClick={() => finalizeOrder(false)}
             disabled={order.length === 0 || saleBusy}
             className="w-full border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-foreground py-2.5 rounded-lg flex items-center justify-center gap-2 transition"
+            data-testid="lch-pos-cobrar"
           >
             <Banknote className="w-5 h-5" />
             {editingTicket ? "Guardar sin imprimir" : "Vender sin imprimir"}
