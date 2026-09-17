@@ -21,6 +21,9 @@ import {
   onlineFieldClass,
 } from '../online-shared';
 
+/** Espera entre reintentos de conexión SSE tras un corte no deliberado. */
+const SSE_RECONNECT_DELAY_MS = 3000;
+
 export function CocinaOnlinePanel() {
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
   const [kitchenId, setKitchenId] = useState('');
@@ -62,39 +65,61 @@ export function CocinaOnlinePanel() {
   // headers propios y esta ruta exige `Authorization: Bearer <token>` (RBAC);
   // en su lugar leemos el body como stream con `fetch`, que sí acepta headers.
   // El polling de 15s de arriba queda como red de contención si esta conexión
-  // se cae (proxy que bufferea, token vencido, etc.).
+  // se cae (proxy que bufferea, token vencido, etc.) o mientras se reconecta.
+  //
+  // `kitchenId` va como query param igual que `useKitchenApiAdapter` (el hook
+  // muerto en adapters.ts:336) para que `SseService.deliverLocally` filtre del
+  // lado del server: sin esto, este panel recibía eventos de *todas* las
+  // cocinas, no sólo la seleccionada.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
     const controller = new AbortController();
     let cancelled = false;
 
-    async function listen() {
-      try {
-        const res = await fetch(`${getApiBaseUrl()}/sse/events`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (!cancelled) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let sepIndex = buffer.indexOf('\n\n');
-          while (sepIndex !== -1) {
-            const frame = buffer.slice(0, sepIndex);
-            buffer = buffer.slice(sepIndex + 2);
-            if (frame.includes('event: kitchen-order-updated')) {
-              void reload();
-            }
-            sepIndex = buffer.indexOf('\n\n');
+    async function connectOnce() {
+      const url = `${getApiBaseUrl()}/sse/events${
+        kitchenId ? `?kitchenId=${encodeURIComponent(kitchenId)}` : ''
+      }`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      const reader = res.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!cancelled) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sepIndex = buffer.indexOf('\n\n');
+        while (sepIndex !== -1) {
+          const frame = buffer.slice(0, sepIndex);
+          buffer = buffer.slice(sepIndex + 2);
+          if (frame.includes('event: kitchen-order-updated')) {
+            void reload();
           }
+          sepIndex = buffer.indexOf('\n\n');
         }
-      } catch {
-        // Conexión SSE cerrada/caída (abort en cleanup o red); el polling sigue.
+      }
+    }
+
+    // Bucle de reconexión: si el stream se corta por algo que no sea el abort
+    // deliberado del cleanup (idle-timeout de un proxy, restart de la API,
+    // token vencido, blip de red), reintentamos tras una espera corta en vez
+    // de degradar silenciosamente a sólo polling por el resto del montaje.
+    // `cancelled` corta el bucle apenas se desmonta o cambia la cocina, y la
+    // espera entre intentos evita martillar al servidor.
+    async function listen() {
+      while (!cancelled) {
+        try {
+          await connectOnce();
+        } catch {
+          // Conexión SSE cerrada/caída (abort en cleanup o error de red).
+        }
+        if (cancelled) break;
+        await new Promise((resolve) => setTimeout(resolve, SSE_RECONNECT_DELAY_MS));
       }
     }
 
@@ -103,7 +128,7 @@ export function CocinaOnlinePanel() {
       cancelled = true;
       controller.abort();
     };
-  }, [reload]);
+  }, [reload, kitchenId]);
 
   const activeKitchen = kitchens.find((k) => k.id === kitchenId);
   const active = orders.filter((o) => o.status !== 'delivered');
