@@ -1,0 +1,434 @@
+# Review package: 8467a68..b403fe5
+
+## Commits
+b403fe5 test: e2e cruzados cantina-KDS, POS-stock y pedido online.
+
+## Files changed
+ apps/api/src/sse/sse.controller.ts                 |   8 +-
+ .../features/online/panels/CocinaOnlinePanel.tsx   |  49 ++++++++++
+ e2e/tests/cross/cantina-kds-sse.spec.ts            | 103 ++++++++++++++++++++
+ e2e/tests/cross/pedido-online-admin.spec.ts        |  71 ++++++++++++++
+ e2e/tests/cross/pos-stock.spec.ts                  | 106 +++++++++++++++++++++
+ 5 files changed, 335 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/apps/api/src/sse/sse.controller.ts b/apps/api/src/sse/sse.controller.ts
+index 0da0c42..8ad5909 100644
+--- a/apps/api/src/sse/sse.controller.ts
++++ b/apps/api/src/sse/sse.controller.ts
+@@ -1,20 +1,24 @@
+-import { Controller, Get, Query, Sse, UseGuards } from '@nestjs/common';
++import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+ import { Response } from 'express';
+ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+ import { RolesGuard } from '../common/guards/roles.guard';
+ import { Roles } from '../common/decorators/roles.decorator';
+ import { KITCHEN_READ_ROLES } from '../common/roles';
+ import { SseService } from './sse.service';
+ 
+ @Controller('sse')
+ @UseGuards(JwtAuthGuard, RolesGuard)
+ export class SseController {
+   constructor(private sseService: SseService) {}
+ 
+   @Get('events')
+   @Roles(...KITCHEN_READ_ROLES)
+-  streamEvents(@Query('kitchenId') kitchenId: string, res: Response) {
++  streamEvents(@Query('kitchenId') kitchenId: string, @Res() res: Response) {
++    // `@Res()` (sin passthrough) es imprescindible acá: sin decorar el parámetro,
++    // Nest nunca inyecta el Response de Express y `sseService.addClient` explota
++    // al llamar `res.writeHead` sobre `undefined` — el endpoint quedaba roto para
++    // cualquier cliente (no sólo para el adapter de React que no lo consumía).
+     const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+     this.sseService.addClient(clientId, res, kitchenId);
+   }
+ }
+diff --git a/apps/web-admin/src/features/online/panels/CocinaOnlinePanel.tsx b/apps/web-admin/src/features/online/panels/CocinaOnlinePanel.tsx
+index e5d052b..8b0baac 100644
+--- a/apps/web-admin/src/features/online/panels/CocinaOnlinePanel.tsx
++++ b/apps/web-admin/src/features/online/panels/CocinaOnlinePanel.tsx
+@@ -1,16 +1,17 @@
+ import { useCallback, useEffect, useMemo, useState } from 'react';
+ import { QrCode } from 'lucide-react';
+ import {
+   kitchenApi,
+   onlineApi,
+   getAccessToken,
++  getApiBaseUrl,
+   type Kitchen,
+   type KitchenOrder,
+   type RedeemQrResponse,
+ } from '@/app/api/client';
+ import { QrScanOverlay } from '../QrScanOverlay';
+ import { OnlineKitchenTicket, aggregatePendingItems } from '../OnlineKitchenTicket';
+ import {
+   NEXT_KITCHEN_STATUS,
+   OnlineError,
+   OnlinePanelShell,
+@@ -49,20 +50,68 @@ export function CocinaOnlinePanel() {
+       setLoading(false);
+     }
+   }, [kitchenId]);
+ 
+   useEffect(() => {
+     void reload();
+     const t = setInterval(() => void reload(), 15000);
+     return () => clearInterval(t);
+   }, [reload]);
+ 
++  // Empuje en tiempo real vía SSE (GET /sse/events, LISTEN/NOTIFY del lado API).
++  // No usamos el `EventSource` nativo del browser porque no permite mandar
++  // headers propios y esta ruta exige `Authorization: Bearer <token>` (RBAC);
++  // en su lugar leemos el body como stream con `fetch`, que sí acepta headers.
++  // El polling de 15s de arriba queda como red de contención si esta conexión
++  // se cae (proxy que bufferea, token vencido, etc.).
++  useEffect(() => {
++    const token = getAccessToken();
++    if (!token) return;
++    const controller = new AbortController();
++    let cancelled = false;
++
++    async function listen() {
++      try {
++        const res = await fetch(`${getApiBaseUrl()}/sse/events`, {
++          headers: { Authorization: `Bearer ${token}` },
++          signal: controller.signal,
++        });
++        const reader = res.body?.getReader();
++        if (!reader) return;
++        const decoder = new TextDecoder();
++        let buffer = '';
++        while (!cancelled) {
++          const { value, done } = await reader.read();
++          if (done) break;
++          buffer += decoder.decode(value, { stream: true });
++          let sepIndex = buffer.indexOf('\n\n');
++          while (sepIndex !== -1) {
++            const frame = buffer.slice(0, sepIndex);
++            buffer = buffer.slice(sepIndex + 2);
++            if (frame.includes('event: kitchen-order-updated')) {
++              void reload();
++            }
++            sepIndex = buffer.indexOf('\n\n');
++          }
++        }
++      } catch {
++        // Conexión SSE cerrada/caída (abort en cleanup o red); el polling sigue.
++      }
++    }
++
++    void listen();
++    return () => {
++      cancelled = true;
++      controller.abort();
++    };
++  }, [reload]);
++
+   const activeKitchen = kitchens.find((k) => k.id === kitchenId);
+   const active = orders.filter((o) => o.status !== 'delivered');
+   const oldest = active[0] ?? null;
+   const pendingItems = useMemo(() => aggregatePendingItems(active), [active]);
+   const otherOrders = oldest ? active.slice(1) : active;
+ 
+   async function advance(order: KitchenOrder) {
+     const next = NEXT_KITCHEN_STATUS[order.status];
+     if (!next) return;
+     try {
+diff --git a/e2e/tests/cross/cantina-kds-sse.spec.ts b/e2e/tests/cross/cantina-kds-sse.spec.ts
+new file mode 100644
+index 0000000..4345989
+--- /dev/null
++++ b/e2e/tests/cross/cantina-kds-sse.spec.ts
+@@ -0,0 +1,103 @@
++import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
++import { ADMIN_URL, API_URL, PUBLIC_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++import { adminAccounts } from '../../fixtures/auth';
++
++type SalesProduct = {
++  id: string;
++  name: string;
++  active: boolean;
++  visibleWeb: boolean;
++  kitchenId: string;
++};
++
++/** El seed de demo deja un pedido previo para `jugador@lachacra.test`, así que
++ *  `CantinaPage` abre el modal "¿Repetimos?" apenas hay orders + carrito vacío
++ *  (ver `RepeatOrderModal` en CantinaPage.tsx). Lo cerramos si aparece para no
++ *  bloquear los clicks de "agregar" con su overlay. Mismo patrón que
++ *  `public/cantina-checkout.spec.ts`. */
++async function dismissRepeatOrderModal(page: Page) {
++  const skip = page.getByRole('button', { name: 'No, gracias' });
++  try {
++    await skip.waitFor({ state: 'visible', timeout: 3000 });
++    await skip.click();
++  } catch {
++    // No había modal de "repetir pedido" pendiente.
++  }
++}
++
++/** `lch-cantina-add` sólo existe en el botón "+" mientras `qty === 0`
++ *  (CantinaPage.tsx) y ese botón no contiene el nombre del producto como
++ *  texto propio — es hermano del <p> con el nombre, ambos dentro del mismo
++ *  div "flex flex-1 flex-col p-3" (MenuCard). Subimos al padre del texto y
++ *  buscamos el botón ahí para clickear un producto puntual, no "el primero". */
++async function addProductToCart(page: Page, name: string) {
++  const nameEl = page.getByText(name, { exact: true }).first();
++  await nameEl.locator('..').getByTestId(ids.cantinaAdd).click();
++}
++
++async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
++  const res = await request.post(`${API_URL}/auth/login`, {
++    data: { username: user, password: pass },
++  });
++  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
++  const body = (await res.json()) as { access_token: string };
++  return body.access_token;
++}
++
++test('pedido pública aparece en KDS sin reload', async ({ browser, request }) => {
++  // Elegimos de antemano (vía API, no UI) un producto visible en la web y su
++  // cocina asociada (`ProductoVenta.kitchenId`, ver sales.service.ts:168).
++  // Necesitamos saberlo *antes* de abrir el KDS para poder pararnos en la
++  // cocina correcta antes del checkout: si sólo lo supiéramos después, el
++  // primer fetch al elegir la cocina ya traería el pedido nuevo y el test no
++  // probaría nada sobre el push en vivo.
++  const vendedorToken = await login(request, adminAccounts.vendedor.user, adminAccounts.vendedor.pass);
++  const productsRes = await request.get(`${API_URL}/sales/products`, {
++    headers: { Authorization: `Bearer ${vendedorToken}` },
++  });
++  expect(productsRes.ok()).toBeTruthy();
++  const products = (await productsRes.json()) as SalesProduct[];
++  const target = products.find((p) => p.active && p.visibleWeb);
++  expect(target, 'Debe existir un producto activo y visible en la web para probar el checkout').toBeTruthy();
++
++  const kds = await browser.newContext({ storageState: '.auth/cocina.json' });
++  const pub = await browser.newContext({ storageState: '.auth/jugador.json' });
++  const kdsPage = await kds.newPage();
++  const pubPage = await pub.newPage();
++
++  await kdsPage.goto(`${ADMIN_URL}/#/online?tab=cocina`);
++  await expect(kdsPage.getByText(/Cocina/i).first()).toBeVisible();
++  // Nos paramos en la cocina del producto elegido (el <select> no tiene
++  // opción "Todas" — CocinaOnlinePanel.tsx filtra por una sola cocina a la
++  // vez). Esto dispara un fetch normal, no es el push que estamos probando.
++  await kdsPage.locator('select').first().selectOption(target!.kitchenId);
++
++  await pubPage.goto(`${PUBLIC_URL}/#/cantina`);
++  await dismissRepeatOrderModal(pubPage);
++  await addProductToCart(pubPage, target!.name);
++  await pubPage.goto(`${PUBLIC_URL}/#/pago`);
++  await pubPage.getByTestId(ids.cantinaPagar).click();
++  // Llegar a /qr es evidencia de que el checkout (POST real) se escribió en
++  // la base — mismo razonamiento que public/cantina-checkout.spec.ts.
++  await expect(pubPage).toHaveURL(/qr/);
++
++  const orderLocator = pubPage.getByText(/Orden #\d+/);
++  await expect(orderLocator).toBeVisible();
++  const orderText = await orderLocator.innerText();
++  const match = orderText.match(/#(\d+)/);
++  expect(match, 'La pantalla de QR debe mostrar el número de orden').not.toBeNull();
++  const padded = match![1].padStart(6, '0');
++
++  // Clave del test: el KDS ya estaba abierto, en la cocina correcta, ANTES
++  // del checkout. Que el ticket nuevo aparezca ahora — sin page.reload() ni
++  // ninguna navegación — sólo se explica por el push SSE real (GET
++  // /sse/events con LISTEN/NOTIFY del lado API, ver sse.service.ts). El
++  // polling de respaldo del panel es de 15s; el timeout de abajo es más
++  // corto a propósito para no dejar que una coincidencia de polling lo
++  // disfrace de éxito.
++  await expect(kdsPage.getByText(padded)).toBeVisible({ timeout: 8_000 });
++
++  await kds.close();
++  await pub.close();
++});
+diff --git a/e2e/tests/cross/pedido-online-admin.spec.ts b/e2e/tests/cross/pedido-online-admin.spec.ts
+new file mode 100644
+index 0000000..7bf3108
+--- /dev/null
++++ b/e2e/tests/cross/pedido-online-admin.spec.ts
+@@ -0,0 +1,71 @@
++import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
++import { ADMIN_URL, API_URL, PUBLIC_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++import { adminAccounts } from '../../fixtures/auth';
++
++/** Mismo helper que public/cantina-checkout.spec.ts y cross/cantina-kds-sse:
++ *  el seed deja un pedido previo para jugador@lachacra.test que dispara el
++ *  modal "¿Repetimos?" apenas se entra a /cantina con carrito vacío. */
++async function dismissRepeatOrderModal(page: Page) {
++  const skip = page.getByRole('button', { name: 'No, gracias' });
++  try {
++    await skip.waitFor({ state: 'visible', timeout: 3000 });
++    await skip.click();
++  } catch {
++    // No había modal de "repetir pedido" pendiente.
++  }
++}
++
++async function addFirstProductToCart(page: Page) {
++  await page.getByTestId(ids.cantinaAdd).first().click();
++}
++
++async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
++  const res = await request.post(`${API_URL}/auth/login`, {
++    data: { username: user, password: pass },
++  });
++  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
++  const body = (await res.json()) as { access_token: string };
++  return body.access_token;
++}
++
++test.use({ storageState: '.auth/jugador.json' });
++
++test('pedido público queda visible para cocina en el admin', async ({ page, request, browser }) => {
++  await page.goto(`${PUBLIC_URL}/#/cantina`);
++  await dismissRepeatOrderModal(page);
++  await addFirstProductToCart(page);
++  await page.goto(`${PUBLIC_URL}/#/pago`);
++  await page.getByTestId(ids.cantinaPagar).click();
++  await expect(page).toHaveURL(/qr/);
++
++  const orderLocator = page.getByText(/Orden #\d+/);
++  await expect(orderLocator).toBeVisible();
++  const orderText = await orderLocator.innerText();
++  const match = orderText.match(/#(\d+)/);
++  expect(match, 'La pantalla de QR debe mostrar el número de orden').not.toBeNull();
++  const ticketNumber = Number(match![1]);
++
++  // Ubicamos la cocina real de este pedido vía la API admin (GET
++  // /kitchen/orders sin kitchenId trae de todas las cocinas) en vez de
++  // asumir cuál va a quedar seleccionada por default en el <select> del KDS.
++  const cocinaToken = await login(request, adminAccounts.cocina.user, adminAccounts.cocina.pass);
++  const ordersRes = await request.get(`${API_URL}/kitchen/orders?onlineOnly=true`, {
++    headers: { Authorization: `Bearer ${cocinaToken}` },
++  });
++  expect(ordersRes.ok()).toBeTruthy();
++  const orders = (await ordersRes.json()) as Array<{ kitchenId: string; ticket: { number: number } | null }>;
++  const kitchenOrder = orders.find((o) => o.ticket?.number === ticketNumber);
++  expect(kitchenOrder, 'El pedido recién creado debe existir en /kitchen/orders').toBeTruthy();
++
++  const admin = await browser.newContext({ storageState: '.auth/cocina.json' });
++  const adminPage = await admin.newPage();
++  await adminPage.goto(`${ADMIN_URL}/#/online?tab=cocina`);
++  await expect(adminPage.getByText(/Cocina/i).first()).toBeVisible();
++  await adminPage.locator('select').first().selectOption(kitchenOrder!.kitchenId);
++
++  const padded = String(ticketNumber).padStart(6, '0');
++  await expect(adminPage.getByText(padded)).toBeVisible();
++
++  await admin.close();
++});
+diff --git a/e2e/tests/cross/pos-stock.spec.ts b/e2e/tests/cross/pos-stock.spec.ts
+new file mode 100644
+index 0000000..1290d68
+--- /dev/null
++++ b/e2e/tests/cross/pos-stock.spec.ts
+@@ -0,0 +1,106 @@
++import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
++import { API_URL, ADMIN_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++import { adminAccounts } from '../../fixtures/auth';
++
++type SalesProduct = {
++  id: string;
++  name: string;
++  active: boolean;
++  kind: 'simple' | 'promo';
++  recipe: Array<{ stockProductId: string; quantity: string | number; stockProduct: { name: string } }>;
++};
++
++type StockLevel = { quantity: string | number };
++
++/** `lch-pos-product` es un botón cuyo texto propio incluye nombre + categoría
++ *  + estación + precio + "Disp.: N" (ver PosProductPicker.tsx:238-292), así
++ *  que filtrar ese botón por `hasText: <nombre>` puede matchear el producto
++ *  equivocado si el picker todavía no terminó de cargar cuando se evalúa el
++ *  filtro (Playwright reintenta el click, no el `.filter()`, así que un
++ *  `.first()` tomado en el momento incorrecto puede clickear cualquier cosa).
++ *  Vamos directo al `<div>` que sólo contiene el nombre (match exacto) y
++ *  subimos al botón ancestro por testid. */
++async function clickPosProductByExactName(page: Page, name: string) {
++  await expect(page.getByTestId(ids.posProduct).first()).toBeVisible();
++  const nameEl = page.getByText(name, { exact: true }).first();
++  await expect(nameEl).toBeVisible();
++  await nameEl.locator('xpath=ancestor::button[@data-testid="lch-pos-product"]').first().click();
++}
++
++async function login(request: APIRequestContext, user: string, pass: string): Promise<string> {
++  const res = await request.post(`${API_URL}/auth/login`, {
++    data: { username: user, password: pass },
++  });
++  expect(res.ok(), `login ${user} debe responder 2xx`).toBeTruthy();
++  const body = (await res.json()) as { access_token: string };
++  return body.access_token;
++}
++
++/** Suma niveles de stock de un insumo en todos los almacenes. `quantity` viaja
++ *  como string (Prisma.Decimal se serializa así por defecto), de ahí el
++ *  Number(...) explícito. */
++async function readStock(request: APIRequestContext, token: string, stockProductId: string): Promise<number> {
++  const res = await request.get(`${API_URL}/stock/products/${stockProductId}/stock`, {
++    headers: { Authorization: `Bearer ${token}` },
++  });
++  expect(res.ok(), 'GET /stock/products/:id/stock debe responder 2xx').toBeTruthy();
++  const levels = (await res.json()) as StockLevel[];
++  return levels.reduce((sum, l) => sum + Number(l.quantity), 0);
++}
++
++test.use({ storageState: '.auth/vendedor.json' });
++
++test('una venta POS de un producto con receta baja el stock del insumo', async ({ page, request }) => {
++  // `stock`/`stock123` (Operador_Stock) puede leer /stock/products/:id/stock
++  // (STOCK_POS_READ_ROLES) pero NO /sales/products (SALES_READ_ROLES no
++  // incluye Operador_Stock) — por eso usamos dos logins distintos, como
++  // indica el brief ("login API stock/stock123" + inspección de recetas vía
++  // /sales/products, que sí expone el admin/vendedor).
++  const vendedorToken = await login(request, adminAccounts.vendedor.user, adminAccounts.vendedor.pass);
++  const stockToken = await login(request, adminAccounts.stock.user, adminAccounts.stock.pass);
++
++  const productsRes = await request.get(`${API_URL}/sales/products`, {
++    headers: { Authorization: `Bearer ${vendedorToken}` },
++  });
++  expect(productsRes.ok()).toBeTruthy();
++  const products = (await productsRes.json()) as SalesProduct[];
++
++  // Buscamos un producto de venta "simple" con receta cuyo insumo tenga stock
++  // suficiente para al menos una unidad — así garantizamos que además
++  // aparezca vendible en el picker del POS (PosProductPicker filtra
++  // `p.stock <= 0`, calculado a partir de la receta real).
++  let target: { productName: string; stockProductId: string; before: number } | null = null;
++  for (const p of products) {
++    if (!p.active || p.kind !== 'simple' || !p.recipe.length) continue;
++    const item = p.recipe[0];
++    const needed = Number(item.quantity);
++    const available = await readStock(request, stockToken, item.stockProductId);
++    if (available >= needed && needed > 0) {
++      target = { productName: p.name, stockProductId: item.stockProductId, before: available };
++      break;
++    }
++  }
++  expect(
++    target,
++    'Debe existir al menos un producto de venta "simple" con receta vendible (stock >= 1 unidad)',
++  ).toBeTruthy();
++
++  await page.goto(`${ADMIN_URL}/#/ventas?tab=mostrador`);
++  await clickPosProductByExactName(page, target!.productName);
++  await page.getByTestId(ids.posCobrar).click();
++  // Ojo: ni "Ticket #\d+" ni "el botón de cobrar está disabled" alcanzan acá.
++  // La corrida completa deja tickets previos (seed + otros specs), así que
++  // "Ticket #\d+" puede matchear el "Último pedido" de ANTES de nuestro click
++  // (VentasPosContext lo repuebla desde una lista aparte). Y el botón queda
++  // disabled tanto por `saleBusy` (mientras la venta está en curso) como por
++  // `order.length === 0` (POSModule.tsx:212) — o sea, se pone disabled ni bien
++  // arranca el checkout, no sólo cuando termina. La señal inequívoca de
++  // "terminó con éxito" es que el carrito se vacíe: `finalizeOrder` sólo llama
++  // `setOrder([])` después de que `storePrint` (el POST real) resuelve con
++  // éxito (POSModule.tsx:84-92), y recién ahí reaparece el placeholder vacío.
++  await expect(page.getByText('Toca productos para agregarlos')).toBeVisible();
++
++  const after = await readStock(request, stockToken, target!.stockProductId);
++  expect(after).toBeLessThan(target!.before);
++});

@@ -1,0 +1,680 @@
+# Review package: e0f2bfe..da3e8e5
+
+## Commits
+da3e8e5 test: harness Playwright e2e y RBAC de login admin.
+
+## Files changed
+ e2e/constants.ts                   |   6 +
+ e2e/fixtures/auth.ts               |  40 ++++++
+ e2e/global-setup.ts                |  25 ++++
+ e2e/package.json                   |  10 ++
+ e2e/playwright.config.ts           |  26 ++++
+ e2e/start-stack.mjs                | 253 +++++++++++++++++++++++++++++++++++++
+ e2e/tests/admin/login-rbac.spec.ts |  29 +++++
+ e2e/tests/auth.setup.ts            |  17 +++
+ package-lock.json                  |  58 ++++++++-
+ package.json                       |   6 +-
+ 10 files changed, 468 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/e2e/constants.ts b/e2e/constants.ts
+new file mode 100644
+index 0000000..82a05d3
+--- /dev/null
++++ b/e2e/constants.ts
+@@ -0,0 +1,6 @@
++export const API_URL = 'http://127.0.0.1:3002';
++export const ADMIN_URL = 'http://127.0.0.1:5175';
++export const PUBLIC_URL = 'http://127.0.0.1:5176';
++export const TEST_DATABASE_URL =
++  'postgresql://lch:lch_dev_pass@localhost:5432/lch_stock_test?schema=public';
++export const JWT_SECRET = 'lch-e2e-jwt-secret-not-for-production';
+diff --git a/e2e/fixtures/auth.ts b/e2e/fixtures/auth.ts
+new file mode 100644
+index 0000000..28b4961
+--- /dev/null
++++ b/e2e/fixtures/auth.ts
+@@ -0,0 +1,40 @@
++import { expect, type Page } from '@playwright/test';
++import { ADMIN_URL, PUBLIC_URL } from '../constants';
++import { ids } from './ids';
++
++export const adminAccounts = {
++  admin: { user: 'admin', pass: 'admin123' },
++  stock: { user: 'stock', pass: 'stock123' },
++  vendedor: { user: 'vendedor', pass: 'vendedor123' },
++  gerente: { user: 'gerente', pass: 'gerente123' },
++  futbol: { user: 'futbol', pass: 'futbol123' },
++  cocina: { user: 'cocina', pass: 'cocina123' },
++} as const;
++export type AdminRole = keyof typeof adminAccounts;
++
++export const publicAccounts = {
++  jugador: { email: 'jugador@lachacra.test', pass: 'jugador123' },
++  capitan: { email: 'capitan@lachacra.test', pass: 'capitan123' },
++} as const;
++
++/** Login admin: llena el form de `LoginPage` y espera a que el shell autenticado quede visible. */
++export async function loginAdmin(page: Page, role: AdminRole): Promise<void> {
++  const { user, pass } = adminAccounts[role];
++  await page.goto(`${ADMIN_URL}/`);
++  await page.getByTestId(ids.loginUser).fill(user);
++  await page.getByTestId(ids.loginPass).fill(pass);
++  await page.getByTestId(ids.loginSubmit).click();
++  // El form de login se desmonta al autenticar (AppShell pasa a AuthenticatedApp).
++  await expect(page.getByTestId(ids.loginSubmit)).toHaveCount(0, { timeout: 45_000 });
++}
++
++/** Login público: llena `AuthForm` en /#/perfil y espera a que el perfil (con email) reemplace el form. */
++export async function loginPublic(page: Page, who: keyof typeof publicAccounts): Promise<void> {
++  const { email, pass } = publicAccounts[who];
++  await page.goto(`${PUBLIC_URL}/#/perfil`);
++  await page.getByTestId(ids.publicLoginEmail).fill(email);
++  await page.getByTestId(ids.publicLoginPass).fill(pass);
++  await page.getByTestId(ids.publicLoginSubmit).click();
++  // El form de login desaparece cuando ProfilePage tiene user+token y muestra el email.
++  await expect(page.getByTestId(ids.publicLoginSubmit)).toHaveCount(0, { timeout: 45_000 });
++}
+diff --git a/e2e/global-setup.ts b/e2e/global-setup.ts
+new file mode 100644
+index 0000000..7801814
+--- /dev/null
++++ b/e2e/global-setup.ts
+@@ -0,0 +1,25 @@
++import { spawnSync } from 'node:child_process';
++import path from 'node:path';
++import { TEST_DATABASE_URL } from './constants';
++
++function run(cmd: string, args: string[], cwd: string) {
++  const r = spawnSync(cmd, args, {
++    cwd,
++    stdio: 'inherit',
++    shell: true,
++    env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL, DIRECT_URL: TEST_DATABASE_URL },
++  });
++  if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} failed`);
++}
++
++// El reset destructivo (`prisma migrate reset`) corre en `start-stack.mjs`,
++// ANTES de levantar la API — Playwright espera a que el `webServer` completo
++// (proceso + chequeo de `url`) esté listo antes de correr `globalSetup`, así
++// que si el reset viviera acá, `/health/ready` nunca respondería 200 (la base
++// todavía no existiría) y quedaría en deadlock. Acá solo sembramos datos:
++// son seeds idempotentes (upsert), seguros de correr con la API ya arriba.
++export default async function globalSetup() {
++  const api = path.resolve(__dirname, '../apps/api');
++  run('npm', ['run', 'prisma:seed'], api);
++  run('npm', ['run', 'prisma:seed:demo'], api);
++}
+diff --git a/e2e/package.json b/e2e/package.json
+new file mode 100644
+index 0000000..21c7547
+--- /dev/null
++++ b/e2e/package.json
+@@ -0,0 +1,10 @@
++{
++  "name": "@lch/e2e",
++  "private": true,
++  "scripts": {
++    "test:e2e": "playwright test"
++  },
++  "devDependencies": {
++    "@playwright/test": "^1.55.0"
++  }
++}
+diff --git a/e2e/playwright.config.ts b/e2e/playwright.config.ts
+new file mode 100644
+index 0000000..8d3b9cd
+--- /dev/null
++++ b/e2e/playwright.config.ts
+@@ -0,0 +1,26 @@
++import { defineConfig, devices } from '@playwright/test';
++import { API_URL } from './constants';
++
++export default defineConfig({
++  testDir: './tests',
++  fullyParallel: false,
++  workers: 1,
++  timeout: 45_000,
++  expect: { timeout: 15_000 },
++  reporter: [['list'], ['html', { open: 'never' }]],
++  globalSetup: './global-setup.ts',
++  use: {
++    trace: 'retain-on-failure',
++    ...devices['Desktop Chrome'],
++  },
++  webServer: {
++    command: 'node start-stack.mjs',
++    url: `${API_URL}/health/ready`,
++    reuseExistingServer: false,
++    timeout: 180_000,
++  },
++  projects: [
++    { name: 'setup', testMatch: /auth\.setup\.ts/ },
++    { name: 'chromium', testMatch: /.*\.spec\.ts/, dependencies: ['setup'] },
++  ],
++});
+diff --git a/e2e/start-stack.mjs b/e2e/start-stack.mjs
+new file mode 100644
+index 0000000..b1aa742
+--- /dev/null
++++ b/e2e/start-stack.mjs
+@@ -0,0 +1,253 @@
++#!/usr/bin/env node
++// Levanta la API (Nest) y los dos frontends (Vite admin + Vite pública) contra
++// la base de test, para que Playwright pueda pegarle a la stack real.
++// Lo invoca `webServer.command` de playwright.config.ts — el proceso queda
++// vivo hasta que Playwright lo mata con SIGTERM/SIGINT al terminar la corrida.
++import { spawn, spawnSync } from 'node:child_process';
++import net from 'node:net';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import {
++  API_URL,
++  TEST_DATABASE_URL,
++  JWT_SECRET,
++} from './constants.ts';
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
++const apiDir = path.resolve(__dirname, '../apps/api');
++const adminDir = path.resolve(__dirname, '../apps/web-admin');
++const publicDir = path.resolve(__dirname, '../apps/web-public');
++
++const VITE_API_URL = API_URL;
++
++/** Puertos que esta corrida de e2e necesita para sí sola. */
++function assertPortFree(port) {
++  return new Promise((resolve, reject) => {
++    const tester = net.createServer();
++    tester.once('error', (err) => {
++      if (err.code === 'EADDRINUSE') {
++        reject(new Error(`puerto ${port} en uso`));
++      } else {
++        reject(err);
++      }
++    });
++    tester.once('listening', () => {
++      tester.close(() => resolve());
++    });
++    tester.listen(port, '127.0.0.1');
++  });
++}
++
++/** TCP connect simple — alcanza para saber si algo escucha en el puerto. */
++function tcpProbe(host, port, timeoutMs = 2000) {
++  return new Promise((resolve) => {
++    const socket = net.connect({ host, port });
++    const done = (ok) => {
++      socket.removeAllListeners();
++      socket.destroy();
++      resolve(ok);
++    };
++    socket.setTimeout(timeoutMs);
++    socket.once('connect', () => done(true));
++    socket.once('timeout', () => done(false));
++    socket.once('error', () => done(false));
++  });
++}
++
++async function httpProbe(url, timeoutMs = 2000) {
++  const controller = new AbortController();
++  const t = setTimeout(() => controller.abort(), timeoutMs);
++  try {
++    const res = await fetch(url, { signal: controller.signal });
++    return res.ok;
++  } catch {
++    return false;
++  } finally {
++    clearTimeout(t);
++  }
++}
++
++async function pollUntil(checkFn, { timeoutMs, intervalMs = 1000, label }) {
++  const deadline = Date.now() + timeoutMs;
++  for (;;) {
++    if (await checkFn()) return true;
++    if (Date.now() >= deadline) {
++      console.error(`Timeout esperando: ${label}`);
++      return false;
++    }
++    await new Promise((r) => setTimeout(r, intervalMs));
++  }
++}
++
++function prefixed(tag, chunk) {
++  const text = chunk.toString();
++  for (const line of text.split(/\r?\n/)) {
++    if (line.length > 0) process.stdout.write(`[${tag}] ${line}\n`);
++  }
++}
++
++function spawnChild(tag, cmd, args, opts) {
++  console.log(`[${tag}] spawn: ${cmd} ${args.join(' ')} (cwd=${opts.cwd})`);
++  const child = spawn(cmd, args, { shell: true, ...opts });
++  child.stdout?.on('data', (d) => prefixed(tag, d));
++  child.stderr?.on('data', (d) => prefixed(tag, d));
++  child.on('spawn', () => console.log(`[${tag}] pid=${child.pid}`));
++  child.on('error', (err) => console.error(`[${tag}] error al spawnear: ${err.message}`));
++  child.on('exit', (code, signal) => {
++    if (code !== null && code !== 0) {
++      console.error(`[${tag}] terminó con código ${code}`);
++    } else if (signal) {
++      console.error(`[${tag}] terminado por señal ${signal}`);
++    }
++  });
++  return child;
++}
++
++const children = [];
++
++/**
++ * `spawn(..., { shell: true })` en Windows crea un cmd.exe intermedio: matar
++ * ese PID con child.kill() no llega a los procesos reales (node de nest/vite)
++ * y quedan colgados con los puertos tomados. `taskkill /T` mata el árbol.
++ */
++function killChildTree(child) {
++  if (child.killed || child.exitCode !== null) return;
++  if (process.platform === 'win32') {
++    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', shell: true });
++  } else {
++    try {
++      child.kill('SIGTERM');
++    } catch {
++      // ya estaba muerto
++    }
++  }
++}
++
++function killChildren() {
++  for (const child of children) {
++    killChildTree(child);
++  }
++}
++
++let shuttingDown = false;
++function shutdown(signal) {
++  if (shuttingDown) return;
++  shuttingDown = true;
++  console.log(`\nRecibida ${signal}, cerrando API + frontends de e2e…`);
++  killChildren();
++  process.exit(0);
++}
++
++process.on('SIGTERM', () => shutdown('SIGTERM'));
++process.on('SIGINT', () => shutdown('SIGINT'));
++
++async function main() {
++  // 1. Puertos libres — si un e2e anterior quedó colgado, avisar y salir.
++  for (const port of [3002, 5175, 5176]) {
++    try {
++      await assertPortFree(port);
++    } catch {
++      console.error('puerto en uso, cerrá el e2e anterior');
++      process.exit(1);
++    }
++  }
++
++  // 2. Infra (Postgres + MinIO) tiene que estar arriba de antes (docker compose).
++  const infraOk = await pollUntil(
++    async () => {
++      const pgUp = await tcpProbe('127.0.0.1', 5432);
++      const minioUp = await httpProbe('http://127.0.0.1:9000/minio/health/live');
++      return pgUp && minioUp;
++    },
++    { timeoutMs: 30_000, label: 'Postgres (5432) + MinIO (9000)' },
++  );
++  if (!infraOk) {
++    console.error('Infra no disponible — levantá "npm run dev:infra" antes de correr e2e.');
++    process.exit(1);
++  }
++
++  // 2.5. Reset de la base de test — tiene que pasar ANTES de levantar la API.
++  // Playwright corre el `webServer` (esto) completo, incluyendo el chequeo de
++  // `url`, antes de disparar `globalSetup`: si el reset viviera ahí, `/health/ready`
++  // nunca respondería 200 (la base no existe todavía) y quedaría en deadlock.
++  // Además, en una segunda corrida la API ya tendría una conexión abierta a la
++  // base existente, y `prisma migrate reset` no puede DROP DATABASE con
++  // sesiones activas. Por eso el reset se hace acá, antes del `spawn` de nest;
++  // `global-setup.ts` solo siembra datos (seeds idempotentes) una vez que la
++  // API ya está arriba.
++  console.log('Reseteando base de test antes de levantar la API…');
++  const reset = spawnSync('node', ['scripts/reset-test-db.mjs'], {
++    cwd: apiDir,
++    shell: true,
++    stdio: 'inherit',
++    env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL, DIRECT_URL: TEST_DATABASE_URL },
++  });
++  if (reset.status !== 0) {
++    console.error('No se pudo resetear la base de test — abortando e2e.');
++    process.exit(1);
++  }
++
++  // 3. API (Nest), sin --watch, apuntando a la base de test.
++  const api = spawnChild('api', 'npx', ['nest', 'start'], {
++    cwd: apiDir,
++    env: {
++      ...process.env,
++      PORT: '3002',
++      NODE_ENV: 'development',
++      DATABASE_URL: TEST_DATABASE_URL,
++      DIRECT_URL: TEST_DATABASE_URL,
++      JWT_SECRET,
++      MINIO_ENDPOINT: '127.0.0.1',
++      MINIO_PORT: '9000',
++      MINIO_ACCESS_KEY: 'minio_admin',
++      MINIO_SECRET_KEY: 'minio_dev_pass',
++      MINIO_USE_SSL: 'false',
++    },
++  });
++  children.push(api);
++
++  // 4. Vite admin.
++  const admin = spawnChild(
++    'admin',
++    'npx',
++    ['vite', '--port', '5175', '--strictPort', '--host', '127.0.0.1', '--open', 'false'],
++    {
++      cwd: adminDir,
++      env: { ...process.env, VITE_API_URL },
++    },
++  );
++  children.push(admin);
++
++  // 5. Vite pública.
++  const pub = spawnChild(
++    'public',
++    'npx',
++    ['vite', '--port', '5176', '--strictPort', '--host', '127.0.0.1', '--open', 'false'],
++    {
++      cwd: publicDir,
++      env: { ...process.env, VITE_API_URL },
++    },
++  );
++  children.push(pub);
++
++  // 6. Esperar a que la API esté lista de verdad (Postgres respondiendo detrás).
++  const apiOk = await pollUntil(() => httpProbe(`${API_URL}/health/ready`), {
++    timeoutMs: 60_000,
++    label: `${API_URL}/health/ready`,
++  });
++  if (!apiOk) {
++    console.error('La API no llegó a healthy — abortando e2e.');
++    killChildren();
++    process.exit(1);
++  }
++
++  console.log('Stack de e2e lista: API 3002, admin 5175, pública 5176.');
++  // El proceso queda vivo — Playwright ya puede empezar a correr los tests.
++  // Se cierra por SIGTERM/SIGINT (ver handlers arriba).
++}
++
++main().catch((err) => {
++  console.error(err);
++  killChildren();
++  process.exit(1);
++});
+diff --git a/e2e/tests/admin/login-rbac.spec.ts b/e2e/tests/admin/login-rbac.spec.ts
+new file mode 100644
+index 0000000..fccfa49
+--- /dev/null
++++ b/e2e/tests/admin/login-rbac.spec.ts
+@@ -0,0 +1,29 @@
++import { expect, test } from '@playwright/test';
++import { ADMIN_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++
++test.describe('login-rbac', () => {
++  test.use({ storageState: '.auth/vendedor.json' });
++  test('vendedor no entra a inventario', async ({ page }) => {
++    await page.goto(`${ADMIN_URL}/#/stock`);
++    await expect(page.getByTestId(ids.moduleDenied)).toBeVisible();
++  });
++});
++
++test.describe('cocina vs futbol', () => {
++  test.use({ storageState: '.auth/cocina.json' });
++  test('cocina no entra a futbol', async ({ page }) => {
++    await page.goto(`${ADMIN_URL}/#/futbol`);
++    await expect(page.getByTestId(ids.moduleDenied)).toBeVisible();
++  });
++});
++
++test.describe('superadmin settings', () => {
++  test.use({ storageState: '.auth/admin.json' });
++  test('admin ve configuracion', async ({ page }) => {
++    await page.goto(`${ADMIN_URL}/#/`);
++    await expect(page.getByTestId(ids.navSettings)).toBeVisible();
++    await page.getByTestId(ids.navSettings).click();
++    await expect(page).toHaveURL(/configuracion/);
++  });
++});
+diff --git a/e2e/tests/auth.setup.ts b/e2e/tests/auth.setup.ts
+new file mode 100644
+index 0000000..6ff082c
+--- /dev/null
++++ b/e2e/tests/auth.setup.ts
+@@ -0,0 +1,17 @@
++import { test as setup } from '@playwright/test';
++import { loginAdmin, loginPublic, adminAccounts, publicAccounts } from '../fixtures/auth';
++
++setup('sesiones', async ({ browser }) => {
++  for (const role of Object.keys(adminAccounts) as (keyof typeof adminAccounts)[]) {
++    const page = await browser.newPage();
++    await loginAdmin(page, role);
++    await page.context().storageState({ path: `.auth/${role}.json` });
++    await page.close();
++  }
++  for (const who of Object.keys(publicAccounts) as (keyof typeof publicAccounts)[]) {
++    const page = await browser.newPage();
++    await loginPublic(page, who);
++    await page.context().storageState({ path: `.auth/${who}.json` });
++    await page.close();
++  }
++});
+diff --git a/package-lock.json b/package-lock.json
+index 75edaaa..73bb489 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -2,21 +2,22 @@
+   "name": "sistema-gestion-lch",
+   "version": "2.0.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sistema-gestion-lch",
+       "version": "2.0.0",
+       "hasInstallScript": true,
+       "workspaces": [
+-        "apps/*"
++        "apps/*",
++        "e2e"
+       ],
+       "devDependencies": {
+         "concurrently": "^9.1.0",
+         "jsdom": "^29.1.1"
+       }
+     },
+     "apps/api": {
+       "name": "@lch/api",
+       "version": "0.1.0",
+       "dependencies": {
+@@ -490,20 +491,26 @@
+       },
+       "peerDependenciesMeta": {
+         "react": {
+           "optional": true
+         },
+         "react-dom": {
+           "optional": true
+         }
+       }
+     },
++    "e2e": {
++      "name": "@lch/e2e",
++      "devDependencies": {
++        "@playwright/test": "^1.55.0"
++      }
++    },
+     "node_modules/@ampproject/remapping": {
+       "version": "2.3.0",
+       "resolved": "https://registry.npmjs.org/@ampproject/remapping/-/remapping-2.3.0.tgz",
+       "integrity": "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "dependencies": {
+         "@jridgewell/gen-mapping": "^0.3.5",
+         "@jridgewell/trace-mapping": "^0.3.24"
+       },
+@@ -4173,20 +4180,24 @@
+       "license": "MIT",
+       "dependencies": {
+         "@jridgewell/resolve-uri": "^3.1.0",
+         "@jridgewell/sourcemap-codec": "^1.4.14"
+       }
+     },
+     "node_modules/@lch/api": {
+       "resolved": "apps/api",
+       "link": true
+     },
++    "node_modules/@lch/e2e": {
++      "resolved": "e2e",
++      "link": true
++    },
+     "node_modules/@lch/web-admin": {
+       "resolved": "apps/web-admin",
+       "link": true
+     },
+     "node_modules/@lch/web-public": {
+       "resolved": "apps/web-public",
+       "link": true
+     },
+     "node_modules/@lukeed/csprng": {
+       "version": "1.1.0",
+@@ -4537,20 +4548,36 @@
+       "version": "0.11.0",
+       "resolved": "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz",
+       "integrity": "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==",
+       "dev": true,
+       "license": "MIT",
+       "optional": true,
+       "engines": {
+         "node": ">=14"
+       }
+     },
++    "node_modules/@playwright/test": {
++      "version": "1.63.0",
++      "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.63.0.tgz",
++      "integrity": "sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright": "1.63.0"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/@prisma/client": {
+       "version": "5.22.0",
+       "resolved": "https://registry.npmjs.org/@prisma/client/-/client-5.22.0.tgz",
+       "integrity": "sha512-M0SVXfyHnQREBKxCgyo7sffrKttwE6R8PMq330MIUF0pTwjUhLbW84pFDlf06B27XyCR++VtjugEnIHdr07SVA==",
+       "hasInstallScript": true,
+       "license": "Apache-2.0",
+       "engines": {
+         "node": ">=16.13"
+       },
+       "peerDependencies": {
+@@ -12005,20 +12032,49 @@
+       "integrity": "sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==",
+       "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">= 16"
+       },
+       "funding": {
+         "url": "https://paulmillr.com/funding/"
+       }
+     },
++    "node_modules/playwright": {
++      "version": "1.63.0",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.63.0.tgz",
++      "integrity": "sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright-core": "1.63.0"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/playwright-core": {
++      "version": "1.63.0",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.63.0.tgz",
++      "integrity": "sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "playwright-core": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
+     "node_modules/plist": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/plist/-/plist-3.1.0.tgz",
+       "integrity": "sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "@xmldom/xmldom": "^0.8.8",
+         "base64-js": "^1.5.1",
+         "xmlbuilder": "^15.1.1"
+diff --git a/package.json b/package.json
+index 7100794..012f4f8 100644
+--- a/package.json
++++ b/package.json
+@@ -1,30 +1,34 @@
+ {
+   "name": "sistema-gestion-lch",
+   "private": true,
+   "version": "2.0.0",
+   "workspaces": [
+-    "apps/*"
++    "apps/*",
++    "e2e"
+   ],
+   "scripts": {
+     "postinstall": "node scripts/patch-express-router.cjs",
+     "dev:infra": "docker compose up -d postgres redis minio minio-init",
+     "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
+     "start:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -Setup",
+     "start:all": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1 -All",
+     "dev:api": "npm run dev --workspace=apps/api",
+     "dev:admin": "npm run dev --workspace=apps/web-admin",
+     "stop:admin": "npx --yes kill-port 5173",
+     "dev:public": "npm run dev --workspace=apps/web-public",
+     "dev:webs": "concurrently -n admin,public -c green,blue \"npm run dev:admin\" \"npm run dev:public\"",
+     "dev:all": "concurrently -n infra,api,admin,public -c yellow,magenta,green,blue \"npm run dev:infra\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:public\"",
+     "test": "npm run test --workspaces --if-present",
++    "test:db": "npm run test:db --workspace=apps/api",
++    "test:e2e": "npm run test:e2e --workspace=@lch/e2e",
++    "test:ci": "npm test && npm run test:db && npm run test:e2e",
+     "test:deep": "npm run test:deep --workspace=apps/api && npm run test:deep --workspace=apps/web-admin",
+     "test:admin": "npm run test --workspace=apps/web-admin",
+     "test:public": "npm run test --workspace=apps/web-public",
+     "test:api": "npm run test --workspace=apps/api",
+     "smoke:public": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-public.ps1",
+     "build:admin": "npm run build --workspace=apps/web-admin",
+     "build:public": "npm run build --workspace=apps/web-public",
+     "build:api": "npm run build --workspace=apps/api",
+     "deploy:prod": "docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build",
+     "deploy:validate": "bash deploy/validate-env.sh",

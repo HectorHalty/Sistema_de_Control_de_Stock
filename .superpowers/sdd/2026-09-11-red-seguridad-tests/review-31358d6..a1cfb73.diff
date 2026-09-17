@@ -1,0 +1,116 @@
+# Review package: 31358d6..a1cfb73
+
+## Commits
+a1cfb73 test: e2e admin de CMS, upload MinIO, fútbol y reportes.
+
+## Files changed
+ e2e/fixtures/files/pixel.png            | Bin 0 -> 70 bytes
+ e2e/tests/admin/futbol.spec.ts          |  16 ++++++++++++++++
+ e2e/tests/admin/media-upload.spec.ts    |  33 ++++++++++++++++++++++++++++++++
+ e2e/tests/admin/online-cms.spec.ts      |  12 ++++++++++++
+ e2e/tests/admin/reportes-config.spec.ts |  13 +++++++++++++
+ 5 files changed, 74 insertions(+)
+
+## Diff
+diff --git a/e2e/fixtures/files/pixel.png b/e2e/fixtures/files/pixel.png
+new file mode 100644
+index 0000000..f37764b
+Binary files /dev/null and b/e2e/fixtures/files/pixel.png differ
+diff --git a/e2e/tests/admin/futbol.spec.ts b/e2e/tests/admin/futbol.spec.ts
+new file mode 100644
+index 0000000..46b94fb
+--- /dev/null
++++ b/e2e/tests/admin/futbol.spec.ts
+@@ -0,0 +1,16 @@
++import { expect, test } from '@playwright/test';
++import { ADMIN_URL } from '../../constants';
++
++test.use({ storageState: '.auth/futbol.json' });
++
++// Solo lectura: no se clickea ningún control de "regenerar"/"publicar"
++// (FixturePanel tiene `publishJornada`/`suspendRain`, ver
++// apps/web-admin/src/features/futbol/panels/FixturePanel.tsx:126-158) — este
++// spec únicamente navega y verifica texto visible.
++test('equipos y fixture', async ({ page }) => {
++  await page.goto(`${ADMIN_URL}/#/futbol?tab=equipos`);
++  await expect(page.locator('body')).toContainText(/equipo/i);
++
++  await page.goto(`${ADMIN_URL}/#/futbol?tab=fixture`);
++  await expect(page.locator('body')).toContainText(/fixture|jornada|fecha/i);
++});
+diff --git a/e2e/tests/admin/media-upload.spec.ts b/e2e/tests/admin/media-upload.spec.ts
+new file mode 100644
+index 0000000..9d2710d
+--- /dev/null
++++ b/e2e/tests/admin/media-upload.spec.ts
+@@ -0,0 +1,33 @@
++import path from 'node:path';
++import { expect, test } from '@playwright/test';
++import { ADMIN_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++
++test.use({ storageState: '.auth/admin.json' });
++
++test('PNG a MinIO y publicUrl 200', async ({ page, request }) => {
++  await page.goto(`${ADMIN_URL}/#/online?tab=sponsors`);
++
++  // A diferencia del ejemplo del brief, `SponsorsPanel` no abre un modal al
++  // click de "Agregar sponsor" (ese botón es el submit del form de alta):
++  // el input de archivo (`ids.mediaFile`, oculto vía `hidden`) ya está
++  // montado dentro de `OnlineMediaUpload` apenas se entra a la pestaña. Ver
++  // apps/web-admin/src/features/online/OnlineMediaUpload.tsx:73-84 y
++  // apps/web-admin/src/features/online/panels/SponsorsPanel.tsx:176-189.
++  const file = path.resolve(__dirname, '../../fixtures/files/pixel.png');
++  await page.getByTestId(ids.mediaFile).first().setInputFiles(file);
++
++  // El upload real hace presign -> PUT a MinIO -> confirm; al resolver,
++  // `onChange(url)` setea `imageUrl` y `OnlineMediaUpload` renderiza el
++  // preview `<img src={value} .../>` (no existe mientras `value` está vacío).
++  const img = page.locator('img[src*="lch-media"], img[src*="127.0.0.1:9000"]').last();
++  await expect(img).toBeVisible();
++  const src = await img.getAttribute('src');
++  expect(src).toBeTruthy();
++
++  // Round-trip real: HTTP GET contra la URL pública devuelta por MinIO
++  // (bucket `lch-media` con política anonymous/download, ver
++  // docker-compose.yml:65) — no se mockea ninguna parte de la cadena.
++  const res = await request.get(src!);
++  expect(res.status()).toBe(200);
++});
+diff --git a/e2e/tests/admin/online-cms.spec.ts b/e2e/tests/admin/online-cms.spec.ts
+new file mode 100644
+index 0000000..1f6fe82
+--- /dev/null
++++ b/e2e/tests/admin/online-cms.spec.ts
+@@ -0,0 +1,12 @@
++import { expect, test } from '@playwright/test';
++import { ADMIN_URL } from '../../constants';
++
++test.use({ storageState: '.auth/admin.json' });
++
++test('menu o sponsor y metricas', async ({ page }) => {
++  await page.goto(`${ADMIN_URL}/#/online?tab=sponsors`);
++  await expect(page.getByText(/sponsor/i).first()).toBeVisible();
++
++  await page.goto(`${ADMIN_URL}/#/online?tab=metricas`);
++  await expect(page.locator('body')).not.toContainText('Acceso denegado');
++});
+diff --git a/e2e/tests/admin/reportes-config.spec.ts b/e2e/tests/admin/reportes-config.spec.ts
+new file mode 100644
+index 0000000..8271a2f
+--- /dev/null
++++ b/e2e/tests/admin/reportes-config.spec.ts
+@@ -0,0 +1,13 @@
++import { expect, test } from '@playwright/test';
++import { ADMIN_URL } from '../../constants';
++import { ids } from '../../fixtures/ids';
++
++test.use({ storageState: '.auth/admin.json' });
++
++test('reportes y config', async ({ page }) => {
++  await page.goto(`${ADMIN_URL}/#/reportes`);
++  await expect(page.locator('body')).not.toContainText('Acceso denegado');
++
++  await page.goto(`${ADMIN_URL}/#/configuracion`);
++  await expect(page.getByTestId(ids.navSettings)).toBeVisible();
++});

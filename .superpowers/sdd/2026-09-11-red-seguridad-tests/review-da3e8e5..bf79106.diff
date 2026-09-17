@@ -1,0 +1,52 @@
+# Review package: da3e8e5..bf79106
+
+## Commits
+bf79106 test: harness Playwright e2e y RBAC de login admin.
+
+## Files changed
+ e2e/start-stack.mjs | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/e2e/start-stack.mjs b/e2e/start-stack.mjs
+index b1aa742..bb2ca61 100644
+--- a/e2e/start-stack.mjs
++++ b/e2e/start-stack.mjs
+@@ -1,24 +1,32 @@
+ #!/usr/bin/env node
+ // Levanta la API (Nest) y los dos frontends (Vite admin + Vite pública) contra
+ // la base de test, para que Playwright pueda pegarle a la stack real.
+ // Lo invoca `webServer.command` de playwright.config.ts — el proceso queda
+ // vivo hasta que Playwright lo mata con SIGTERM/SIGINT al terminar la corrida.
+ import { spawn, spawnSync } from 'node:child_process';
+ import net from 'node:net';
+ import path from 'node:path';
+ import { fileURLToPath } from 'node:url';
+-import {
+-  API_URL,
+-  TEST_DATABASE_URL,
+-  JWT_SECRET,
+-} from './constants.ts';
++
++// Duplicado a propósito en vez de `import ... from './constants.ts'`: este
++// archivo lo ejecuta un `node` plano (`webServer.command`), no el runner de
++// Playwright (que sí transforma TS antes de correrlo). Node solo resuelve
++// `import` de un `.ts` sin flags desde la 22.6/23.6 en adelante — los
++// Dockerfiles del repo (`apps/api`, `apps/web-admin`) fijan `node:20-alpine`,
++// así que un `import './constants.ts'` acá rompería en CI con
++// ERR_UNKNOWN_FILE_EXTENSION. Mantener estos valores en sync con
++// `e2e/constants.ts` si cambian.
++const API_URL = 'http://127.0.0.1:3002';
++const TEST_DATABASE_URL =
++  'postgresql://lch:lch_dev_pass@localhost:5432/lch_stock_test?schema=public';
++const JWT_SECRET = 'lch-e2e-jwt-secret-not-for-production';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const apiDir = path.resolve(__dirname, '../apps/api');
+ const adminDir = path.resolve(__dirname, '../apps/web-admin');
+ const publicDir = path.resolve(__dirname, '../apps/web-public');
+ 
+ const VITE_API_URL = API_URL;
+ 
+ /** Puertos que esta corrida de e2e necesita para sí sola. */
+ function assertPortFree(port) {
