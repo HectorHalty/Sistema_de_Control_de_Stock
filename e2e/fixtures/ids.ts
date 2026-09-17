@@ -2,10 +2,6 @@ export const ids = {
   loginUser: 'lch-login-user',
   loginPass: 'lch-login-pass',
   loginSubmit: 'lch-login-submit',
-  navStock: 'lch-nav-stock',
-  navVentas: 'lch-nav-ventas',
-  navOnline: 'lch-nav-online',
-  navFutbol: 'lch-nav-futbol',
   navSettings: 'lch-nav-settings',
   moduleDenied: 'lch-module-denied',
   posProduct: 'lch-pos-product',
@@ -24,5 +20,4 @@ export const ids = {
   cantinaPagar: 'lch-cantina-pagar',
   kdsTicket: 'lch-kds-ticket',
   mediaFile: 'lch-media-file',
-  mediaUpload: 'lch-media-upload',
 } as const;
