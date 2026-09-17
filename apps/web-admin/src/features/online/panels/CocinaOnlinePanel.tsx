@@ -67,10 +67,9 @@ export function CocinaOnlinePanel() {
   // El polling de 15s de arriba queda como red de contención si esta conexión
   // se cae (proxy que bufferea, token vencido, etc.) o mientras se reconecta.
   //
-  // `kitchenId` va como query param igual que `useKitchenApiAdapter` (el hook
-  // muerto en adapters.ts:336) para que `SseService.deliverLocally` filtre del
-  // lado del server: sin esto, este panel recibía eventos de *todas* las
-  // cocinas, no sólo la seleccionada.
+  // `kitchenId` va como query param para que `SseService.deliverLocally`
+  // filtre del lado del server: sin esto, este panel recibía eventos de
+  // *todas* las cocinas, no sólo la seleccionada.
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;

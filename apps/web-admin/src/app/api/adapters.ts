@@ -5,12 +5,11 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-  salesApi, kitchenApi, mediaApi, sponsorsApi, printingApi,
+  salesApi, mediaApi, sponsorsApi, printingApi,
   getApiBaseUrl, getApiErrorMessage, isApiError,
 } from './client';
 import type {
   CheckoutPayload, ReturnPayload, ReturnItemsPayload, UpdateTicketItemsPayload,
-  KitchenOrderStatus,
   PresignPayload, ConfirmMediaPayload,
   TestPrinterPayload, PrintTicketPayload,
 } from './client';
@@ -296,73 +295,6 @@ export function usePrintingApiAdapter() {
   }, []);
 
   return { testPrinter, printTicket, apiAvailable };
-}
-
-// ==================== Kitchen Adapter ====================
-
-export function useKitchenApiAdapter(kitchenId?: string) {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    isApiReachable().then(setApiAvailable);
-  }, []);
-
-  // Fetch orders
-  const fetchOrders = useCallback(async () => {
-    if (!apiAvailable) return;
-    setLoading(true);
-    try {
-      const result = await kitchenApi.orders.list(kitchenId);
-      setOrders(result);
-      setError(null);
-    } catch (e) {
-      setError(getApiErrorMessage(e, 'No se pudieron cargar los pedidos'));
-    } finally {
-      setLoading(false);
-    }
-  }, [apiAvailable, kitchenId]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  // SSE connection for real-time updates
-  useEffect(() => {
-    if (!apiAvailable) return;
-
-    const url = `${getApiBaseUrl()}/sse/events${kitchenId ? `?kitchenId=${kitchenId}` : ''}`;
-    const eventSource = new EventSource(url);
-
-    eventSource.addEventListener('kitchen-order-updated', () => {
-      fetchOrders();
-    });
-
-    eventSource.onerror = () => {
-      console.warn('SSE connection error, will retry');
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, [apiAvailable, kitchenId, fetchOrders]);
-
-  // Transition order
-  const transitionOrder = useCallback(async (orderId: string, status: KitchenOrderStatus) => {
-    if (!apiAvailable) {
-      return { ok: false, apiUnavailable: true } as const;
-    }
-    try {
-      const result = await kitchenApi.orders.transition(orderId, status);
-      return { ok: true, apiUnavailable: false, result } as const;
-    } catch (e) {
-      return { ok: false, apiUnavailable: false, error: getApiErrorMessage(e, 'No se pudo cambiar el estado') } as const;
-    }
-  }, [apiAvailable]);
-
-  return { orders, loading, error, apiAvailable, transitionOrder, refetch: fetchOrders };
 }
 
 // ==================== Media Adapter ====================

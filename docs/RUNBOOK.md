@@ -324,7 +324,6 @@ Both frontends use adapter hooks (`src/app/api/adapters.ts`) that:
 
 Available adapters:
 - `useSalesApiAdapter()` - checkout, return
-- `useKitchenApiAdapter(kitchenId?)` - orders list, transitions, SSE
 - `useMediaApiAdapter()` - presign, confirm, list, delete
 - `useSponsorsApiAdapter()` - CRUD
 
