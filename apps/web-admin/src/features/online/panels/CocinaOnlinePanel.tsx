@@ -4,6 +4,7 @@ import {
   kitchenApi,
   onlineApi,
   getAccessToken,
+  getApiBaseUrl,
   type Kitchen,
   type KitchenOrder,
   type RedeemQrResponse,
@@ -54,6 +55,54 @@ export function CocinaOnlinePanel() {
     void reload();
     const t = setInterval(() => void reload(), 15000);
     return () => clearInterval(t);
+  }, [reload]);
+
+  // Empuje en tiempo real vía SSE (GET /sse/events, LISTEN/NOTIFY del lado API).
+  // No usamos el `EventSource` nativo del browser porque no permite mandar
+  // headers propios y esta ruta exige `Authorization: Bearer <token>` (RBAC);
+  // en su lugar leemos el body como stream con `fetch`, que sí acepta headers.
+  // El polling de 15s de arriba queda como red de contención si esta conexión
+  // se cae (proxy que bufferea, token vencido, etc.).
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function listen() {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/sse/events`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const reader = res.body?.getReader();
+        if (!reader) return;
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!cancelled) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let sepIndex = buffer.indexOf('\n\n');
+          while (sepIndex !== -1) {
+            const frame = buffer.slice(0, sepIndex);
+            buffer = buffer.slice(sepIndex + 2);
+            if (frame.includes('event: kitchen-order-updated')) {
+              void reload();
+            }
+            sepIndex = buffer.indexOf('\n\n');
+          }
+        }
+      } catch {
+        // Conexión SSE cerrada/caída (abort en cleanup o red); el polling sigue.
+      }
+    }
+
+    void listen();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [reload]);
 
   const activeKitchen = kitchens.find((k) => k.id === kitchenId);
