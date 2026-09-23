@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { EstadoOrdenCompra, Prisma, UnidadMedida } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { CreateProductDto, UpdateProductDto, AdjustStockDto,
+import { CreateProductDto, UpdateProductDto, AdjustStockDto, ApplyStockCountDto,
   CreateStockCountSessionDto,
   CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
@@ -188,6 +188,63 @@ export class StockService {
       }]);
 
       return updated;
+    });
+  }
+
+  /**
+   * Conteo físico: cada fila se escribe como cantidad final.
+   * Un delta repetido (doble click o reintento) llevaba 220 → 10 y después
+   * 10 + (−210) = −200. La cantidad absoluta es idempotente.
+   */
+  async applyStockCount(dto: ApplyStockCountDto) {
+    const byKey = new Map<string, ApplyStockCountDto['entries'][number]>();
+    for (const entry of dto.entries) {
+      byKey.set(`${entry.productId}:${entry.warehouseId}`, entry);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      let updated = 0;
+      for (const entry of byKey.values()) {
+        const target = Math.round(entry.quantity * 1000) / 1000;
+        if (target < 0) {
+          throw new ConflictException('Stock count quantity cannot be negative');
+        }
+
+        let stockLevel = await tx.nivelStock.findUnique({
+          where: { productId_warehouseId: { productId: entry.productId, warehouseId: entry.warehouseId } },
+        });
+        if (!stockLevel) {
+          stockLevel = await tx.nivelStock.create({
+            data: { productId: entry.productId, warehouseId: entry.warehouseId, quantity: 0 },
+          });
+        }
+
+        await tx.$queryRaw`
+          SELECT id FROM "niveles_stock" WHERE id::text = ${stockLevel.id} FOR UPDATE
+        `;
+        const locked = await tx.nivelStock.findUnique({ where: { id: stockLevel.id } });
+        if (!locked) throw new NotFoundException(`Stock level ${stockLevel.id} not found`);
+
+        const current = Number(locked.quantity);
+        const delta = Math.round((target - current) * 1000) / 1000;
+        if (delta === 0) continue;
+
+        await tx.nivelStock.update({
+          where: { id: locked.id },
+          data: { quantity: target },
+        });
+        await this.movements.recordMany(tx, [{
+          type: 'ajuste_manual',
+          productId: entry.productId,
+          warehouseId: entry.warehouseId,
+          quantity: delta,
+          reference: dto.reference,
+          operatorId: dto.operatorId,
+          operatorName: dto.operatorName,
+        }]);
+        updated += 1;
+      }
+      return { updated };
     });
   }
 

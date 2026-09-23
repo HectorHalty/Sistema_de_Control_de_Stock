@@ -1,6 +1,6 @@
 ﻿import { getApiErrorMessage, stockApi } from '@/app/api/client';
 import { operatorFields } from '@/shared/utils/persist-mutation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { getWarehouseIcon } from '@/features/inventory/lib/warehouse-icons';
@@ -9,15 +9,10 @@ import type { ConsumptionLog, StockCountSession } from '@/app/components/store';
 import { getUnitLabel } from '@/app/components/store';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildConsumptionReportXlsx } from '@/app/components/xlsxExport';
+import { mapApiProductToLocal } from '@/features/inventory/api/inventory-mappers';
+import { buildStockCountAdjustments, syncStockEdits, type StockEdit } from '@/features/inventory/stock-count';
 
 type DateType = 'regular' | 'after';
-
-interface StockEdit {
-  warehouseId: string;
-  productId: string;
-  previousStock: number;
-  newStock: number;
-}
 
 export function ConsumptionPage() {
   const {
@@ -35,21 +30,17 @@ export function ConsumptionPage() {
 
   const getCatIconName = (categoryName: string) =>
     categories.find(c => c.name === categoryName)?.icon ?? 'Package';
-  const [edits, setEdits] = useState<StockEdit[]>(() => {
-    // Pre-populate with current stock values
-    const all: StockEdit[] = [];
-    for (const product of products) {
-      for (const s of product.stockByWarehouse) {
-        all.push({
-          warehouseId: s.warehouseId,
-          productId: product.id,
-          previousStock: s.quantity,
-          newStock: s.quantity,
-        });
-      }
-    }
-    return all;
-  });
+  const [edits, setEdits] = useState<StockEdit[]>([]);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+
+  useEffect(() => {
+    void refreshStockProducts();
+  }, [refreshStockProducts]);
+
+  useEffect(() => {
+    setEdits(prev => syncStockEdits(prev, products));
+  }, [products]);
   const [saved, setSaved] = useState(false);
   const [lastLog, setLastLog] = useState<ConsumptionLog | null>(null);
 
@@ -67,6 +58,9 @@ export function ConsumptionPage() {
   const hasChanges = edits.some(e => e.newStock !== e.previousStock);
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     const now = new Date();
     const today = now.toLocaleDateString('es-AR');
     const day = now.toISOString().slice(0, 10);
@@ -125,24 +119,28 @@ export function ConsumptionPage() {
     };
 
     try {
-      for (const e of changedEdits) {
-        const delta = e.newStock - e.previousStock;
-        if (delta !== 0) {
-          await stockApi.products.adjustStock(e.productId, e.warehouseId, delta, '', {
-            reference: 'control-stock',
-            ...operatorFields({
-              operatorId: currentUser?.id,
-              operatorName: currentUser?.username,
-            }),
-          });
-        }
+      const latest = (await stockApi.products.list()).map(mapApiProductToLocal);
+      const adjustments = buildStockCountAdjustments(changedEdits, latest);
+      if (adjustments.length > 0) {
+        await stockApi.applyCount({
+          entries: adjustments,
+          reference: 'control-stock',
+          ...operatorFields({
+            operatorId: currentUser?.id,
+            operatorName: currentUser?.username,
+          }),
+        }, '');
       }
       await saveStockCountSession(countSession);
       await refreshStockProducts();
       await refreshOperations();
     } catch (e) {
       window.alert(getApiErrorMessage(e, 'No se pudo guardar el conteo'));
+      try { await refreshStockProducts(); } catch { /* la pantalla sigue con el último stock conocido */ }
       return;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
 
     // Save consumption log (local; usado por historial legacy)
@@ -479,11 +477,11 @@ export function ConsumptionPage() {
       <div className="sticky bottom-4 flex justify-end">
         <button
           onClick={handleSave}
-          disabled={!hasChanges}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm shadow-lg transition-all ${hasChanges ? 'bg-[#3d7a3d] hover:bg-[#2f5f2f] active:scale-95' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+          disabled={!hasChanges || saving}
+          className={`flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm shadow-lg transition-all ${hasChanges && !saving ? 'bg-[#3d7a3d] hover:bg-[#2f5f2f] active:scale-95' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
         >
           <Check size={18} />
-          Guardar y Ver Reporte
+          {saving ? 'Guardando...' : 'Guardar y Ver Reporte'}
         </button>
       </div>
     </div>

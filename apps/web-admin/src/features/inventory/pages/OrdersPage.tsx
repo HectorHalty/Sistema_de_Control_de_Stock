@@ -11,8 +11,22 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
+import logoLchUrl from '@/assets/logo-LCH.png';
 import { generateMovementBasedSuggestions, type SuggestionParams } from '@/features/kitchen/domain';
 import { isOrderReceived, sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
+
+function orderLogoUrl(): string {
+  return new URL(logoLchUrl, window.location.href).href;
+}
+
+function loadOrderLogo(): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('No se pudo cargar el logo'));
+    img.src = orderLogoUrl();
+  });
+}
 
 type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival' | 'edit-order';
 type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
@@ -172,45 +186,46 @@ export function OrdersPage() {
     }
   };
 
-  const buildOrderPDFBlob = (order: Order): Blob => {
+  const buildOrderPDFBlob = async (order: Order): Promise<Blob> => {
+    const logo = await loadOrderLogo();
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
-    let y = 50;
+    const margin = 40;
+    const pad = 16;
+    const contentW = W - margin * 2;
+    const textX = margin + pad;
+    const textRight = W - margin - pad;
+    const green: [number, number, number] = [64, 138, 49];
+    let y = 36;
 
-    // Header circle
-    doc.setFillColor(45, 80, 22);
-    doc.circle(60, y, 28, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('LCH', 60, y + 5, { align: 'center' });
-
+    const logoSize = 56;
+    doc.addImage(logo, 'PNG', margin, y, logoSize, logoSize);
+    const brandX = margin + logoSize + 12;
+    const brandMid = y + logoSize / 2;
     doc.setTextColor(113, 113, 130);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text('La Chacra Futbol', 100, y - 6);
-    doc.setTextColor(180, 180, 180);
+    doc.text('La Chacra Futbol', brandX, brandMid - 2);
+    doc.setTextColor(160, 160, 160);
     doc.setFontSize(8);
-    doc.text('Sistema de Gestión LCH', 100, y + 8);
+    doc.text('Sistema de Gestión LCH', brandX, brandMid + 12);
 
-    y += 50;
-    doc.setDrawColor(45, 80, 22);
-    doc.setLineWidth(1.5);
-    doc.line(40, y, W - 40, y);
-    y += 18;
-    doc.setTextColor(45, 80, 22);
-    doc.setFontSize(18);
+    y += logoSize + 28;
+    doc.setTextColor(17, 17, 17);
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.text('Detalle del Pedido', W / 2, y, { align: 'center' });
-
-    y += 30;
-    doc.setFillColor(249, 249, 247);
-    doc.roundedRect(40, y, W - 80, 75, 4, 4, 'F');
-    doc.setDrawColor(45, 80, 22);
-    doc.setLineWidth(3);
-    doc.line(40, y, 40, y + 75);
+    y += 12;
+    doc.setDrawColor(green[0], green[1], green[2]);
+    doc.setLineWidth(1.5);
+    doc.line(margin, y, W - margin, y);
 
     y += 18;
+    const boxH = 52;
+    doc.setFillColor(247, 247, 245);
+    doc.roundedRect(margin, y, contentW, boxH, 4, 4, 'F');
+
+    y += 20;
     const now = new Date();
     const hrs = String(now.getHours()).padStart(2, '0');
     const mins = String(now.getMinutes()).padStart(2, '0');
@@ -221,12 +236,11 @@ export function OrdersPage() {
       { label: 'Remito', value: remito },
       { label: 'Fecha', value: order.date },
       { label: 'Proveedor', value: order.provider },
-      { label: 'Estado', value: order.status },
     ];
-    const colW = (W - 80) / fields.length;
+    const colW = (textRight - textX) / fields.length;
     fields.forEach(({ label, value }, i) => {
-      const x = 50 + i * colW;
-      doc.setTextColor(180, 180, 180);
+      const x = textX + i * colW;
+      doc.setTextColor(150, 150, 150);
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
       doc.text(label.toUpperCase(), x, y);
@@ -236,15 +250,14 @@ export function OrdersPage() {
       doc.text(value, x, y + 14);
     });
 
-    y += 55;
-    // Table header
-    doc.setFillColor(45, 80, 22);
-    doc.rect(40, y, W - 80, 24, 'F');
+    y += boxH - 20 + 18;
+    doc.setFillColor(green[0], green[1], green[2]);
+    doc.rect(margin, y, contentW, 24, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Producto', 52, y + 15);
-    doc.text('Cantidad Pedida', W - 48, y + 15, { align: 'right' });
+    doc.text('Producto', textX, y + 16);
+    doc.text('Cantidad Pedida', textRight, y + 16, { align: 'right' });
 
     y += 24;
     let totalUnits = 0;
@@ -252,32 +265,35 @@ export function OrdersPage() {
       if (y > 760) { doc.addPage(); y = 40; }
       const bg = idx % 2 === 0 ? [255, 255, 255] : [249, 249, 247];
       doc.setFillColor(bg[0], bg[1], bg[2]);
-      doc.rect(40, y, W - 80, 22, 'F');
+      doc.rect(margin, y, contentW, 22, 'F');
       doc.setTextColor(51, 51, 51);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       const prod = getProduct(item.productId);
       const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
-      doc.text(getProductName(item.productId).toUpperCase(), 52, y + 14);
-      doc.text(item.quantityOrdered + ' ' + unitLabel, W - 48, y + 14, { align: 'right' });
+      doc.text(getProductName(item.productId).toUpperCase(), textX, y + 15);
+      doc.text(item.quantityOrdered + ' ' + unitLabel, textRight, y + 15, { align: 'right' });
       totalUnits += item.quantityOrdered;
       y += 22;
     });
 
-    // Total row
     doc.setFillColor(240, 236, 230);
-    doc.rect(40, y, W - 80, 26, 'F');
-    doc.setTextColor(113, 113, 130);
+    doc.rect(margin, y, contentW, 26, 'F');
     doc.setFontSize(10);
-    doc.text('Total productos:', 52, y + 16);
-    doc.setTextColor(45, 80, 22);
     doc.setFont('helvetica', 'bold');
-    doc.text(String(totalUnits), W - 48, y + 16, { align: 'right' });
+    const totalText = String(totalUnits);
+    const totalWidth = doc.getTextWidth(totalText);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(113, 113, 130);
+    doc.text('Total productos:', textRight - totalWidth - 16, y + 17, { align: 'right' });
+    doc.setTextColor(green[0], green[1], green[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.text(totalText, textRight, y + 17, { align: 'right' });
 
-    y += 50;
+    y += 48;
     doc.setDrawColor(229, 229, 229);
     doc.setLineWidth(0.5);
-    doc.line(40, y, W - 40, y);
+    doc.line(margin, y, W - margin, y);
     y += 14;
     doc.setTextColor(180, 180, 180);
     doc.setFontSize(8);
@@ -289,7 +305,7 @@ export function OrdersPage() {
   };
 
   const sharePDF = async (order: Order) => {
-    const blob = buildOrderPDFBlob(order);
+    const blob = await buildOrderPDFBlob(order);
     const filename = `pedido-${order.id}.pdf`;
 
     if (Capacitor.isNativePlatform()) {
@@ -470,10 +486,10 @@ export function OrdersPage() {
       const prod = getProduct(item.productId);
       const unitLabel = prod ? getUnitLabel(prod.unit, true) : 'uds';
       rows += '<tr>';
-      rows += '<td style="padding: 10px 16px; border-bottom: 1px solid #e5e5e5; font-size: 13px; color: #333; text-transform: uppercase;">';
+      rows += '<td style="padding: 12px 16px; border-bottom: 1px solid #e5e5e5; font-size: 13px; color: #333; text-transform: uppercase;">';
       rows += getProductName(item.productId);
       rows += '</td>';
-      rows += '<td style="padding: 10px 16px; border-bottom: 1px solid #e5e5e5; text-align: center; font-size: 13px; color: #333; font-weight: 500;">';
+      rows += '<td style="padding: 12px 16px; border-bottom: 1px solid #e5e5e5; text-align: right; font-size: 13px; color: #333; font-weight: 500;">';
       rows += String(item.quantityOrdered) + ' ' + unitLabel;
       rows += '</td>';
       rows += '</tr>';
@@ -483,47 +499,45 @@ export function OrdersPage() {
       '<!DOCTYPE html><html><head><meta charset="utf-8">',
       '<title>Detalle del Pedido - ' + order.id + '</title>',
       '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">',
-      '<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: Poppins, sans-serif; background: #fff; color: #333; } @media print { body { margin: 0; } .no-print { display: none !important; } }</style>',
+      '<style>',
+      '* { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+      'body { font-family: Poppins, sans-serif; background: #fff; color: #333; }',
+      'th, .meta, .total { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+      '@media print { body { margin: 0; } .no-print { display: none !important; } }',
+      '</style>',
       '</head><body>',
       '<div style="max-width: 700px; margin: 0 auto; padding: 40px 32px;">',
-      '<div style="display: flex; align-items: flex-start; margin-bottom: 32px;">',
-      '<div style="width: 80px; height: 80px; background: #2D5016; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">',
-      '<span style="color: white; font-weight: 700; font-size: 22px; letter-spacing: 1px;">LCH</span>',
-      '</div>',
-      '<div style="margin-left: 20px; padding-top: 8px;">',
+      '<div style="display: flex; align-items: center; gap: 16px; margin-bottom: 28px;">',
+      '<img src="' + orderLogoUrl() + '" alt="LCH" style="width: 72px; height: 72px; object-fit: contain; flex-shrink: 0;" />',
+      '<div>',
       '<h2 style="font-size: 11px; color: #717182; text-transform: uppercase; letter-spacing: 2px; font-weight: 500;">La Chacra Futbol</h2>',
       '<p style="font-size: 10px; color: #999; margin-top: 2px;">Sistema de Gestión LCH</p>',
       '</div></div>',
-      '<h1 style="text-align: center; font-size: 22px; font-weight: 600; color: #2D5016; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #2D5016;">Detalle del Pedido</h1>',
-      '<div style="margin-bottom: 28px; background: #f9f9f7; padding: 20px 24px; border-radius: 10px; border-left: 4px solid #2D5016;">',
-      '<div style="margin-bottom: 8px;">',
-      '<span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Remito</span>',
-      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + remito + '</p>',
-      '</div>',
-      '<div style="display: flex; gap: 40px; margin-top: 12px;">',
+      '<h1 style="text-align: center; font-size: 16px; font-weight: 600; color: #111; margin: 0 0 16px; padding-bottom: 12px; border-bottom: 2px solid #408A31;">Detalle del Pedido</h1>',
+      '<div class="meta" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; background: #f7f7f5; padding: 16px; border-radius: 8px;">',
+      '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Remito</span>',
+      '<p style="font-size: 14px; font-weight: 600; color: #333; margin-top: 4px;">' + remito + '</p></div>',
       '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Fecha</span>',
-      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.date + '</p></div>',
+      '<p style="font-size: 14px; font-weight: 600; color: #333; margin-top: 4px;">' + order.date + '</p></div>',
       '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Proveedor</span>',
-      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.provider + '</p></div>',
-      '<div><span style="font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Estado</span>',
-      '<p style="font-size: 14px; font-weight: 500; color: #333; margin-top: 2px;">' + order.status + '</p></div>',
-      '</div></div>',
-      '<table style="width: 100%; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">',
+      '<p style="font-size: 14px; font-weight: 600; color: #333; margin-top: 4px;">' + order.provider + '</p></div>',
+      '</div>',
+      '<table style="width: 100%; border-collapse: collapse;">',
       '<thead><tr>',
-      '<th style="background: #2D5016; color: white; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">Producto</th>',
-      '<th style="background: #2D5016; color: white; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 500; width: 160px; letter-spacing: 0.5px;">Cantidad Pedida</th>',
+      '<th style="padding: 0; text-align: left; font-size: 13px; font-weight: 600;"><div style="background-color: #408A31; color: #fff; padding: 12px 16px; border-radius: 8px 0 0 8px;">Producto</div></th>',
+      '<th style="padding: 0; text-align: right; font-size: 13px; font-weight: 600; width: 180px;"><div style="background-color: #408A31; color: #fff; padding: 12px 16px; border-radius: 0 8px 8px 0;">Cantidad Pedida</div></th>',
       '</tr></thead>',
       '<tbody>' + rows + '</tbody></table>',
-      '<div style="display: flex; justify-content: flex-end; margin-top: 16px; padding: 12px 16px; background: #f0ece6; border-radius: 8px;">',
-      '<span style="font-size: 13px; color: #717182; margin-right: 40px;">Total productos:</span>',
-      '<span style="font-size: 14px; font-weight: 600; color: #2D5016;">' + totalUnits + '</span>',
+      '<div class="total" style="display: flex; justify-content: flex-end; align-items: baseline; gap: 24px; margin-top: 12px; padding: 12px 16px; background-color: #f0ece6; border-radius: 8px;">',
+      '<span style="font-size: 13px; color: #717182;">Total productos:</span>',
+      '<span style="font-size: 14px; font-weight: 600; color: #408A31; min-width: 72px; text-align: right;">' + totalUnits + '</span>',
       '</div>',
       '<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center;">',
       '<p style="font-size: 10px; color: #999;">Documento generado por Sistema de Gestión LCH - La Chacra Fútbol</p>',
       '<p style="font-size: 10px; color: #ccc; margin-top: 4px;">Generado el ' + now.toLocaleDateString('es-AR') + ' a las ' + now.toLocaleTimeString('es-AR') + '</p>',
       '</div>',
       '<div class="no-print" style="text-align: center; margin-top: 24px;">',
-      '<button onclick="window.print()" style="background: #2D5016; color: white; border: none; padding: 12px 32px; border-radius: 8px; font-family: Poppins, sans-serif; font-size: 14px; cursor: pointer; font-weight: 500;">Imprimir / Guardar PDF</button>',
+      '<button onclick="window.print()" style="background: #408A31; color: white; border: none; padding: 12px 32px; border-radius: 8px; font-family: Poppins, sans-serif; font-size: 14px; cursor: pointer; font-weight: 500;">Imprimir / Guardar PDF</button>',
       '</div>',
       '</div></body></html>',
     ];

@@ -102,6 +102,10 @@ export function formatApiErrorMessage(status: number, rawBody: ApiErrorBody): st
     return msgs.join(' ');
   }
 
+  if (typeof body.message === 'string' && body.message.startsWith('Insufficient stock: would go from')) {
+    return 'El stock en el servidor cambió. Recargá el control e ingresá el conteo de nuevo.';
+  }
+
   if (typeof body.message === 'string') return body.message;
   if (Array.isArray(body.message)) {
     return body.message.filter((m): m is string => typeof m === 'string').join(' ');
@@ -270,6 +274,20 @@ export const stockApi = {
       return apiFetch<ApiStockMovement[]>(`/stock/movements${qs ? `?${qs}` : ''}`);
     },
   },
+  applyCount: (
+    data: {
+      entries: { productId: string; warehouseId: string; quantity: number }[];
+      reference?: string;
+      operatorId?: string;
+      operatorName?: string;
+    },
+    token: string,
+  ) =>
+    apiFetch<{ updated: number }>('/stock/count-apply', {
+      method: 'POST',
+      token,
+      body: data,
+    }),
   countSessions: {
     list: (limit?: number) => {
       const q = limit ? `?limit=${limit}` : '';

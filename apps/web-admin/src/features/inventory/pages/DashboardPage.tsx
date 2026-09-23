@@ -7,9 +7,10 @@ import { useNavigate } from 'react-router';
 import logoIcon from '@/assets/logo-LCH.png';
 import { getUnitLabel } from '@/app/components/store';
 import type { AuditEntry } from '@/app/components/store';
+import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
 
 export function DashboardPage() {
-  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, currentUser } = useAppContext();
+  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, currentUser, stockMovements } = useAppContext();
 
   const stockAuditEntries = useMemo(
     () => getStockAuditEntries(auditLog, salesAuditLog),
@@ -20,7 +21,10 @@ export function DashboardPage() {
 
   const totalStock = products.reduce((sum, p) => sum + getTotalStock(p), 0);
   const pendingOrders = orders.filter(o => o.status === 'Pendiente').length;
-  const lowStockProducts = products.filter(p => getTotalStock(p) < 20);
+  const lowStockProducts = useMemo(
+    () => getStockAlertProducts(products, orders, stockMovements),
+    [products, orders, stockMovements],
+  );
 
   const stats = [
     {
@@ -113,14 +117,14 @@ export function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {lowStockProducts.map(p => (
+              {lowStockProducts.map(({ product: p, current }) => (
                 <div key={p.id} className="flex items-center justify-between py-2 px-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/40">
                   <div>
                     <p className="text-sm text-foreground" style={{ fontWeight: 500 }}>{p.name}</p>
                     <p className="text-xs text-muted-foreground">{p.category}</p>
                   </div>
                   <span className="text-sm text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>
-                    {getTotalStock(p)} {getUnitLabel(p.unit, true)}
+                    {current} {getUnitLabel(p.unit, true)}
                   </span>
                 </div>
               ))}

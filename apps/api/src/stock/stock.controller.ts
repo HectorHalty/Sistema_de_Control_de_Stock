@@ -7,7 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StockService } from './stock.service';
 import {
-  CreateProductDto, UpdateProductDto, AdjustStockDto,
+  CreateProductDto, UpdateProductDto, AdjustStockDto, ApplyStockCountDto,
   CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
   CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
@@ -148,6 +148,12 @@ export class StockController {
   @Roles(...STOCK_COUNT_ROLES)
   createCountSession(@Body() dto: CreateStockCountSessionDto) {
     return this.stockService.createStockCountSession(dto);
+  }
+
+  @Post('count-apply')
+  @Roles(...STOCK_COUNT_ROLES)
+  applyStockCount(@Body() dto: ApplyStockCountDto) {
+    return this.stockService.applyStockCount(dto);
   }
 
   @Get('suppliers')

@@ -1,17 +1,24 @@
 ﻿import { AlertTriangle, BarChart3, ShoppingBag, ShoppingCart, Trophy, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
+import { useMemo } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { canAccessModule } from '@/features/platform/config/modules';
+import { getUnitLabel } from '@/app/components/store';
+import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
 
 export function PlatformDashboardPage() {
-  const { currentUser, products, orders, getTotalStock } = useAppContext();
+  const { currentUser, products, orders, stockMovements } = useAppContext();
 
   const canSeeStock = canAccessModule(currentUser.role, 'stock');
   const canSeeVentas = canAccessModule(currentUser.role, 'ventas');
   const canSeeOnline = canAccessModule(currentUser.role, 'online');
   const canSeeFutbol = canAccessModule(currentUser.role, 'futbol');
 
-  const lowStockProducts = products.filter((product) => getTotalStock(product) < 20).slice(0, 4);
+  const stockAlerts = useMemo(
+    () => getStockAlertProducts(products, orders, stockMovements),
+    [products, orders, stockMovements],
+  );
+  const lowStockProducts = stockAlerts.slice(0, 4);
   const pendingOrders = orders.filter((order) => order.status === 'Pendiente').length;
 
   return (
@@ -30,20 +37,20 @@ export function PlatformDashboardPage() {
               <AlertTriangle size={18} className="text-amber-600" />
               <h3 className="text-foreground">Alertas de Stock Bajo</h3>
             </header>
-            {lowStockProducts.length === 0 ? (
+            {stockAlerts.length === 0 ? (
               <p className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-300">
                 Sin alertas críticas. Inventario en rango saludable.
               </p>
             ) : (
               <div className="space-y-2">
-                {lowStockProducts.map((product) => (
+                {lowStockProducts.map(({ product, current }) => (
                   <div
                     key={product.id}
                     className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40"
                   >
                     <span className="text-foreground">{product.name}</span>
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">
-                      {getTotalStock(product)} uds
+                      {current} {getUnitLabel(product.unit, true)}
                     </span>
                   </div>
                 ))}

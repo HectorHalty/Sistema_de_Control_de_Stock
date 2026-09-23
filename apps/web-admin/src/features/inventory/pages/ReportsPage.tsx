@@ -11,8 +11,8 @@ import type { StockMovementType, StockCountSession } from '@/app/components/stor
 import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildReconciliationXlsx } from '@/app/components/xlsxExport';
-import { calculateAvgDailyDemandFromMovements } from '@/features/kitchen/domain';
 import { getStockAuditEntries } from '@/shared/utils/audit-log';
+import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
 import { AuditHistoryTable } from '@/shared/components/AuditHistoryTable';
 import { buildReconciliation, findPreviousSession, sortCountSessionsDesc } from '@/features/inventory/reconciliation';
 
@@ -171,33 +171,9 @@ export function ReportsPage() {
     });
   };
 
-  const pendingOrdersQty = (productId: string) => {
-    return orders.filter(o => o.status === 'Pendiente').reduce((sum, o) => {
-      const item = o.items.find(i => i.productId === productId);
-      return sum + (item?.quantityOrdered || 0);
-    }, 0);
-  };
-
-  const getWeeklyAvg = (productId: string) => {
-    const { avgDaily } = calculateAvgDailyDemandFromMovements(stockMovements, productId, 1);
-    return Math.ceil(avgDaily * 7);
-  };
-
   const alertProducts = useMemo(
-    () =>
-      products
-        .map(p => {
-          const weeklyAvg = getWeeklyAvg(p.id);
-          const current = getTotalStock(p);
-          const pending = pendingOrdersQty(p.id);
-          return { product: p, weeklyAvg, current, pending };
-        })
-        .filter(
-          ({ weeklyAvg, current, pending }) =>
-            weeklyAvg > 0 && current + pending < weeklyAvg,
-        ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [products, orders, stockMovements, getTotalStock],
+    () => getStockAlertProducts(products, orders, stockMovements),
+    [products, orders, stockMovements],
   );
 
   const productNameMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);

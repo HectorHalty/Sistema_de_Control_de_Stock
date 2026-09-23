@@ -23,6 +23,13 @@ describe('formatApiErrorMessage', () => {
     expect(msg).toContain('faltan 3');
   });
 
+  it('traduce ajuste de stock insuficiente', () => {
+    const msg = formatApiErrorMessage(409, {
+      message: 'Insufficient stock: would go from 10 to -200',
+    });
+    expect(msg).toContain('stock en el servidor cambió');
+  });
+
   it('traduce rate limit', () => {
     const msg = formatApiErrorMessage(429, {
       message: 'Too many requests, please try again later',

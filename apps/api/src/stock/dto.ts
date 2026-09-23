@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsNumber, IsEnum, Min, IsUUID, MaxLength, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsNumber, IsEnum, Min, IsUUID, MaxLength, IsArray, ArrayMaxSize, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UnidadMedida } from '@prisma/client';
 
@@ -108,6 +108,42 @@ export class AdjustStockDto {
   operatorName?: string;
 }
 
+/** Una fila del conteo físico: la cantidad contada, no un delta. */
+export class StockCountLevelDto {
+  @IsUUID()
+  productId: string;
+
+  @IsUUID()
+  warehouseId: string;
+
+  @IsNumber()
+  @Min(0)
+  quantity: number;
+}
+
+/** Aplica un conteo entero en una sola transacción, escribiendo cada cantidad tal cual. */
+export class ApplyStockCountDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => StockCountLevelDto)
+  entries: StockCountLevelDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reference?: string;
+
+  @IsOptional()
+  @IsUUID()
+  operatorId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  operatorName?: string;
+}
+
 export class StockCountEntryDto {
   @IsUUID()
   productId: string;
@@ -128,7 +164,7 @@ export class StockCountEntryDto {
 
 export class CreateStockCountSessionDto {
   @IsString()
-  @MaxLength(20)
+  @MaxLength(40)
   date: string;
 
   @IsOptional()
