@@ -25,8 +25,11 @@
 
 ## Setup de rama (antes de Task 1)
 
+`feat/pos-stock-config-paginacion` no existe en este repo (ese plan quedó
+solo como doc, nunca se mergeó su rama) — se parte de `main`:
+
 ```bash
-git checkout feat/pos-stock-config-paginacion
+git checkout main
 git checkout -b feat/red-seguridad-tests
 ```
 
@@ -84,7 +87,10 @@ Estos caminos ya tienen integración/BD. No inventar una suite Nest HTTP. Verifi
 - Stock: `apps/api/test/db/stock-constraints.test.ts`, `apps/api/test/db/reconcile.test.ts`
 - Cocina: `apps/api/test/unit/kitchen-transitions.test.ts` + `apps/api/test/db/public-checkout.test.ts` (crea `OrdenCocina`)
 - Pedido público: `apps/api/test/db/public-checkout.test.ts`
-- Write fútbol: `apps/api/test/db/fixture-berger.test.ts`
+- Write fútbol: `apps/api/test/football-create-match.test.ts` (el generador de
+  round-robin/Berger ya no existe en el módulo — no restaurar
+  `fixture-berger.test.ts`; `createMatch` es el único endpoint de escritura
+  y ya tiene esta cobertura unit)
 
 POS stock local ya está en `apps/web-admin/src/features/sales/stock-link.test.ts`. No reescribir `VentasPosContext`.
 
