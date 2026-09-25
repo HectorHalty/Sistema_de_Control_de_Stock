@@ -4,7 +4,7 @@
 
 **Goal:** recorrer el módulo de ventas completo y dejar un informe que diga, paso por paso, si el dinero, el stock y las comandas cierran entre pantallas y en la base, con atención especial al alta y la baja de cocinas, recetas, productos e impresoras.
 
-**Architecture:** este ciclo no cambia código. Se crean datos con prefijo `VTA-` por pantalla, salvo los tickets con fecha anterior y las dos ventas simultáneas, que van por API o por SQL porque la pantalla no puede hacerlos. Cada paso se compara contra el oráculo del spec y se anota en el informe.
+**Architecture:** una cocina es la estación de retiro que se imprime en el ticket, no una cola de trabajo: los pasos que la miran comprueban lo que sale impreso y las filas de `ordenes_cocina` como dato. Este ciclo no cambia código. Se crean datos con prefijo `VTA-` por pantalla, salvo los tickets con fecha anterior y las dos ventas simultáneas, que van por API o por SQL porque la pantalla no puede hacerlos. Cada paso se compara contra el oráculo del spec y se anota en el informe.
 
 **Tech Stack:** admin React + Vite en `127.0.0.1:5173`, API NestJS en `127.0.0.1:3001`, Postgres local `lch_stock`. Login `admin` / `admin123`.
 
@@ -137,10 +137,10 @@ PASO V1 | esperado: total 2.000, A 24 → 20, un movimiento venta de −4, una c
 
 - [ ] **Step 2: V2, dos cocinas en un ticket**
 
-Vender 1 × `VTA-SIMPLE` + 1 × `VTA-OTRA-COCINA`. Total 1.900. A pasa a 18 y B a 2. Tienen que quedar **dos** filas en `ordenes_cocina` para ese ticket, una por cocina, cada una con su ítem.
+Vender 1 × `VTA-SIMPLE` + 1 × `VTA-OTRA-COCINA`. Total 1.900. A pasa a 18 y B a 2. La cocina es la estación de retiro, así que el ticket tiene que decir por dónde se retira cada producto, y tienen que quedar **dos** filas en `ordenes_cocina`, una por estación, cada una con su ítem.
 
 ```
-PASO V2 | esperado: total 1.900, A 18, B 2, dos comandas | Mostrador y base
+PASO V2 | esperado: total 1.900, A 18, B 2, dos estaciones en el ticket y dos filas | Mostrador y base
 ```
 
 - [ ] **Step 3: V3, promo**
@@ -279,10 +279,10 @@ PASO D3 | esperado: devuelve exactamente lo vendido | Mis Pedidos y base
 
 - [ ] **Step 5: La comanda de un ticket anulado**
 
-Después de anular y de devolver, mirar `ordenes_cocina` de esos tickets. Si siguen en `pending`, es un hallazgo: la cocina va a preparar algo que ya no se vende.
+Después de anular y de devolver, mirar `ordenes_cocina` de esos tickets. Como la cocina es solo la estación de retiro, que sigan en `pending` no rompe ninguna cuenta: se anota como dato que queda colgado, no como fallo.
 
 ```
-PASO D4 | esperado: la comanda no queda pendiente | base
+PASO D4 | esperado: anotar en qué estado queda la comanda | base
 ```
 
 ---
@@ -347,10 +347,10 @@ PASO T3 | esperado: si no valida al agregar, al menos no pierde la cuenta al fal
 
 - [ ] **Step 4: Cobrar y cerrar**
 
-Dejar la cuenta en 2 × `VTA-SIMPLE` + 1 × `VTA-KILO` y cobrar. Queda un solo ticket con total 3.500, el stock baja en ese momento (A −4 y KG −0,25), y se crean las comandas de las cocinas involucradas.
+Dejar la cuenta en 2 × `VTA-SIMPLE` + 1 × `VTA-KILO` y cobrar. Queda un solo ticket con total 3.500, con las estaciones de retiro de sus productos, y el stock baja en ese momento: A −4 y KG −0,25.
 
 ```
-PASO T4 | esperado: un ticket de 3.500, A −4, KG −0,25, comandas creadas | Mesas y base
+PASO T4 | esperado: un ticket de 3.500 con sus estaciones, A −4, KG −0,25 | Mesas y base
 ```
 
 - [ ] **Step 5: Qué queda de la cuenta cerrada**
@@ -361,12 +361,12 @@ Mirar `cuentas_equipo`: si la fila se borra en lugar de quedar cerrada, el estad
 PASO T5 | esperado: la cuenta cobrada deja rastro | base
 ```
 
-- [ ] **Step 6: La comanda durante el día**
+- [ ] **Step 6: Dos cuentas sobre la última unidad**
 
-Anotar cuándo llega la comanda a la cocina: al agregar el producto o al cobrar. Hoy sale al cobrar. Si el equipo consume durante el día, esto es una pregunta de producto para el ciclo 2, no un fallo de número.
+Abrir una segunda cuenta y cargar en las dos el mismo producto hasta pasar el stock disponible entre ambas. Mientras están abiertas no hay stock reservado, así que las dos van a parecer cobrables. Cobrar la primera y después la segunda: la segunda tiene que fallar con el faltante y quedar abierta.
 
 ```
-PASO T6 | esperado: anotar el momento de la comanda | base
+PASO T6 | esperado: la segunda falla al cobrar y no se pierde | Mesas y base
 ```
 
 ---
@@ -395,10 +395,10 @@ PASO B2 | esperado: rechaza y ofrece desactivar | Ventas → Productos → Cocin
 
 - [ ] **Step 3: Cocina inactiva y venta**
 
-Desactivar `VTA-COCINA-2` y vender su producto. Anotar si la venta pasa y si se crea la comanda. Hoy la venta pasa y la comanda no se crea, en silencio: si se confirma, es un fallo.
+Desactivar `VTA-COCINA-2` y vender su producto. Lo que importa es si el ticket sigue diciendo por dónde se retira. Anotar además si la venta pasa y si se crea la fila de comanda: hoy la venta pasa y la fila no se crea, en silencio.
 
 ```
-PASO B3 | esperado: o no deja vender, o avisa que no habrá comanda | Mostrador y base
+PASO B3 | esperado: el ticket dice la estación de retiro igual | Mostrador y base
 ```
 
 - [ ] **Step 4: Baja de un producto de venta ya vendido**
@@ -565,7 +565,90 @@ PASO P4 | esperado: el gerente anula, el vendedor no | Mis Pedidos y API
 
 ---
 
-### Task 11: Integridad de la base
+### Task 11: La diferencia entre lo tickeado y lo contado
+
+El dueño vende un solo día por semana y cuenta el stock el lunes siguiente. El stock del sistema sale de las ventas tickeadas; el stock real sale de las entradas de pedidos y del control. Esta tarea no arregla nada: mide dónde termina hoy esa diferencia, para que el ciclo que la separe arranque con evidencia.
+
+**Files:** ninguno.
+
+- [ ] **Step 1: Cerrar el sábado**
+
+Anotar, para `VTA-INS-A`: el nivel del sistema, lo que entró por pedidos, lo que descontaron las ventas del recorrido y lo que descontó el consumo interno. Esos cuatro números tienen que explicar el nivel exacto.
+
+```
+PASO S1 | esperado: entradas − ventas − consumos ± ajustes = nivel | base
+```
+
+- [ ] **Step 2: Contar menos de lo esperado**
+
+Cargar un control de stock de `VTA-INS-A` contando **2 unidades menos** que lo que muestra el sistema. Eso simula lo que se fue sin ticket: mal tickeado, rotura o robo.
+
+```
+PASO S2 | esperado: el nivel queda en lo contado | Controlar Stock y base
+```
+
+- [ ] **Step 3: Dónde quedó esa diferencia**
+
+Buscar el movimiento que escribió el control y anotar su tipo y su referencia.
+
+```sql
+SELECT m."createdAt", m.type, m.reference, d.name AS deposito, m.quantity
+FROM movimientos_stock m
+JOIN productos p ON p.id = m."productId"
+LEFT JOIN depositos d ON d.id = m."warehouseId"
+WHERE p.code = 'VTA-INS-A'
+ORDER BY m."createdAt";
+```
+
+Se espera `ajuste_manual` con referencia `control-stock`, es decir el mismo tipo que una corrección a mano y que las dos patas de un pasaje. Anotar si se puede separar la fuga de una corrección sin depender de ese texto.
+
+```
+PASO S3 | esperado: la diferencia se distingue de un ajuste a mano por el modelo, no por un texto | base
+```
+
+- [ ] **Step 4: Qué pantalla la muestra**
+
+Recorrer el inicio de stock, Reportes y el detalle del producto buscando la diferencia del control. Si ninguna pantalla la muestra como tal, es un hallazgo.
+
+```
+PASO S4 | esperado: alguna pantalla muestra la diferencia del control | Inicio, Reportes y ficha
+```
+
+- [ ] **Step 5: La diferencia por almacén**
+
+`entradas_conteo` guarda esperado y contado sumados por producto. Comprobar si la diferencia por almacén se puede reconstruir, y de dónde.
+
+```sql
+SELECT s.date, p.code, e.expected, e.counted, e.expected - e.counted AS diferencia
+FROM entradas_conteo e
+JOIN sesiones_conteo s ON s.id = e."sessionId"
+JOIN productos p ON p.id = e."productId"
+WHERE p.code LIKE 'VTA-%' ORDER BY s.date;
+```
+
+```
+PASO S5 | esperado: se sabe en qué almacén faltó | base
+```
+
+- [ ] **Step 6: Qué le hace al pedido sugerido**
+
+En la pantalla de pedidos, mirar el sugerido de `VTA-INS-A` antes y después del control. El consumo del control incluye la fuga, así que el sugerido tiene que subir. Eso es lo correcto: se repone contra lo que realmente se fue.
+
+```
+PASO S6 | esperado: el sugerido sube porque el consumo del control incluye la fuga | Pedidos
+```
+
+- [ ] **Step 7: Antigüedad del dato**
+
+Anotar si alguna pantalla dice cuándo fue el último control de cada producto. Un stock contado hace dos días y uno contado hace tres meses se muestran igual.
+
+```
+PASO S7 | esperado: se ve la fecha del último control | ficha y Controlar Stock
+```
+
+---
+
+### Task 12: Integridad de la base
 
 **Files:** ninguno.
 
@@ -641,7 +724,7 @@ Volver cada control de Configuración → Ventas al valor anotado en la Task 0 y
 
 ---
 
-### Task 12: Informe
+### Task 13: Informe
 
 **Files:**
 - Create: `docs/superpowers/reports/2026-09-25-test-modulo-ventas-informe.md`
@@ -657,6 +740,10 @@ Lista de arreglos propuestos, cada uno con el paso que lo encontró. Los tres ya
 - [ ] **Step 3: Las preguntas de producto**
 
 Lo que no se puede decidir leyendo código: el momento de la comanda en una cuenta de equipo, y qué tiene que pasar cuando se borra un insumo que está en una receta.
+
+- [ ] **Step 4: La base del ciclo 3**
+
+Lo que la Task 11 haya mostrado sobre la diferencia entre lo tickeado y lo contado, con los números reales: qué tipo de movimiento la guarda hoy, qué pantalla la muestra, si se sabe el almacén y si se conoce la fecha del último control. Ese es el punto de partida del ciclo que separe el stock real del stock del sistema.
 
 - [ ] **Step 4: Commit**
 

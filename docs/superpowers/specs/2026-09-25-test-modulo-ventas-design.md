@@ -42,6 +42,26 @@ Ya hay tres decisiones tomadas para el ciclo 2, así que no se discuten en el in
 | Fechas | Se insertan tickets con fecha anterior en la base para que los rangos de métricas midan algo. Esas filas no escriben movimientos de stock. |
 | Configuración | Se anota cada control antes de tocarlo y se restaura al final. |
 
+## Qué es una cocina
+
+Una cocina es la **estación de retiro** que se imprime en el ticket: le dice al cliente por dónde retira cada producto. No hay un flujo de preparación en este módulo. Las filas de `ordenes_cocina` que escribe el servidor se verifican como dato (que existan, que repartan bien las líneas y que no queden duplicadas al editar), no como una cola de trabajo que alguien atiende.
+
+De ahí sale el peso de cada paso: que el ticket diga la estación correcta es un requisito; que una comanda quede en `pending` después de anular es una anotación, no un fallo de plata ni de stock.
+
+## Stock real contra stock del sistema
+
+El dueño vende un solo día por semana, los sábados, y cuenta el stock el lunes siguiente. Eso parte el inventario en tres números que hoy el sistema mezcla en uno:
+
+- **Stock real:** el contado. Solo existe el lunes. Es el que manda.
+- **Stock del sistema:** último conteo, más las entradas de pedidos, menos las ventas tickeadas y los consumos, más o menos los ajustes. Nace exacto el lunes y se degrada toda la semana.
+- **La diferencia:** lo que el conteo del lunes corrige. Es lo que se fue sin ticket: mal tickeado, rotura, regalo o robo.
+
+Como vende un solo día, el ciclo de lunes a lunes aísla el sábado: la diferencia de cada lunes es la fuga de ese sábado.
+
+Hoy esa diferencia se guarda como un movimiento `ajuste_manual` con referencia `control-stock`, o sea en la misma bolsa que una corrección a mano y que las dos patas de un pasaje. Se reconoce solo por ese texto y ninguna pantalla la muestra. Separarla es un ciclo aparte, el 3. Este recorrido solo la mide: la Task 11 del plan deja el número y la conducta actual por escrito.
+
+Lo que ya está bien y no hay que tocar: el pedido sugerido sale del consumo de los controles, no de las ventas tickeadas, así que la reposición ya se calcula contra lo que realmente se fue, fuga incluida.
+
 ## Oráculo del dinero
 
 No hay descuentos, ni IVA, ni impuestos, ni caja. El total de un ticket es siempre la suma de precio unitario por cantidad. El servidor recalcula el total y no confía en el del navegador: el número de la pantalla y el de la base tienen que coincidir igual.
@@ -134,8 +154,8 @@ Estos son los candidatos que el recorrido va a confirmar o descartar. Están ac�
 
 1. **Anular después de devolver parcial devuelve de más.** `netRestoreQuantitiesAfterPartialReturns` existe en `apps/api/src/sales/sales-integrity.ts` y no se llama desde ningún lado. El ticket original conserva la asignación completa.
 2. **Borrar un insumo de inventario borra la línea de receta en cascada.** `DELETE /stock/products/:id` hace un `delete` directo. Si la receta tenía dos insumos, el producto de venta sigue vendible y deja de descontar el que se borró.
-3. **Anular o devolver no toca la comanda.** La orden de cocina queda en `pending`.
-4. **Si la cocina está inactiva, la venta pasa y no se crea la comanda**, en silencio.
+3. **Anular o devolver no toca la comanda.** La orden de cocina queda en `pending`. Como la cocina es solo la estación de retiro, esto es una anotación, no un fallo de plata.
+4. **Si la cocina está inactiva, la venta pasa y no se crea la comanda**, en silencio. Lo que importa es si el ticket sigue diciendo por dónde se retira.
 5. **El Historial no muestra la venta recién hecha** hasta recargar: usa una consulta propia, aparte de la lista en memoria.
 6. **El interruptor de protección de concurrencia no se lee en ningún lado.** Ya decidido: se saca en el ciclo 2.
 7. **Una cuenta de equipo no valida stock al agregar productos** y no reserva nada hasta cobrar.
@@ -146,9 +166,9 @@ Estos son los candidatos que el recorrido va a confirmar o descartar. Están ac�
 
 Según el dueño: se venden productos igual que en el mostrador, y al final del día se paga el total y se cierra la cuenta.
 
-**Oráculo:** al cobrar queda un solo ticket con el total acumulado, el stock baja en ese momento, y las comandas de las cocinas involucradas se crean. Si el stock no alcanza al cobrar, la venta falla y la cuenta queda abierta con sus productos.
+**Oráculo:** al cobrar queda un solo ticket con el total acumulado, con las estaciones de retiro de sus productos, y el stock baja en ese momento. Si el stock no alcanza al cobrar, la venta falla y la cuenta queda abierta con sus productos.
 
-Queda una pregunta de producto que el informe tiene que dejar planteada, no resolver: si el equipo consume durante el día, la cocina tendría que recibir la comanda cuando se agrega el producto, no cuando se cobra. Hoy la comanda sale recién al cobrar. La decisión es del dueño y va al ciclo 2.
+Queda una pregunta de producto que el informe tiene que dejar planteada, no resolver: mientras la cuenta está abierta el stock no está reservado, así que dos cuentas abiertas pueden cargar la misma última unidad y una de las dos no va a poder cobrar. La decisión es del dueño y va al ciclo 2.
 
 ## Permisos
 
