@@ -330,6 +330,11 @@ export const stockApi = {
         method: 'POST', token, body: data,
       }),
   },
+  cycles: {
+    /** `current` como id devuelve el ciclo todavía abierto (sin nada contado). */
+    get: (sessionId: string) =>
+      apiFetch<ApiStockCycle>(`/stock/cycles/${encodeURIComponent(sessionId)}`),
+  },
   warehouses: {
     list: () => apiFetch<Warehouse[]>('/stock/warehouses'),
     create: (data: { name: string; location: string; icon?: string }, token: string) =>
@@ -1006,6 +1011,39 @@ export interface ApiStockCountSession {
   operatorId?: string | null;
   operatorName?: string | null;
   entries: ApiStockCountEntry[];
+}
+
+/**
+ * Fila de un ciclo de stock. Sólo sumas: la aritmética está en
+ * `features/inventory/stock-cycles.ts`.
+ */
+export interface ApiStockCycleRow {
+  productId: string;
+  productName: string;
+  unit: string;
+  countedBefore: number | null;
+  counted: number | null;
+  expected: number | null;
+  entradas: number;
+  devoluciones: number;
+  anulaciones: number;
+  ventas: number;
+  consumos: number;
+  roturas: number;
+  vencidos: number;
+  ajustes: number;
+}
+
+export interface ApiStockCycle {
+  sessionId: string;
+  sessionCreatedAt: string | null;
+  sessionDate: string | null;
+  dateType: string | null;
+  previousSessionId: string | null;
+  previousCreatedAt: string | null;
+  days: number;
+  hadSales: boolean;
+  rows: ApiStockCycleRow[];
 }
 
 export interface ApiSupplier {

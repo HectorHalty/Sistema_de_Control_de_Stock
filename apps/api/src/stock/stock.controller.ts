@@ -158,6 +158,12 @@ export class StockController {
     return this.stockService.createStockCountSession(dto);
   }
 
+  @Get('cycles/:sessionId')
+  @Roles(...STOCK_READ_ROLES)
+  findStockCycle(@Param('sessionId') sessionId: string) {
+    return this.stockService.findStockCycle(sessionId);
+  }
+
   @Post('count-apply')
   @Roles(...STOCK_COUNT_ROLES)
   applyStockCount(@Body() dto: ApplyStockCountDto) {

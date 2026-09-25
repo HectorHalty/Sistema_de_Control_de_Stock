@@ -215,6 +215,46 @@ export class CreateStockCountSessionDto {
   entries: StockCountEntryDto[];
 }
 
+/**
+ * Una fila del ciclo: materia prima sin aritmética. `esperadoCalculado`,
+ * `diferencia` y `consumoReal` se derivan en el frontend
+ * (features/inventory/stock-cycles.ts), que es donde se muestran.
+ */
+export interface StockCycleRowDto {
+  productId: string;
+  productName: string;
+  unit: UnidadMedida;
+  /** Contado en el control anterior; null si ese control no incluyó el producto. */
+  countedBefore: number | null;
+  /** Contado en el control que cierra el ciclo; null en el ciclo abierto. */
+  counted: number | null;
+  /** Esperado que guardó el control; null en el ciclo abierto. */
+  expected: number | null;
+  entradas: number;
+  devoluciones: number;
+  anulaciones: number;
+  ventas: number;
+  consumos: number;
+  roturas: number;
+  vencidos: number;
+  /** Signado: correccion + entrada_directa + los ajustes sin motivo. */
+  ajustes: number;
+}
+
+/** Respuesta de `GET /stock/cycles/:sessionId` (`current` = el ciclo todavía abierto). */
+export interface StockCycleDto {
+  sessionId: string;
+  sessionCreatedAt: string | null;
+  sessionDate: string | null;
+  dateType: string | null;
+  previousSessionId: string | null;
+  previousCreatedAt: string | null;
+  days: number;
+  /** Un ciclo sin ventas es un control de pedido recibido, no merma de mostrador. */
+  hadSales: boolean;
+  rows: StockCycleRowDto[];
+}
+
 export class CreateSupplierDto {
   @IsString()
   @MaxLength(200)

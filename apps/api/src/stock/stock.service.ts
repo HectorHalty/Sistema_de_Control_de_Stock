@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
-import { EstadoOrdenCompra, Prisma, UnidadMedida } from '@prisma/client';
+import { EstadoOrdenCompra, MotivoAjusteStock, Prisma, TipoMovimientoStock, UnidadMedida } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { CreateProductDto, UpdateProductDto, AdjustStockDto, TransferStockDto, ApplyStockCountDto,
   CreateStockCountSessionDto,
   CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
   CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
+  type StockCycleDto, type StockCycleRowDto,
 } from './dto';
 import { StockMovementsService } from './stock-movements.service';
 import { isPrismaUniqueConflict } from '../common/prisma-errors';
@@ -21,6 +22,32 @@ type ProductWithLevels = Prisma.ProductoGetPayload<{
 }>;
 type SupplierWithProducts = Prisma.ProveedorGetPayload<{ include: { products: true } }>;
 type PurchaseOrderWithItems = Prisma.OrdenCompraGetPayload<{ include: { items: true } }>;
+type CountSessionWithEntries = Prisma.SesionConteoGetPayload<{ include: { entries: true } }>;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Lo que no explica un ciclo: `diferencia_conteo` es lo que el propio control
+ * corrigió (ya está dentro de lo contado) y las dos patas de un `pasaje` suman
+ * cero por producto.
+ */
+const CYCLE_IGNORED_TYPES = [
+  TipoMovimientoStock.diferencia_conteo,
+  TipoMovimientoStock.pasaje,
+] as const;
+
+type CycleSums = Omit<StockCycleRowDto, 'productId' | 'productName' | 'unit' | 'countedBefore' | 'counted' | 'expected'>;
+
+function emptyCycleSums(): CycleSums {
+  return {
+    entradas: 0, devoluciones: 0, anulaciones: 0, ventas: 0,
+    consumos: 0, roturas: 0, vencidos: 0, ajustes: 0,
+  };
+}
+
+function round3(n: number): number {
+  return Math.round((n + Number.EPSILON) * 1000) / 1000;
+}
 
 @Injectable()
 export class StockService {
@@ -379,6 +406,140 @@ export class StockService {
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+  }
+
+  // ============ Ciclos de stock (de un conteo al siguiente) ============
+
+  /**
+   * El ciclo que cerró un control, o el todavía abierto con `current`.
+   *
+   * La suma es del servidor a propósito: `GET /stock/movements` corta en 500
+   * filas y un día de venta escribe cientos, así que cualquier ciclo viejo
+   * calculado con los movimientos que tiene el cliente sale mal en silencio.
+   */
+  async findStockCycle(sessionId: string): Promise<StockCycleDto> {
+    const isCurrent = sessionId === 'current';
+
+    let session: CountSessionWithEntries | null = null;
+    if (!isCurrent) {
+      session = await this.prisma.sesionConteo.findUnique({
+        where: { id: sessionId },
+        include: { entries: true },
+      });
+      if (!session) throw new NotFoundException(`Stock count session ${sessionId} not found`);
+    }
+
+    // Con `current` el último control hace de anterior: el ciclo arranca ahí y
+    // no tiene cierre.
+    const previous = await this.prisma.sesionConteo.findFirst({
+      where: session ? { createdAt: { lt: session.createdAt } } : undefined,
+      orderBy: { createdAt: 'desc' },
+      include: { entries: true },
+    });
+
+    const windowFilter: Prisma.DateTimeFilter = {};
+    if (previous) windowFilter.gt = previous.createdAt;
+    if (session) windowFilter.lte = session.createdAt;
+
+    const grouped = await this.prisma.movimientoStock.groupBy({
+      by: ['productId', 'type', 'reason'],
+      where: {
+        type: { notIn: [...CYCLE_IGNORED_TYPES] },
+        ...(previous || session ? { createdAt: windowFilter } : {}),
+      },
+      _sum: { quantity: true },
+    });
+
+    const sums = new Map<string, CycleSums>();
+    let hadSales = false;
+    for (const group of grouped) {
+      const bucket = sums.get(group.productId) ?? emptyCycleSums();
+      const total = Number(group._sum.quantity ?? 0);
+      switch (group.type) {
+        case TipoMovimientoStock.entrada:
+          bucket.entradas += Math.abs(total);
+          break;
+        case TipoMovimientoStock.devolucion:
+          bucket.devoluciones += Math.abs(total);
+          break;
+        case TipoMovimientoStock.venta_anulada:
+          bucket.anulaciones += Math.abs(total);
+          break;
+        case TipoMovimientoStock.venta:
+          bucket.ventas += Math.abs(total);
+          hadSales = true;
+          break;
+        case TipoMovimientoStock.consumo:
+          bucket.consumos += Math.abs(total);
+          break;
+        case TipoMovimientoStock.ajuste_manual:
+          if (group.reason === MotivoAjusteStock.rotura) bucket.roturas += Math.abs(total);
+          else if (group.reason === MotivoAjusteStock.vencido) bucket.vencidos += Math.abs(total);
+          else bucket.ajustes += total;
+          break;
+        default:
+          break;
+      }
+      sums.set(group.productId, bucket);
+    }
+
+    // El snapshot del control cierra el ciclo; sin él (o si el producto no se
+    // contó) el nombre y la unidad salen del catálogo.
+    const snapshot = session ?? previous;
+    const snapshotEntries = new Map(snapshot?.entries.map(e => [e.productId, e]) ?? []);
+    const previousCounted = new Map(previous?.entries.map(e => [e.productId, Number(e.counted)]) ?? []);
+    const productIds = [...new Set([...snapshotEntries.keys(), ...sums.keys()])];
+    const unknownIds = productIds.filter(id => !snapshotEntries.has(id));
+    const catalog = unknownIds.length
+      ? await this.prisma.producto.findMany({
+        where: { id: { in: unknownIds } },
+        select: { id: true, name: true, unit: true },
+      })
+      : [];
+    const catalogById = new Map(catalog.map(p => [p.id, p]));
+
+    const rows: StockCycleRowDto[] = productIds.map(productId => {
+      const entry = snapshotEntries.get(productId);
+      const product = catalogById.get(productId);
+      const bucket = sums.get(productId) ?? emptyCycleSums();
+      const closing = session ? entry : undefined;
+      const before = previousCounted.get(productId);
+      return {
+        productId,
+        productName: entry?.productName ?? product?.name ?? productId,
+        unit: entry?.unit ?? product?.unit ?? UnidadMedida.unidades,
+        countedBefore: before === undefined ? null : round3(before),
+        counted: closing ? round3(Number(closing.counted)) : null,
+        expected: closing ? round3(Number(closing.expected)) : null,
+        entradas: round3(bucket.entradas),
+        devoluciones: round3(bucket.devoluciones),
+        anulaciones: round3(bucket.anulaciones),
+        ventas: round3(bucket.ventas),
+        consumos: round3(bucket.consumos),
+        roturas: round3(bucket.roturas),
+        vencidos: round3(bucket.vencidos),
+        ajustes: round3(bucket.ajustes),
+      };
+    });
+    rows.sort((a, b) => a.productName.localeCompare(b.productName, 'es'));
+
+    const windowEnd = session?.createdAt ?? new Date();
+    // El primer control de la historia no abarca ningún tramo medible.
+    const days = previous
+      ? Math.max(1, Math.floor((windowEnd.getTime() - previous.createdAt.getTime()) / MS_PER_DAY))
+      : 1;
+
+    return {
+      sessionId: session?.id ?? 'current',
+      sessionCreatedAt: session ? session.createdAt.toISOString() : null,
+      sessionDate: session?.date ?? null,
+      dateType: session?.dateType ?? null,
+      previousSessionId: previous?.id ?? null,
+      previousCreatedAt: previous ? previous.createdAt.toISOString() : null,
+      days,
+      hadSales,
+      rows,
+    };
   }
 
   // ============ Suppliers ============
