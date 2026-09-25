@@ -1,13 +1,20 @@
 ﻿import type { Product, Category } from '@/app/components/store';
 import { getUnitLabel, isFractionalUnit } from '@/app/components/store';
 import { previewNextProductCode } from '@/features/inventory/product-codes';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { Plus, Search, Edit, Trash2, X, Package, ChevronDown } from 'lucide-react';
 import { ExpandChevron } from '@/shared/components/ExpandChevron';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
 import { transferStockError } from '@/features/inventory/transfer-stock';
+import {
+  NEGATIVE_ENTRY_LOCK_MS,
+  NEGATIVE_STOCK_MESSAGE,
+  parseStockQuantityDraft,
+  rejectStockKey,
+  stockEditIntroducesMinus,
+} from '@/features/inventory/stock-quantity-input';
 import { getApiErrorMessage } from '@/app/api/client';
 
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
@@ -64,7 +71,7 @@ export function ProductsPage() {
 
   const handleSave = async (product: Product) => {
     if (product.stockByWarehouse.some(level => level.quantity < 0)) {
-      window.alert('No se puede dejar el stock en negativo');
+      window.alert(NEGATIVE_STOCK_MESSAGE);
       return;
     }
     if (editingProduct) {
@@ -587,6 +594,13 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconEditCategoryId, setIconEditCategoryId] = useState<string | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const negativeLock = useRef(0);
+
+  const blockNegativeStock = () => {
+    negativeLock.current = Date.now() + NEGATIVE_ENTRY_LOCK_MS;
+    setStockError(NEGATIVE_STOCK_MESSAGE);
+  };
 
   const addWarehouseStock = () => {
     const available = warehouses.filter(w => !form.stockByWarehouse.find(s => s.warehouseId === w.id));
@@ -900,23 +914,68 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
                 <input
-                  type="number"
-                  value={s.quantity}
+                  type="text"
+                  inputMode={isFractionalUnit(form.unit) ? 'decimal' : 'numeric'}
+                  autoComplete="off"
+                  data-testid="product-stock-quantity"
+                  value={quantityDrafts[s.warehouseId] ?? String(s.quantity)}
+                  onKeyDown={e => {
+                    const decision = rejectStockKey(e.key, e.code, negativeLock.current);
+                    negativeLock.current = decision.lockUntil;
+                    if (decision.negative) setStockError(NEGATIVE_STOCK_MESSAGE);
+                    if (decision.prevent) e.preventDefault();
+                  }}
+                  onBeforeInput={e => {
+                    const data = (e.nativeEvent as InputEvent).data ?? '';
+                    const el = e.currentTarget;
+                    const introducesMinus = stockEditIntroducesMinus(
+                      el.value,
+                      data,
+                      el.selectionStart ?? el.value.length,
+                      el.selectionEnd ?? el.value.length,
+                    );
+                    if (Date.now() < negativeLock.current || introducesMinus) {
+                      e.preventDefault();
+                      if (introducesMinus) blockNegativeStock();
+                    }
+                  }}
+                  onPaste={e => {
+                    const text = e.clipboardData.getData('text');
+                    if (text.includes('-')) {
+                      e.preventDefault();
+                      blockNegativeStock();
+                    }
+                  }}
                   onChange={e => {
                     const raw = e.target.value;
-                    const parsed = isFractionalUnit(form.unit) ? parseFloat(raw) : parseInt(raw, 10);
-                    if (raw.trim().startsWith('-') || (!Number.isNaN(parsed) && parsed < 0)) {
-                      setStockError('No se puede dejar el stock en negativo');
+                    if (raw.includes('-') || Date.now() < negativeLock.current) {
+                      setStockError(NEGATIVE_STOCK_MESSAGE);
                       return;
                     }
+                    const fractional = isFractionalUnit(form.unit);
+                    const parsed = parseStockQuantityDraft(raw, fractional);
+                    if (parsed.kind === 'negative') {
+                      setStockError(NEGATIVE_STOCK_MESSAGE);
+                      return;
+                    }
+                    if (parsed.kind === 'invalid') return;
                     setStockError(null);
+                    const quantity = parsed.kind === 'empty' ? 0 : parsed.quantity;
+                    setQuantityDrafts(prev => {
+                      const keepDraft = fractional && raw.trim() !== '' && raw.trim() !== String(quantity);
+                      if (!keepDraft) {
+                        if (!(s.warehouseId in prev)) return prev;
+                        const next = { ...prev };
+                        delete next[s.warehouseId];
+                        return next;
+                      }
+                      return { ...prev, [s.warehouseId]: raw };
+                    });
                     const newStock = [...form.stockByWarehouse];
-                    newStock[idx] = { ...newStock[idx], quantity: Number.isNaN(parsed) ? 0 : parsed };
+                    newStock[idx] = { ...newStock[idx], quantity };
                     setForm(p => ({ ...p, stockByWarehouse: newStock }));
                   }}
                   className="w-24 px-3 py-2 rounded-lg bg-input-background border border-border outline-none text-sm text-right text-foreground"
-                  min={0}
-                  step={isFractionalUnit(form.unit) ? 0.001 : 1}
                 />
                 <button type="button" onClick={() => removeWarehouseStock(s.warehouseId)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
                   <X size={14} />
@@ -935,7 +994,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
             type="button"
             onClick={() => {
               if (form.stockByWarehouse.some(level => level.quantity < 0) || stockError) {
-                setStockError('No se puede dejar el stock en negativo');
+                setStockError(NEGATIVE_STOCK_MESSAGE);
                 return;
               }
               if (form.name && form.category) onSave(form);

@@ -10,7 +10,7 @@
 
 **Origen:** `docs/superpowers/specs/2026-09-23-test-modulo-stock-design.md` (oráculo del pedido y de las alertas) y `docs/superpowers/reports/2026-09-23-test-modulo-stock-informe.md` (qué falló).
 
-**Estado (2026-09-25):** las tareas 1 a 7 están implementadas. La tarea 8 no se corrió: el admin (`localhost:5173`) y la API (`localhost:3001`) no respondían, y este ciclo no levanta los servicios. El informe está en `docs/superpowers/reports/2026-09-25-cerrar-fallos-stock.md`.
+**Estado (2026-09-25):** las tareas 1 a 8 están hechas. El recorrido en vivo se corrió con el admin en `127.0.0.1:5173` y la API en `127.0.0.1:3001`. El día real era viernes 25, no el miércoles del oráculo. F1 falló en Chrome con `type="number"` (`-999` quedaba `0999`) y se corrigió en la ficha. El informe está en `docs/superpowers/reports/2026-09-25-cerrar-fallos-stock.md`.
 
 ## Global Constraints
 
@@ -393,8 +393,6 @@ git commit -am "fix(stock): pasar cantidad de un almacen a otro sin mover el tot
 ---
 
 
-La tarea 8 queda sin ejecutar. `curl` a `http://localhost:5173` y `http://localhost:3001` devolvió HTTP 000. No se levantó Docker ni el dev server. Los registros `TEST-` no se borraron.
-
 ### Task 8: Recorrer solo lo que había fallado
 
 **Files:**
@@ -403,18 +401,20 @@ La tarea 8 queda sin ejecutar. `curl` a `http://localhost:5173` y `http://localh
 **Interfaces:**
 - Consumes: el admin en `http://localhost:5173` con `admin` / `admin123`, si los tres servicios ya están levantados. Si no están, esta tarea no los arranca y queda anotada como no corrida. Las tareas 1 a 7 no dependen de este paso para compilar.
 
-- [ ] **Step 1: Pedido**
+- [x] **Step 1: Pedido**
 
 Producto con stock total 10, unidad 24, y las sesiones de la Tarea 1. Con el interruptor prendido: 24, 24, 24, 24, 48, 48. Apagado: 20, 10, 17.5, 14, 30, 30. Después del control −10, semana apagada = 2.5 y la fecha 2026-09-21 sigue en 20. Guardar el pedido de esa fecha: queda Pendiente, proveedor del producto, cantidad 24 con el interruptor prendido.
 
-Elegir **Ultimos 6 meses**, anotar el número que muestre y no compararlo con 24 ni con 14.
+Elegir **Ultimos 6 meses**, anotar el número que muestre y no compararlo con 24 ni con 14. En vivo, con el control −10 y el pack prendido, la cantidad fue 24 y el consumo promedio 18.333.
 
-- [ ] **Step 2: Alertas**
+- [x] **Step 2: Alertas**
 
-Producto en 8, sin ventas. Automáticas prendidas, stock bajo apagado, mínimo 20: la campana lo muestra. Apagar automáticas: se va. Stock bajo prendido, día en `Jueves` un miércoles: no está. Día en `Miercoles`: está. Un pendiente que cubre el promedio semanal lo saca si las automáticas están apagadas.
+Producto en 8, sin ventas. Automáticas prendidas, stock bajo apagado, mínimo 20: la campana lo muestra. Apagar automáticas: se va. Stock bajo prendido, día en `Jueves` un miércoles: no está. Día en `Miercoles`: está. Un pendiente que cubre el promedio semanal lo saca si las automáticas están apagadas. El recorrido cayó un viernes (2026-09-25): con el combo en `Jueves` no está y con `Viernes` está. El promedio semanal visto fue 46 y el pendiente de cobertura fue 38.
 
-- [ ] **Step 3: Inicio, actividad, ficha y pasaje**
+- [x] **Step 3: Inicio, actividad, ficha y pasaje**
 
 `/` y `/stock` muestran el mismo Stock Total y los mismos pendientes. Después de un alta, Actividad Reciente muestra esa alta al recargar. En la ficha, escribir `-999` deja la cantidad anterior y el aviso; no queda `0999`. Un pasaje de 20 mueve los dos almacenes y el Stock Total no cambia.
 
-- [ ] **Step 4: No commit si no hubo corrección**
+- [x] **Step 4: Commit de la corrección de F1**
+
+En Chrome, el input `type="number"` no entrega `-999`: el menos se pierde, el campo pasa por vacío y los dígitos quedan en `0999`. La ficha ahora usa texto, rechaza el menos en teclado, `beforeinput` y pegado, y sostiene 600 ms para que el resto de ese tipeo no pise la cantidad. El recorrido se volvió a hacer: el campo siguió en 10, apareció el aviso, y un pasaje de 20 dejó el total en 48.

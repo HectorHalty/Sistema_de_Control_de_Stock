@@ -2,7 +2,7 @@
 
 Ejecución del plan `docs/superpowers/plans/2026-09-25-cerrar-fallos-stock.md`. El oráculo sigue siendo el spec `docs/superpowers/specs/2026-09-23-test-modulo-stock-design.md`. El punto de partida es el informe `docs/superpowers/reports/2026-09-23-test-modulo-stock-informe.md`.
 
-Las tareas 1 a 7 quedaron en código. La tarea 8, el recorrido en vivo, no se corrió.
+Las tareas 1 a 8 quedaron hechas. El recorrido en vivo se corrió el viernes 2026-09-25 contra el admin en `127.0.0.1:5173` y la API en `127.0.0.1:3001`. Esta base arrancó vacía de productos: no había registros `TEST-` para conservar ni borrar. Los datos del recorrido son `WALK-TEST`, `WALK-ALERTA`, `WALK-PASAJE` y el almacén `WALK-ALTA`.
 
 ## Qué se cerró
 
@@ -15,12 +15,12 @@ Las tareas 1 a 7 quedaron en código. La tarea 8, el recorrido en vivo, no se co
 | N8 | El panel tiene el campo Mínimo. El texto de stock bajo describe el promedio semanal de ventas, no un mínimo que esa regla no usa. |
 | M4-home | `/` muestra `Stock Total: {suma} uds` y la misma línea de pedidos pendientes. |
 | M4-actividad | Admin y SuperAdmin mezclan Actividad reciente con `GET /settings/audit`. |
-| F1 | Escribir un negativo en la ficha muestra “No se puede dejar el stock en negativo” y no pisa la cantidad. Guardar tampoco acepta una cantidad menor a 0. |
+| F1 | Escribir `-999` en la ficha muestra “No se puede dejar el stock en negativo” y la cantidad anterior sigue. Guardar tampoco acepta una cantidad menor a 0. El primer guardia en `onChange` no alcanzaba en Chrome: ver el recorrido. |
 | P1 | `POST /stock/products/:id/transfer` mueve cantidad en una transacción. El total del producto no cambia. |
 | O5, N3, N4, N5, N7, A, B, C, R, Z1–Z3 | No se tocaron. |
 | Ultimos 6 meses | Sigue en el combo. La cuenta es la misma, con ventana de 180 días. No tiene número esperado para comparar en vivo. |
 
-Los registros `TEST-` no se borraron. No hay suite e2e nueva. Web pública, fútbol, online, impresora y APK quedaron afuera.
+En esta base no había registros `TEST-`. No se borró ninguno. No hay suite e2e nueva. Web pública, fútbol, online, impresora y APK quedaron afuera.
 
 ## Cómo está armado
 
@@ -54,6 +54,8 @@ El pasaje no agrega un valor a `TipoMovimientoStock` ni una migración. `Transfe
 
 `transferStockError` es el control de la ficha. El límite de verdad es el servidor. La ficha llama al endpoint, refresca productos y movimientos, y deja un audit `Pasaje`.
 
+El rechazo del negativo vive en `stock-quantity-input.ts`. El campo de stock de la ficha es texto: Chrome no entrega un menos en un input numérico, y ese era el camino que convertía `-999` en `0999`.
+
 ## Verificación
 
 `npm --prefix apps/api run prisma:generate` hizo falta antes de los tests de API: sin el cliente de Prisma, `@IsEnum(UnidadMedida)` y `Prisma.TransactionIsolationLevel` quedaban indefinidos y varias suites ni arrancaban.
@@ -70,9 +72,37 @@ El texto de After ya no dice “mayor demanda”, y la fecha específica dice �
 
 ## Recorrido en vivo
 
-No se hizo. `curl` a `http://localhost:5173` y `http://localhost:3001` devolvió HTTP 000. El plan dice no arrancar los tres servicios si no están levantados. Los pasos de la tarea 8 siguen abiertos en el plan.
+Postgres 16, la API y el admin se levantaron en esta máquina. Docker no está. La semilla no crea productos. Hoy era viernes 2026-09-25, así que el día de alerta se probó con `Jueves` (no) y `Viernes` (sí), no con el miércoles del oráculo. Los números de pedido no cambian entre el 23 y el 25: las mismas sesiones siguen adentro de las ventanas.
 
-Cuando haya stack, el recorrido es solo lo que había fallado: el oráculo de pedido (anotando 6 meses sin compararlo), alertas con la automática apagada para mirar el día, el mismo Stock Total en `/` y `/stock`, la alta en Actividad reciente al recargar, `-999` en la ficha, y un pasaje cuyo total no cambia.
+Pedido de `WALK-TEST`, stock 10, unidad 24:
+
+| Caso | Pack prendido | Pack apagado |
+|---|---|---|
+| Fecha 2026-09-21 | 24 | 20 |
+| Semana | 24 | 10 |
+| Ultimo mes | 24 | 17.5 |
+| Ultimos 3 meses | 24 | 14 |
+| After, fecha 2026-09-22 | 48 | 30 |
+| After, semana | 48 | 30 |
+
+Después del control regular 2026-09-20 con consumido −10, la semana sin pack dio 2.5 y la fecha 2026-09-21 siguió en 20. Con el pack otra vez prendido, esa fecha guardó un pedido pendiente de 24. **Ultimos 6 meses**, con ese control y el pack prendido, mostró cantidad 24 y consumo promedio 18.333. Se anota y no se compara con 24 ni con 14.
+
+Alertas de `WALK-ALERTA` en 8, con una venta de −200 (promedio semanal 46):
+
+- Automáticas prendidas, stock bajo apagado, mínimo 20: la campana muestra `WALK-ALERTA: 8 uds restantes` y también `WALK-TEST: 10 uds restantes`.
+- Automáticas apagadas y stock bajo apagado: `WALK-ALERTA` sale de la campana.
+- Stock bajo prendido, automáticas apagadas, día `Jueves` un viernes: no está en reportes.
+- Día `Viernes`: está, promedio semanal 46. Un pendiente de 38 la saca.
+
+Inicio y `/stock` mostraron `Stock Total: 48 uds` y 2 pedidos pendientes.
+
+Actividad reciente lista la acción `Alta Almacén`. El nombre `WALK-ALTA` está en el detalle de esa fila y en `entradas_auditoria`. La primera lectura falló porque buscaba el nombre en la lista, que muestra usuario y acción.
+
+F1 en Chrome: con `type="number"`, escribir `-999` dejó `0999` y no apareció el aviso. El navegador no manda el menos; manda vacío y después los dígitos se pegan a un 0. La ficha pasó a `type="text"`. `rejectStockKey` y `stockEditIntroducesMinus` cortan el menos en teclado, `beforeinput` y pegado, y dejan un bloqueo de 600 ms para que el resto de ese `-999` no reemplace la cantidad. `parseStockQuantityDraft` sigue rechazando un texto con menos. Al rehacer el paso, el campo quedó en 10 y el aviso se vio.
+
+Pasaje de 20 de `WALK-PASAJE` desde Depósito Principal a Quincho Bar: el origen quedó en 10, el destino en 20, y el Stock Total siguió en 48.
+
+Al terminar, la configuración remota quedó con redondeo de pack prendido, notificaciones de stock bajo prendidas, alertas automáticas apagadas y día de alerta `Viernes`.
 
 ## Commits
 
@@ -84,5 +114,6 @@ Sobre `cursor/plan-cerrar-fallos-stock-5ff4`, después del plan `23b6d33`:
 | `b200095` fix(stock): calcular el pedido con los controles, no con las ventas | Tarea 2 |
 | `9d31ff4` fix(stock): alertar por minimo automatico y por el dia elegido | Tareas 3 y 4. El inicio general vive en el mismo archivo que las alertas de `/`. |
 | `78fe739` fix(stock): auditar actividad, rechazar negativo y pasar entre almacenes | Tareas 5, 6 y 7. La ficha, el cliente y el estado de inventario comparten los tres cambios. |
+| `fix(stock): el menos en la ficha no se convierte en 0999` | Corrección de F1 del recorrido, más el informe de la tarea 8. |
 
 `package-lock.json` no entra: `npm install` solo le sacó campos `libc` de paquetes opcionales. No se commiteó `node_modules`.
