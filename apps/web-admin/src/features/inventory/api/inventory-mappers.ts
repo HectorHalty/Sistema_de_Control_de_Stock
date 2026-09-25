@@ -12,6 +12,7 @@ import type {
   Category as ApiCategory,
   ApiStockMovement,
   ApiStockCountSession,
+  ApiStockCycle,
   ApiSupplier,
   ApiPurchaseOrder,
 } from '@/app/api/client';
@@ -19,6 +20,7 @@ import type {
   Product, Warehouse, Category, StockMovement, StockCountSession,
   Supplier, Order,
 } from '@/features/inventory/types';
+import type { StockCyclePayload } from '@/features/inventory/stock-cycles';
 
 export function mapApiProductToLocal(api: ApiProduct): Product {
   return {
@@ -84,6 +86,20 @@ export function mapApiCountSessionToLocal(api: ApiStockCountSession): StockCount
       unit: e.unit as StockCountSession['entries'][number]['unit'],
       expected: Number(e.expected),
       counted: Number(e.counted),
+    })),
+  };
+}
+
+/** El ciclo llega con `dateType` y `unit` como texto libre; la aritmética los pide tipados. */
+export function mapApiStockCycleToPayload(api: ApiStockCycle): StockCyclePayload {
+  return {
+    ...api,
+    dateType: api.dateType === null
+      ? null
+      : api.dateType === 'after' || api.dateType === 'verificacion' ? api.dateType : 'regular',
+    rows: api.rows.map(row => ({
+      ...row,
+      unit: row.unit as StockCyclePayload['rows'][number]['unit'],
     })),
   };
 }

@@ -14,6 +14,7 @@
  * Cuando al libro no le falta nada, `consumoReal === salidas + diferencia`.
  */
 import type { StockCountType, UnidadMedida } from './types';
+import { calendarDayInArgentina, sessionCalendarDay } from './order-suggestions';
 
 /** Fila cruda del ciclo: lo que el endpoint devuelve, sin derivar nada. */
 export interface StockCyclePayloadRow {
@@ -91,6 +92,26 @@ export interface StockCycleTotals {
 
 function round3(value: number): number {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
+}
+
+/**
+ * Día calendario del control que cierra el ciclo.
+ *
+ * `sessionDate` es texto libre: los controles cargados desde la pantalla guardan
+ * `25/9/2026 13:12`, que no se puede parsear. Cuando no empieza con
+ * `YYYY-MM-DD`, el día sale de `sessionCreatedAt`, que siempre es un instante.
+ * Sin esto, un control hecho en pantalla queda afuera de la ventana del pedido
+ * y el sugerido vuelve a dar 0.
+ */
+export function stockCycleDay(payload: {
+  sessionDate: string | null;
+  sessionCreatedAt: string | null;
+}): string {
+  const fromDate = payload.sessionDate ? sessionCalendarDay(payload.sessionDate) : '';
+  if (fromDate) return fromDate;
+  if (!payload.sessionCreatedAt) return '';
+  const instant = new Date(payload.sessionCreatedAt);
+  return Number.isNaN(instant.getTime()) ? '' : calendarDayInArgentina(instant);
 }
 
 export function buildStockCycleRows(payload: StockCyclePayload): StockCycleRow[] {

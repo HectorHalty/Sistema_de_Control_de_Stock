@@ -223,3 +223,61 @@ describe('StockService.findStockCycle', () => {
     expect(h.groupBy).not.toHaveBeenCalled();
   });
 });
+
+function listHarness(sessions: FakeSession[]) {
+  const findMany = vi.fn().mockResolvedValue(sessions);
+  const groupBy = vi.fn().mockResolvedValue([]);
+  const prisma = {
+    sesionConteo: { findMany },
+    movimientoStock: { groupBy },
+    producto: { findMany: vi.fn().mockResolvedValue([]) },
+  } as unknown as PrismaService;
+  return { service: new StockService(prisma, {} as never), findMany, groupBy };
+}
+
+const T1 = new Date('2026-08-25T15:00:00.000Z');
+
+describe('StockService.findStockCycles', () => {
+  it('pide un control de más y empareja cada cierre con el anterior', async () => {
+    const h = listHarness([
+      session('s3', T_SESSION, [entry('p1', 41, 38)]),
+      session('s2', T_PREV, [entry('p1', 106, 104)]),
+      session('s1', T1, [entry('p1', 50, 46)]),
+    ]);
+    const cycles = await h.service.findStockCycles(2);
+
+    expect(h.findMany.mock.calls[0][0]).toMatchObject({
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    });
+    expect(cycles.map(c => c.sessionId)).toEqual(['s3', 's2']);
+    expect(cycles.map(c => c.previousSessionId)).toEqual(['s2', 's1']);
+    expect(cycles.map(c => c.rows[0].countedBefore)).toEqual([104, 46]);
+    // Una agregación por ciclo, ninguna de más.
+    expect(h.groupBy).toHaveBeenCalledTimes(2);
+  });
+
+  it('el ciclo más viejo sale sin anterior sólo cuando la historia se terminó', async () => {
+    const h = listHarness([
+      session('s2', T_SESSION, [entry('p1', 41, 38)]),
+      session('s1', T_PREV, [entry('p1', 50, 46)]),
+    ]);
+    const cycles = await h.service.findStockCycles(10);
+
+    expect(cycles.map(c => c.previousSessionId)).toEqual(['s1', null]);
+    expect(cycles[1].rows[0].countedBefore).toBeNull();
+  });
+
+  it('topea el limite en 60 y sin limite usa el default de la convención', async () => {
+    const h = listHarness([]);
+
+    await h.service.findStockCycles(5000);
+    expect(h.findMany.mock.calls[0][0].take).toBe(61);
+    await h.service.findStockCycles();
+    expect(h.findMany.mock.calls[1][0].take).toBe(51);
+    await h.service.findStockCycles(-3);
+    expect(h.findMany.mock.calls[2][0].take).toBe(51);
+    await h.service.findStockCycles(4);
+    expect(h.findMany.mock.calls[3][0].take).toBe(5);
+  });
+});

@@ -36,6 +36,13 @@ const CYCLE_IGNORED_TYPES = [
   TipoMovimientoStock.pasaje,
 ] as const;
 
+/**
+ * Tope de ciclos por pedido: cada ciclo es su propia agregación, y seis meses
+ * de controles semanales son unos 30. Con 60 alcanza para la ventana más ancha
+ * de la pantalla sin que un `limit` inflado dispare cientos de consultas.
+ */
+const MAX_STOCK_CYCLES = 60;
+
 type CycleSums = Omit<StockCycleRowDto, 'productId' | 'productName' | 'unit' | 'countedBefore' | 'counted' | 'expected'>;
 
 function emptyCycleSums(): CycleSums {
@@ -437,6 +444,34 @@ export class StockService {
       include: { entries: true },
     });
 
+    return this.buildStockCycle(session, previous);
+  }
+
+  /**
+   * Los últimos ciclos cerrados, del más nuevo al más viejo. El abierto
+   * (`current`) queda afuera: no tiene contado de cierre, así que no mide nada.
+   */
+  async findStockCycles(limit?: number): Promise<StockCycleDto[]> {
+    const take = Math.min(normalizeLimit(limit), MAX_STOCK_CYCLES);
+    // Un control de más: el ciclo más viejo de la lista necesita su anterior
+    // para tener contado inicial.
+    const sessions = await this.prisma.sesionConteo.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { entries: true },
+      take: take + 1,
+    });
+
+    const cycles: StockCycleDto[] = [];
+    for (const [index, session] of sessions.slice(0, take).entries()) {
+      cycles.push(await this.buildStockCycle(session, sessions[index + 1] ?? null));
+    }
+    return cycles;
+  }
+
+  private async buildStockCycle(
+    session: CountSessionWithEntries | null,
+    previous: CountSessionWithEntries | null,
+  ): Promise<StockCycleDto> {
     const windowFilter: Prisma.DateTimeFilter = {};
     if (previous) windowFilter.gt = previous.createdAt;
     if (session) windowFilter.lte = session.createdAt;

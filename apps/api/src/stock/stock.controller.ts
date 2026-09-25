@@ -158,6 +158,12 @@ export class StockController {
     return this.stockService.createStockCountSession(dto);
   }
 
+  @Get('cycles')
+  @Roles(...STOCK_READ_ROLES)
+  findStockCycles(@Query('limit') limit?: string) {
+    return this.stockService.findStockCycles(limit ? Number(limit) : undefined);
+  }
+
   @Get('cycles/:sessionId')
   @Roles(...STOCK_READ_ROLES)
   findStockCycle(@Param('sessionId') sessionId: string) {

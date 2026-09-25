@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStockCycleRows,
   buildStockCycleTotals,
+  stockCycleDay,
   type StockCyclePayload,
   type StockCyclePayloadRow,
 } from './stock-cycles';
@@ -181,6 +182,30 @@ describe('buildStockCycleRows', () => {
     expect(r.esperadoCalculado).toBe(1.2);
     expect(r.diferencia).toBe(0.001);
     expect(r.cierra).toBe(true);
+  });
+});
+
+describe('stockCycleDay', () => {
+  it('usa la fecha del control cuando es un día ISO', () => {
+    expect(stockCycleDay({ sessionDate: '2026-09-14', sessionCreatedAt: '2026-09-20T12:00:00.000Z' }))
+      .toBe('2026-09-14');
+  });
+
+  it('cae en el instante cuando la fecha es el texto que guarda la pantalla', () => {
+    // Un control cargado en pantalla guarda `25/9/2026 13:12`: sin este respaldo
+    // el ciclo quedaba afuera de la ventana y el sugerido volvía a dar 0.
+    expect(stockCycleDay({ sessionDate: '25/9/2026 13:12', sessionCreatedAt: '2026-09-25T16:12:00.000Z' }))
+      .toBe('2026-09-25');
+  });
+
+  it('lee el instante en Argentina, no en UTC', () => {
+    expect(stockCycleDay({ sessionDate: null, sessionCreatedAt: '2026-09-26T01:30:00.000Z' }))
+      .toBe('2026-09-25');
+  });
+
+  it('sin fecha ni instante devuelve vacío en vez de inventar un día', () => {
+    expect(stockCycleDay({ sessionDate: null, sessionCreatedAt: null })).toBe('');
+    expect(stockCycleDay({ sessionDate: 'ayer', sessionCreatedAt: 'no es una fecha' })).toBe('');
   });
 });
 

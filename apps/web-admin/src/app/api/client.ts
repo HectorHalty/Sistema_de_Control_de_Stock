@@ -334,6 +334,11 @@ export const stockApi = {
     /** `current` como id devuelve el ciclo todavía abierto (sin nada contado). */
     get: (sessionId: string) =>
       apiFetch<ApiStockCycle>(`/stock/cycles/${encodeURIComponent(sessionId)}`),
+    /** Los últimos ciclos cerrados, del más nuevo al más viejo. Sin el abierto. */
+    list: (limit?: number) => {
+      const q = limit ? `?limit=${limit}` : '';
+      return apiFetch<ApiStockCycle[]>(`/stock/cycles${q}`);
+    },
   },
   warehouses: {
     list: () => apiFetch<Warehouse[]>('/stock/warehouses'),

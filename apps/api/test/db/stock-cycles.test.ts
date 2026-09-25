@@ -391,4 +391,63 @@ describe('ciclos de stock (Postgres real)', () => {
       service().findStockCycle('00000000-0000-4000-8000-000000000099'),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('la lista devuelve un ciclo por par consecutivo de controles, del más nuevo al más viejo', async () => {
+    const { s0, sa, sb, sc } = await seedOracle();
+
+    const cycles = await service().findStockCycles();
+
+    expect(cycles.map(c => c.sessionId)).toEqual([sc.id, sb.id, sa.id, s0.id]);
+    expect(cycles.map(c => c.previousSessionId)).toEqual([sb.id, sa.id, s0.id, null]);
+    expect(cycles.map(c => c.hadSales)).toEqual([true, false, true, false]);
+    expect(cycles.map(c => c.dateType)).toEqual(['regular', 'verificacion', 'regular', 'regular']);
+    // El envoltorio y las filas son los mismos que los del ciclo suelto.
+    expect(cycles[0]).toEqual(await service().findStockCycle(sc.id));
+  });
+
+  it('el ciclo más viejo de la lista sólo sale sin anterior si es el primer control de la historia', async () => {
+    const { s0, sa, sb, sc } = await seedOracle();
+    const stock = service();
+
+    // Con la ventana recortada, el más viejo de la lista sigue teniendo su
+    // anterior: el control existe aunque el ciclo no entre.
+    const recortada = await stock.findStockCycles(2);
+    expect(recortada.map(c => c.sessionId)).toEqual([sc.id, sb.id]);
+    expect(recortada[1].previousSessionId).toBe(sa.id);
+    expect(recortada[1].rows[0].countedBefore).toBe(46);
+
+    // Con la historia completa, el primer control es el único sin anterior.
+    const completa = await stock.findStockCycles(4);
+    expect(completa[3].sessionId).toBe(s0.id);
+    expect(completa[3].previousSessionId).toBeNull();
+    expect(completa[3].rows[0].countedBefore).toBeNull();
+  });
+
+  it('respeta el limite pedido y lo topea en 60', async () => {
+    const { producto } = await seedCatalog();
+    for (let i = 0; i < 4; i += 1) {
+      await countSession({
+        createdAt: plusMinutes(T0, i * 60),
+        date: '2026-09-01',
+        productId: producto.id,
+        expected: 100 - i,
+        counted: 100 - i,
+      });
+    }
+    const stock = service();
+
+    expect(await stock.findStockCycles(2)).toHaveLength(2);
+    // Un limite absurdo se topea; con 4 controles la lista se queda en 4.
+    expect(await stock.findStockCycles(5000)).toHaveLength(4);
+
+    const conMuchos = await prisma.sesionConteo.createMany({
+      data: Array.from({ length: 70 }, (_, i) => ({
+        createdAt: plusMinutes(TA, i),
+        date: '2026-09-08',
+        dateType: 'regular',
+      })),
+    });
+    expect(conMuchos.count).toBe(70);
+    expect(await stock.findStockCycles(5000)).toHaveLength(60);
+  });
 });

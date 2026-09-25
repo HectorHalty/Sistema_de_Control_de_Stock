@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppContext } from '@/app/providers/AppContext';
-import { getApiErrorMessage } from '@/app/api/client';
+import { getApiErrorMessage, stockApi } from '@/app/api/client';
 import { operatorFields } from '@/shared/utils/persist-mutation';
 import { Plus, X, Check, Download, ChevronRight, Truck, FileText, Clock, Filter, Share2, Pencil } from 'lucide-react';
 import type { Order, Product } from '@/app/components/store';
@@ -12,8 +13,20 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
 import logoLchUrl from '@/assets/logo-LCH.png';
-import { calendarDayInArgentina, suggestFromStockCounts, type SuggestionSpan } from '@/features/inventory/order-suggestions';
+import { calendarDayInArgentina, suggestFromStockCycles, type SuggestionCycle, type SuggestionSpan } from '@/features/inventory/order-suggestions';
+import { buildStockCycleRows, stockCycleDay } from '@/features/inventory/stock-cycles';
+import { mapApiStockCycleToPayload } from '@/features/inventory/api/inventory-mappers';
 import { isOrderReceived, sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
+
+/**
+ * Alcanza para la ventana más ancha del selector (180 días): son unas 26
+ * semanas y cada semana puede dejar más de un control.
+ */
+const CYCLES_FOR_SUGGESTIONS = 60;
+
+function cyclesLabel(count: number): string {
+  return `promedio de ${count} ${count === 1 ? 'control' : 'controles'}`;
+}
 
 function orderLogoUrl(): string {
   return new URL(logoLchUrl, window.location.href).href;
@@ -40,7 +53,7 @@ type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
 export function OrdersPage() {
   const ctx = useAppContext();
   const {
-    orders, products, addAudit, getTotalStock, warehouses, suppliers, stockCountSessions, stockPackRounding,
+    orders, products, addAudit, getTotalStock, warehouses, suppliers, stockPackRounding,
     createPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder, currentUser,
   } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,7 +63,7 @@ export function OrdersPage() {
 
   const [dateType, setDateType] = useState<'regular' | 'after'>('regular');
   const [calcDate, setCalcDate] = useState<string>('');
-  const [orderItems, setOrderItems] = useState<{ productId: string; avgUsage: number; currentStock: number; suggested: number; quantity: number; included: boolean }[]>([]);
+  const [orderItems, setOrderItems] = useState<{ productId: string; average: number; cyclesUsed: number; raw: number; currentStock: number; suggested: number; quantity: number; included: boolean }[]>([]);
   const [provider, setProvider] = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -106,6 +119,28 @@ export function OrdersPage() {
 
   const [span, setSpan] = useState<SuggestionSpan>('month');
 
+  // Fuera de `hydrationQueries`: que no haya ciclos todavía no significa que el
+  // inventario esté offline, igual que con el log de auditoría.
+  const cyclesQuery = useQuery({
+    queryKey: ['inventory', 'cycles', CYCLES_FOR_SUGGESTIONS],
+    queryFn: () => stockApi.cycles.list(CYCLES_FOR_SUGGESTIONS),
+  });
+
+  const suggestionCycles = useMemo<SuggestionCycle[]>(() => {
+    return (cyclesQuery.data ?? []).map(api => {
+      const payload = mapApiStockCycleToPayload(api);
+      return {
+        day: stockCycleDay(payload),
+        dateType: payload.dateType ?? 'regular',
+        hadSales: payload.hadSales,
+        rows: buildStockCycleRows(payload).map(row => ({
+          productId: row.productId,
+          consumoReal: row.consumoReal,
+        })),
+      };
+    });
+  }, [cyclesQuery.data]);
+
   const calculateSuggestions = () => {
     const supplierProductIds = selectedSupplier?.productIds;
     const catalog = supplierProductIds
@@ -115,8 +150,8 @@ export function OrdersPage() {
 
     const items = catalog.map(product => {
       const currentStock = getTotalStock(product);
-      const result = suggestFromStockCounts({
-        sessions: stockCountSessions,
+      const result = suggestFromStockCycles({
+        cycles: suggestionCycles,
         productId: product.id,
         currentStock,
         orderUnit: product.orderUnit,
@@ -128,7 +163,9 @@ export function OrdersPage() {
       });
       return {
         productId: product.id,
-        avgUsage: Math.round((result.raw + currentStock) * 1000) / 1000,
+        average: result.average,
+        cyclesUsed: result.cyclesUsed,
+        raw: result.raw,
         currentStock,
         suggested: result.suggested,
         quantity: result.suggested,
@@ -625,7 +662,7 @@ export function OrdersPage() {
                 <option value="halfYear">Ultimos 6 meses</option>
               </select>
               <p className="text-xs text-muted-foreground mt-1">
-                El calculo usa los controles de stock del tipo elegido. Ultimos 6 meses aplica la misma cuenta a 180 dias.
+                El promedio sale del consumo real entre controles del tipo elegido: lo que fisicamente salio, no lo que se tickeo. Ultimos 6 meses aplica la misma cuenta a 180 dias.
               </p>
             </div>
             <div>
@@ -645,10 +682,20 @@ export function OrdersPage() {
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => setView('list')} className="px-4 py-2.5 rounded-lg border border-border text-sm">Cancelar</button>
-              <button onClick={calculateSuggestions} className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f]">
-                Calcular Sugerencias
+              {/* Sin los ciclos cargados todo daria 0, que se leeria como una respuesta. */}
+              <button
+                onClick={calculateSuggestions}
+                disabled={cyclesQuery.isPending}
+                className="px-6 py-2.5 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f] disabled:opacity-50"
+              >
+                {cyclesQuery.isPending ? 'Cargando controles…' : 'Calcular Sugerencias'}
               </button>
             </div>
+            {cyclesQuery.isError && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                No se pudieron traer los controles: el sugerido va a salir en 0. Cargá las cantidades a mano.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -739,7 +786,10 @@ export function OrdersPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate" style={{ fontWeight: 500 }}>{getProductName(item.productId)}</p>
                     <p className="text-xs text-muted-foreground">Stock: {item.currentStock} {unitLabel}</p>
-                    {packSize && item.suggested !== item.avgUsage - item.currentStock && (
+                    <p className="text-xs text-muted-foreground">
+                      Consumo real prom.: {item.average} {unitLabel} · {cyclesLabel(item.cyclesUsed)}
+                    </p>
+                    {packSize && item.suggested !== item.raw && (
                       <p className="text-xs text-[#3d7a3d]">Pack x{packSize} → redondeado a {item.suggested}</p>
                     )}
                   </div>
@@ -766,7 +816,7 @@ export function OrdersPage() {
                 <tr className="bg-muted">
                   <th className="text-center px-4 py-3 text-xs text-muted-foreground uppercase w-12">Incluir</th>
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground uppercase">Producto</th>
-                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Consumo Prom. Diario</th>
+                  <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Consumo Real Prom. por Control</th>
                   <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Stock Actual</th>
                   <th className="text-right px-4 py-3 text-xs text-muted-foreground uppercase">Cantidad Pedida</th>
                 </tr>
@@ -794,7 +844,12 @@ export function OrdersPage() {
                         {getProductName(item.productId)}
                         {packSize && <span className="ml-1 text-xs text-[#3d7a3d]">(pack x{packSize})</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">{item.avgUsage} {unitLabel}</td>
+                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">
+                        <div className="flex flex-col items-end">
+                          <span>{item.average} {unitLabel}</span>
+                          <span className="text-[10px]">{cyclesLabel(item.cyclesUsed)}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-right">{item.currentStock} {unitLabel}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end">
@@ -810,7 +865,7 @@ export function OrdersPage() {
                             min={0}
                             disabled={!item.included}
                           />
-                          {packSize && item.suggested !== item.avgUsage - item.currentStock && (
+                          {packSize && item.suggested !== item.raw && (
                             <span className="text-[10px] text-[#3d7a3d]">sugerido: {item.suggested}</span>
                           )}
                         </div>
