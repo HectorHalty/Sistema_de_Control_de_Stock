@@ -10,6 +10,8 @@
 
 **Origen:** `docs/superpowers/specs/2026-09-23-test-modulo-stock-design.md` (oráculo del pedido y de las alertas) y `docs/superpowers/reports/2026-09-23-test-modulo-stock-informe.md` (qué falló).
 
+**Estado (2026-09-25):** las tareas 1 a 7 están implementadas. La tarea 8 no se corrió: el admin (`localhost:5173`) y la API (`localhost:3001`) no respondían, y este ciclo no levanta los servicios. El informe está en `docs/superpowers/reports/2026-09-25-cerrar-fallos-stock.md`.
+
 ## Global Constraints
 
 - El oráculo del pedido es el de ese spec. No se conserva el multiplicador 1,5 ni los “días a cubrir” de `generateMovementBasedSuggestions`.
@@ -95,7 +97,7 @@ export function suggestFromStockCounts(input: {
 }): { raw: number; suggested: number };
 ```
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Armar las sesiones del spec con `today` fijo `2026-09-23` y stock actual 10. Unidad de pedido 24.
 
@@ -118,7 +120,7 @@ Un caso con `orderUnit: 1` y `packRounding: true` no redondea. Un caso cuyo prom
 
 Correr `npm --prefix apps/web-admin test -- src/features/inventory/order-suggestions.test.ts` y verlo fallar porque el módulo no existe.
 
-- [ ] **Step 2: Implementar la cuenta**
+- [x] **Step 2: Implementar la cuenta**
 
 Días de cada span, incluido `today`: semana 7, mes 30, 3 meses 90, 6 meses 180. Restar `n - 1` días de calendario a `today`.
 
@@ -128,11 +130,11 @@ Si viene `specificDate`, el conjunto es solo ese día. Si no, el conjunto es el 
 
 `roundUpToOrderUnit` ya no redondea cuando `orderUnit` falta o es `<= 1`, ni cuando la cantidad es `<= 0`.
 
-- [ ] **Step 3: Ver el test en verde**
+- [x] **Step 3: Ver el test en verde**
 
 `npm --prefix apps/web-admin test -- src/features/inventory/order-suggestions.test.ts`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web-admin/src/features/inventory/order-suggestions.ts apps/web-admin/src/features/inventory/order-suggestions.test.ts
@@ -151,7 +153,7 @@ git commit -m "test(admin): sugerido de pedido desde controles de stock"
 - Consumes: `suggestFromStockCounts`, `stockCountSessions` y `stockPackRounding` del contexto (ya están en el provider). `getTotalStock(product)` es el stock actual.
 - Produces: Calcular Sugerencias escribe `suggested` con esa cuenta. Semana queda en el combo.
 
-- [ ] **Step 1: Cambiar el combo y el cálculo**
+- [x] **Step 1: Cambiar el combo y el cálculo**
 
 El estado de período deja de ser `periodMonths: 1 | 3 | 6`. Pasa a `SuggestionSpan`, default `month`.
 
@@ -170,17 +172,17 @@ Sacar el texto “Sin historial de ventas/consumos” y “Basado en N movimient
 
 La fecha específica sigue siendo opcional y, si está, manda sobre el período. El texto deja de decir “repetir ese pedido”.
 
-- [ ] **Step 2: Borrar el generador viejo de pedidos**
+- [x] **Step 2: Borrar el generador viejo de pedidos**
 
 Quitar el import de `generateMovementBasedSuggestions`. Si ningún archivo lo importa, borrar la función y `SuggestionParams` de `domain.ts`. No borrar `calculateAvgDailyDemandFromMovements`.
 
-- [ ] **Step 3: Tests y build del admin**
+- [x] **Step 3: Tests y build del admin**
 
 `npm --prefix apps/web-admin test -- src/features/inventory/order-suggestions.test.ts`
 
 `npm --prefix apps/web-admin run build`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "fix(stock): calcular el pedido con los controles, no con las ventas"
@@ -205,7 +207,7 @@ git commit -am "fix(stock): calcular el pedido con los controles, no con las ven
 - Consumes: `stockLowNotifications`, `stockAutoAlerts`, `stockAlertDay`, y el mínimo nuevo.
 - Produces: `selectStockAlerts(input): StockAlert[]`. Campana, `/stock`, `/` y reportes lo llaman. `getStockAlertProducts` queda como la regla semanal.
 
-- [ ] **Step 1: Tests de las dos reglas**
+- [x] **Step 1: Tests de las dos reglas**
 
 Mantener los tres tests actuales de `getStockAlertProducts`. Agregar:
 
@@ -217,7 +219,7 @@ Mantener los tres tests actuales de `getStockAlertProducts`. Agregar:
 - Stock 8 que cumple las dos: una sola fila, la semanal (`weeklyAvg > 0`).
 - Pendiente que cubre el promedio semanal: no queda la semanal. Si la automática está prendida y 8 < 20, la automática sí queda. El recorrido N7 apaga las automáticas antes de crear el pendiente; con las automáticas apagadas el pendiente saca el producto de la lista.
 
-- [ ] **Step 2: Configuración**
+- [x] **Step 2: Configuración**
 
 En `storageKeys.inventory`, `autoAlertMinimum: 'stock-auto-alert-minimum'`.
 
@@ -225,7 +227,7 @@ En `usePlatformState`, estado número, default 20. Setter persiste `stock.autoAl
 
 En el panel, la fila **Notificaciones de Stock Bajo** dice que avisa el día elegido cuando el stock más los pedidos pendientes no cubren el promedio semanal de ventas. La fila **Alertas Automaticas** conserva el interruptor y agrega un input numérico “Mínimo”, `min={1}`, valor el estado, al cambiar persiste el entero. La descripción dice que avisa cuando el stock baja de ese mínimo, aunque no haya ventas.
 
-- [ ] **Step 3: Un selector para las cuatro pantallas**
+- [x] **Step 3: Un selector para las cuatro pantallas**
 
 ```ts
 export function selectStockAlerts(input: {
@@ -244,11 +246,11 @@ La semanal solo se evalúa si `lowStockNotifications` es true y `isAlertDay(toda
 
 `DashboardPage`, `ReportsPage`, `PlatformDashboardPage` y `usePendingNotifications` dejan de llamar a `getStockAlertProducts` directo y llaman a `selectStockAlerts` con los flags del contexto. La campana sigue exigiendo `notificationsEnabled` y el cupo de 5. El dashboard general sigue mostrando como máximo 4. Esos cupos no cambian.
 
-- [ ] **Step 4: Tests**
+- [x] **Step 4: Tests**
 
 `npm --prefix apps/web-admin test -- src/features/inventory/stock-alerts.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "fix(stock): alertar por minimo automatico y por el dia elegido"
@@ -265,17 +267,17 @@ git commit -am "fix(stock): alertar por minimo automatico y por el dia elegido"
 - Consumes: `products` y `getTotalStock` del contexto. `pendingOrders` ya está.
 - Produces: la tarjeta Stock y Compras muestra el mismo entero que la tarjeta Stock Total de `/stock`, con el sufijo `uds`, y la misma cantidad de pedidos pendientes.
 
-- [ ] **Step 1: Mostrar el número**
+- [x] **Step 1: Mostrar el número**
 
 `const totalStock = products.reduce((sum, product) => sum + getTotalStock(product), 0)`.
 
 En la sección Stock y Compras, una línea `Stock Total: ${totalStock} uds` y la línea de pendientes que ya existe. Sin gráfico nuevo.
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 `npm --prefix apps/web-admin run build`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "fix(admin): mostrar el stock total en el inicio general"
@@ -293,11 +295,11 @@ git commit -am "fix(admin): mostrar el stock total en el inicio general"
 - Consumes: `GET /settings/audit`, que ya existe. Cada alta de almacén y de producto ya hace `POST` en `addStockAudit`.
 - Produces: `auditLog` incluye esas filas aunque `localStorage` esté vacío. `DashboardPage` no cambia de componente: sigue leyendo `auditLog`.
 
-- [ ] **Step 1: Tipar la lista**
+- [x] **Step 1: Tipar la lista**
 
 `settingsApi.audit.list` devuelve `{ id, userName, module, action, element, previousValue, newValue, createdAt }[]`, no `unknown[]`.
 
-- [ ] **Step 2: Hidratar**
+- [x] **Step 2: Hidratar**
 
 En `useInventoryState`, un `useQuery` de `['settings', 'audit']` llama `settingsApi.audit.list(50)`. Al llegar datos, mapear cada fila a `AuditEntry`: `id` del servidor, `user` = `userName ?? ''`, `date` = `createdAt` formateado `es-AR`, `module` `ventas` o `stock`.
 
@@ -305,11 +307,11 @@ Mezclar con el log local por `id`. Si el `GET` falla, dejar el log local; no vac
 
 `getStockAuditEntries` sigue filtrando ventas. “Alta Producto” y “Alta Almacén” quedan en stock.
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 `npm --prefix apps/web-admin run build`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "fix(stock): leer la actividad reciente desde la auditoria del servidor"
@@ -326,21 +328,21 @@ git commit -am "fix(stock): leer la actividad reciente desde la auditoria del se
 - Consumes: el input de cantidad por almacén en el modal de producto (`min={0}`).
 - Produces: un valor que empieza con `-` no pisa la cantidad. Se ve el aviso “No se puede dejar el stock en negativo” y el número anterior sigue en el campo. Guardar no se llama con una cantidad negativa.
 
-- [ ] **Step 1: Rechazar el negativo en el onChange**
+- [x] **Step 1: Rechazar el negativo en el onChange**
 
 Si `raw` recortado empieza con `-`, o el número parseado es `< 0`, no escribir esa cantidad. Mostrar el aviso junto al bloque Stock por Almacén. El valor controlado sigue siendo la cantidad anterior, así `-999` no queda en `0999` ni en `999`.
 
 Un vacío o un texto que no es número sigue pasando a 0, como hoy. Un entero `>= 0` limpia el aviso.
 
-- [ ] **Step 2: Bloquear el guardado**
+- [x] **Step 2: Bloquear el guardado**
 
 `handleSave` vuelve sin llamar a `updateProduct` si alguna cantidad de `stockByWarehouse` es `< 0`. El aviso queda visible.
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 `npm --prefix apps/web-admin run build`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "fix(stock): avisar y no guardar un stock negativo en la ficha"
@@ -362,7 +364,7 @@ git commit -am "fix(stock): avisar y no guardar un stock negativo en la ficha"
 - Consumes: `adjustStock` ya bloquea la fila y rechaza negativo con 409. El pasaje hace las dos patas en la misma transacción.
 - Produces: `POST /stock/products/:id/transfer` con `{ fromWarehouseId, toWarehouseId, quantity, operatorId?, operatorName? }`. El total del producto no cambia. Quedan dos movimientos `ajuste_manual`, uno negativo y uno positivo, de la misma cantidad.
 
-- [ ] **Step 1: DTO y servicio**
+- [x] **Step 1: DTO y servicio**
 
 `quantity` es un número `> 0`. `fromWarehouseId` y `toWarehouseId` son UUID distintos. Si son iguales, 400.
 
@@ -370,25 +372,28 @@ En una transacción: crear el nivel de destino en 0 si no existe; bloquear las d
 
 No agregar un valor al enum `TipoMovimientoStock`.
 
-- [ ] **Step 2: Ruta**
+- [x] **Step 2: Ruta**
 
 Junto a `POST products/:id/stock/adjust`, `POST products/:id/transfer`, mismos roles que el ajuste.
 
-- [ ] **Step 3: Cliente y ficha**
+- [x] **Step 3: Cliente y ficha**
 
 `stockApi.products.transfer(id, body)`. En la ficha del producto, botón **Pasaje**: origen, destino (sin repetir origen), cantidad `> 0` y no mayor que el stock del origen. Al confirmar, llamar al endpoint, refrescar productos y movimientos, y `addAudit` con acción `Pasaje` y el nombre del producto. Si la API responde 409, mostrar el mensaje y no cambiar los números en pantalla.
 
-- [ ] **Step 4: Tests de API que ya cubren el 409 de stock**
+- [x] **Step 4: Tests de API que ya cubren el 409 de stock**
 
 No hace falta un test de base nuevo si no hay Postgres en el paso. `npm --prefix apps/api test` tiene que seguir en verde. `npm --prefix apps/api run build` también.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "fix(stock): pasar cantidad de un almacen a otro sin mover el total"
 ```
 
 ---
+
+
+La tarea 8 queda sin ejecutar. `curl` a `http://localhost:5173` y `http://localhost:3001` devolvió HTTP 000. No se levantó Docker ni el dev server. Los registros `TEST-` no se borraron.
 
 ### Task 8: Recorrer solo lo que había fallado
 
