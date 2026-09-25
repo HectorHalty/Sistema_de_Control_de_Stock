@@ -27,6 +27,8 @@ enum TipoMovimientoStock {
   ajuste_manual
   consumo
   entrada
+  diferencia_conteo
+  pasaje
 }
 
 enum EstadoOrdenCompra {

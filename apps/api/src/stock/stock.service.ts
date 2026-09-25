@@ -256,7 +256,7 @@ export class StockService {
 
       await this.movements.recordMany(tx, [
         {
-          type: 'ajuste_manual',
+          type: 'pasaje',
           productId,
           warehouseId: dto.fromWarehouseId,
           quantity: -quantity,
@@ -265,7 +265,7 @@ export class StockService {
           operatorName: dto.operatorName,
         },
         {
-          type: 'ajuste_manual',
+          type: 'pasaje',
           productId,
           warehouseId: dto.toWarehouseId,
           quantity,
@@ -322,7 +322,7 @@ export class StockService {
           data: { quantity: target },
         });
         await this.movements.recordMany(tx, [{
-          type: 'ajuste_manual',
+          type: 'diferencia_conteo',
           productId: entry.productId,
           warehouseId: entry.warehouseId,
           quantity: delta,

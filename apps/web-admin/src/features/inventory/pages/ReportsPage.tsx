@@ -31,6 +31,8 @@ const MOVEMENT_LABELS: Record<StockMovementType, string> = {
   consumo: 'Consumo',
   entrada: 'Entrada (pedido)',
   ajuste_manual: 'Ajuste manual',
+  diferencia_conteo: 'Diferencia de control',
+  pasaje: 'Pasaje entre almacenes',
 };
 
 function movementBadgeClass(type: StockMovementType): string {
@@ -442,6 +444,8 @@ export function ReportsPage() {
               <option value="venta_anulada">Anulaciones</option>
               <option value="devolucion">Devoluciones</option>
               <option value="ajuste_manual">Ajustes manuales</option>
+              <option value="diferencia_conteo">Diferencias de control</option>
+              <option value="pasaje">Pasajes</option>
             </select>
           </div>
 

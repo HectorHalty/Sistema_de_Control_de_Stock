@@ -7,7 +7,10 @@ import { SalesService } from '../../src/sales/sales.service';
 import { FootballService } from '../../src/football/football.service';
 import type { PrismaService } from '../../src/common/prisma.service';
 import type { SseService } from '../../src/sse/sse.service';
-import type { StockMovementsService as StockMovementsServiceType } from '../../src/stock/stock-movements.service';
+import type {
+  StockMovementsService as StockMovementsServiceType,
+  StockMovementType,
+} from '../../src/stock/stock-movements.service';
 import type { ReglamentoEngineService } from '../../src/reglamento/reglamento-engine.service';
 import type { SuspensionSyncService } from '../../src/football/suspension-sync.service';
 
@@ -69,6 +72,17 @@ function footballService() {
 
 describe('filtros por enum en stock', () => {
   describe('StockMovementsService.findAll', () => {
+    // La diferencia de un control y el pasaje dejaron de ser ajuste_manual: si el
+    // filtro no los acepta, la pantalla de movimientos no puede aislarlos.
+    const TIPOS_PROPIOS: StockMovementType[] = ['diferencia_conteo', 'pasaje'];
+
+    it.each(TIPOS_PROPIOS)('acepta %s y consulta la base', async type => {
+      const { service, findMany } = movementsService();
+      await service.findAll({ type });
+      expect(findMany).toHaveBeenCalledOnce();
+      expect(findMany.mock.calls[0][0].where.type).toBe(type);
+    });
+
     it('acepta un tipo válido y consulta la base', async () => {
       const { service, findMany } = movementsService();
       await service.findAll({ type: 'venta' });

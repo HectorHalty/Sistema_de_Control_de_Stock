@@ -52,9 +52,12 @@ describe('restricciones de stock', () => {
     ).rejects.toThrow(/invalid input value for enum/i);
   });
 
-  it('acepta los seis tipos de movimiento válidos', async () => {
+  it('acepta los ocho tipos de movimiento válidos', async () => {
     const { producto, deposito } = await seedCatalog();
-    const tipos = ['venta', 'devolucion', 'venta_anulada', 'ajuste_manual', 'consumo', 'entrada'] as const;
+    const tipos = [
+      'venta', 'devolucion', 'venta_anulada', 'ajuste_manual', 'consumo', 'entrada',
+      'diferencia_conteo', 'pasaje',
+    ] as const;
     for (const type of tipos) {
       const mov = await prisma.movimientoStock.create({
         data: { type, productId: producto.id, warehouseId: deposito.id, quantity: 1 },

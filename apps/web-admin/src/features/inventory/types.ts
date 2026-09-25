@@ -49,7 +49,9 @@ export type StockMovementType =
   | 'devolucion'
   | 'consumo'
   | 'entrada'
-  | 'ajuste_manual';
+  | 'ajuste_manual'
+  | 'diferencia_conteo'
+  | 'pasaje';
 
 /** Asiento del libro de movimientos de stock (fuente para la conciliación). */
 export interface StockMovement {

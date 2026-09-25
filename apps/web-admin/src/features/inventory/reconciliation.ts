@@ -93,6 +93,13 @@ function bucketMovementsByProduct(
       case 'ajuste_manual':
         bucket.ajustes += m.quantity;
         break;
+      case 'diferencia_conteo':
+        // Es lo que el propio control corrigió: ya está dentro de lo contado y
+        // sumarlo contaría dos veces la diferencia.
+        break;
+      case 'pasaje':
+        // Las dos patas suman cero en el total del producto: no mueven ninguna columna.
+        break;
     }
     map.set(m.productId, bucket);
   }

@@ -9,7 +9,9 @@ export type StockMovementType =
   | 'devolucion'
   | 'consumo'
   | 'entrada'
-  | 'ajuste_manual';
+  | 'ajuste_manual'
+  | 'diferencia_conteo'
+  | 'pasaje';
 
 export interface RecordMovementInput {
   type: StockMovementType;
