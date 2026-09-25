@@ -5,21 +5,28 @@ import { useAppContext } from '@/app/providers/AppContext';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { getWarehouseIcon } from '@/features/inventory/lib/warehouse-icons';
 import { ChevronDown, ChevronUp, Check, Download, Calendar, ClipboardList, Search } from 'lucide-react';
-import type { ConsumptionLog, StockCountSession } from '@/app/components/store';
-import { getUnitLabel } from '@/app/components/store';
+import type { ConsumptionLog, StockCountSession, StockCountType } from '@/app/components/store';
+import { getUnitLabel, stockCountTypeLabel } from '@/app/components/store';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildConsumptionReportXlsx } from '@/app/components/xlsxExport';
 import { mapApiProductToLocal } from '@/features/inventory/api/inventory-mappers';
 import { buildStockCountAdjustments, syncStockEdits, type StockEdit } from '@/features/inventory/stock-count';
+import { calendarDayInArgentina } from '@/features/inventory/order-suggestions';
+import { lastCountAgeLabel } from '@/features/inventory/last-count';
 
-type DateType = 'regular' | 'after';
+type DateType = StockCountType;
 
 export function ConsumptionPage() {
   const {
     products, warehouses, categories, setProducts, consumptionLogs, setConsumptionLogs,
     saveStockCountSession, inventoryApiAvailable, refreshStockProducts, refreshOperations,
-    currentUser, addAudit,
+    currentUser, addAudit, stockCountSessions,
   } = useAppContext();
+  // Antes de re-contar conviene saber desde cuándo el stock del sistema es una
+  // estimación: es lo que separa un número de ayer de uno de julio.
+  const today = calendarDayInArgentina(new Date());
+  const lastCountLabel = (productId: string) =>
+    lastCountAgeLabel({ sessions: stockCountSessions, productId, today });
   const [dateType, setDateType] = useState<DateType>('regular');
   const [expandedWarehouse, setExpandedWarehouse] = useState<string | null>(null);
   const [warehouseSearch, setWarehouseSearch] = useState('');
@@ -149,7 +156,7 @@ export function ConsumptionPage() {
     // Audit
     addAudit({
       user: 'Admin',
-      action: `Registro de Consumo (${dateType === 'after' ? 'After' : 'Regular'})`,
+      action: `Registro de Consumo (${stockCountTypeLabel(dateType)})`,
       element: `${entries.length} productos actualizados`,
       previousValue: '-',
       newValue: today,
@@ -197,7 +204,7 @@ export function ConsumptionPage() {
             </div>
             <div>
               <p className="text-sm" style={{ fontWeight: 600 }}>Consumo guardado</p>
-              <p className="text-xs text-muted-foreground">{lastLog.date} · {lastLog.dateType === 'after' ? 'After / Especial' : 'Regular'} · {lastLog.entries.length} productos</p>
+              <p className="text-xs text-muted-foreground">{lastLog.date} · {stockCountTypeLabel(lastLog.dateType)} · {lastLog.entries.length} productos</p>
             </div>
           </div>
 
@@ -288,7 +295,7 @@ export function ConsumptionPage() {
                 <div key={log.id} className="flex items-center justify-between py-2.5 px-3 bg-muted rounded-lg">
                   <div>
                     <p className="text-sm" style={{ fontWeight: 500 }}>{log.date}</p>
-                    <p className="text-xs text-muted-foreground">{log.dateType === 'after' ? 'After' : 'Regular'} · {log.entries.length} productos</p>
+                    <p className="text-xs text-muted-foreground">{stockCountTypeLabel(log.dateType)} · {log.entries.length} productos</p>
                   </div>
                   <button onClick={() => downloadXlsx(log)} className="p-2 rounded-lg text-[#3d7a3d] hover:bg-[#3d7a3d]/10">
                     <Download size={16} />
@@ -333,6 +340,15 @@ export function ConsumptionPage() {
           >
             <p className="text-sm" style={{ fontWeight: 600 }}>After / Especial</p>
             <p className="text-xs text-muted-foreground mt-0.5">Evento especial (mayor demanda)</p>
+          </button>
+          <button
+            onClick={() => setDateType('verificacion')}
+            className={`p-3 rounded-lg border text-left transition-all ${
+              dateType === 'verificacion' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-border/60 hover:bg-muted/40'
+            }`}
+          >
+            <p className="text-sm" style={{ fontWeight: 600 }}>Verificación</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Para comprobar un pedido recibido. No cierra un día de venta.</p>
           </button>
         </div>
       </div>
@@ -426,6 +442,7 @@ export function ConsumptionPage() {
                                   <p className="text-sm truncate" style={{ fontWeight: 500 }}>{product.name}</p>
                                   <p className="text-xs text-muted-foreground">
                                     {product.code} · Stock previo: {edit.previousStock} {getUnitLabel(product.unit, true)}
+                                    {' · último control: '}{lastCountLabel(product.id)}
                                     {consumed !== 0 && (
                                       <span className={`ml-2 ${consumed > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-blue-600 dark:text-blue-400'}`} style={{ fontWeight: 600 }}>
                                         {consumed > 0 ? `–${consumed}` : `+${Math.abs(consumed)}`} {getUnitLabel(product.unit, true)}

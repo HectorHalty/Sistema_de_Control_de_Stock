@@ -52,15 +52,45 @@ describe('restricciones de stock', () => {
     ).rejects.toThrow(/invalid input value for enum/i);
   });
 
-  it('acepta los seis tipos de movimiento válidos', async () => {
+  it('acepta los ocho tipos de movimiento válidos', async () => {
     const { producto, deposito } = await seedCatalog();
-    const tipos = ['venta', 'devolucion', 'venta_anulada', 'ajuste_manual', 'consumo', 'entrada'] as const;
+    const tipos = [
+      'venta', 'devolucion', 'venta_anulada', 'ajuste_manual', 'consumo', 'entrada',
+      'diferencia_conteo', 'pasaje',
+    ] as const;
     for (const type of tipos) {
       const mov = await prisma.movimientoStock.create({
         data: { type, productId: producto.id, warehouseId: deposito.id, quantity: 1 },
       });
       expect(mov.type).toBe(type);
     }
+  });
+
+  it('rechaza un motivo de ajuste inventado', async () => {
+    const { producto, deposito } = await seedCatalog();
+    await expect(
+      prisma.$executeRawUnsafe(
+        `INSERT INTO "movimientos_stock" ("id", "type", "productId", "warehouseId", "quantity", "reason")
+         VALUES (gen_random_uuid()::text, 'ajuste_manual', $1, $2, -1, 'motivo_inventado')`,
+        producto.id,
+        deposito.id,
+      ),
+    ).rejects.toThrow(/invalid input value for enum/i);
+  });
+
+  it('acepta los cuatro motivos de ajuste y deja el motivo nulo si no se manda', async () => {
+    const { producto, deposito } = await seedCatalog();
+    const motivos = ['rotura', 'vencido', 'correccion', 'entrada_directa'] as const;
+    for (const reason of motivos) {
+      const mov = await prisma.movimientoStock.create({
+        data: { type: 'ajuste_manual', productId: producto.id, warehouseId: deposito.id, quantity: -1, reason },
+      });
+      expect(mov.reason).toBe(reason);
+    }
+    const sinMotivo = await prisma.movimientoStock.create({
+      data: { type: 'venta', productId: producto.id, warehouseId: deposito.id, quantity: -1 },
+    });
+    expect(sinMotivo.reason).toBeNull();
   });
 
   it('rechaza una unidad de medida inventada', async () => {

@@ -49,7 +49,16 @@ export type StockMovementType =
   | 'devolucion'
   | 'consumo'
   | 'entrada'
-  | 'ajuste_manual';
+  | 'ajuste_manual'
+  | 'diferencia_conteo'
+  | 'pasaje';
+
+/**
+ * Motivo de un ajuste manual. Refleja el enum `MotivoAjusteStock` de la API:
+ * la merma conocida (rotura, vencido) no es el faltante sin explicar que
+ * expone el control de stock.
+ */
+export type StockAdjustmentReason = 'rotura' | 'vencido' | 'correccion' | 'entrada_directa';
 
 /** Asiento del libro de movimientos de stock (fuente para la conciliación). */
 export interface StockMovement {
@@ -62,6 +71,8 @@ export interface StockMovement {
   quantity: number;
   /** Referencia al documento de origen (ticket, pedido, consumo, etc.). */
   reference?: string;
+  /** Sólo en ajuste_manual; los movimientos previos al motivo no lo tienen. */
+  reason?: StockAdjustmentReason;
   operatorId?: string;
   operatorName?: string;
 }
@@ -77,12 +88,16 @@ export interface StockCountEntry {
   counted: number;
 }
 
+/** Tipo de un control de stock. `verificacion` no cierra un día de venta. */
+export type StockCountType = 'regular' | 'after' | 'verificacion';
+
 /** Sesión de control de stock: foto completa de lo contado vs lo esperado. */
 export interface StockCountSession {
   id: string;
   createdAtISO: string;
   date: string;
-  dateType: 'regular' | 'after';
+  /** `verificacion` es el control que comprueba un pedido recibido, no un día de venta. */
+  dateType: StockCountType;
   operatorId?: string;
   operatorName?: string;
   entries: StockCountEntry[];
@@ -99,7 +114,7 @@ export interface ConsumptionLog {
   date: string;
   day?: string;
   createdAtISO?: string;
-  dateType: 'regular' | 'after';
+  dateType: StockCountType;
   entries: {
     productId: string;
     productName: string;
@@ -131,6 +146,16 @@ const UNIT_LABELS: Record<UnidadMedida, { long: string; short: string }> = {
   litros: { long: 'litros', short: 'L' },
   cajas: { long: 'cajas', short: 'cajas' },
 };
+
+export const STOCK_COUNT_TYPE_LABELS: Record<StockCountType, string> = {
+  regular: 'Regular',
+  after: 'After',
+  verificacion: 'Verificación',
+};
+
+export function stockCountTypeLabel(dateType: StockCountType): string {
+  return STOCK_COUNT_TYPE_LABELS[dateType] ?? STOCK_COUNT_TYPE_LABELS.regular;
+}
 
 export function getUnitLabel(unit: UnidadMedida, short = false): string {
   const label = UNIT_LABELS[unit] ?? UNIT_LABELS.unidades;

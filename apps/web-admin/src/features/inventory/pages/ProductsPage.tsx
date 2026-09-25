@@ -8,6 +8,10 @@ import { ExpandChevron } from '@/shared/components/ExpandChevron';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
 import { transferStockError } from '@/features/inventory/transfer-stock';
+import { calendarDayInArgentina } from '@/features/inventory/order-suggestions';
+import { lastCountAgeLabel } from '@/features/inventory/last-count';
+import { ADJUSTMENT_REASONS, ADJUSTMENT_REASON_LABELS, stockAdjustmentError } from '@/features/inventory/stock-adjustment';
+import type { StockAdjustmentReason } from '@/features/inventory/types';
 import {
   NEGATIVE_ENTRY_LOCK_MS,
   NEGATIVE_STOCK_MESSAGE,
@@ -37,10 +41,12 @@ export function ProductsPage() {
     createProduct,
     updateProduct,
     transferStock,
+    adjustStock,
     deleteProduct,
     createCategory,
     updateCategory,
     currentUser,
+    stockCountSessions,
   } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -49,7 +55,14 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [transferProduct, setTransferProduct] = useState<Product | null>(null);
+  const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // El stock del sistema sólo fue cierto en el último conteo: sin esa fecha, un
+  // número de ayer y uno de julio se leen igual.
+  const today = calendarDayInArgentina(new Date());
+  const lastCountLabel = (productId: string) =>
+    lastCountAgeLabel({ sessions: stockCountSessions, productId, today });
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
@@ -240,6 +253,7 @@ export function ProductsPage() {
                       <p className="text-sm" style={{ fontWeight: 500 }}>{UNIT_LABELS[product.unit]}</p>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mb-3">último control: {lastCountLabel(product.id)}</p>
                   <div className="mb-3">
                     <p className="text-xs text-muted-foreground mb-1.5">Stock por Almacén</p>
                     <div className="space-y-1">
@@ -260,6 +274,12 @@ export function ProductsPage() {
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-xs"
                     >
                       Pasaje
+                    </button>
+                    <button
+                      onClick={() => setAdjustProduct(product)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-xs"
+                    >
+                      Ajuste
                     </button>
                     <button
                       onClick={() => { setEditingProduct(product); setShowModal(true); }}
@@ -332,6 +352,13 @@ export function ProductsPage() {
                           Pasaje
                         </button>
                         <button
+                          onClick={(e) => { e.stopPropagation(); setAdjustProduct(product); }}
+                          className="px-2 py-1 rounded-lg hover:bg-muted text-xs text-muted-foreground hover:text-[#3d7a3d] transition-colors"
+                          title="Ajuste"
+                        >
+                          Ajuste
+                        </button>
+                        <button
                           onClick={(e) => { e.stopPropagation(); setEditingProduct(product); setShowModal(true); }}
                           className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-blue-600 transition-colors"
                           title="Modificar"
@@ -369,6 +396,7 @@ export function ProductsPage() {
                             <div>
                               <p className="text-xs text-muted-foreground">Stock Total</p>
                               <p className="text-sm" style={{ fontWeight: 600 }}>{total} {getUnitLabel(product.unit, true)}</p>
+                              <p className="text-xs text-muted-foreground">último control: {lastCountLabel(product.id)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Unidad de Medida</p>
@@ -453,6 +481,28 @@ export function ProductsPage() {
               action: 'Pasaje',
               element: transferProduct.name,
               newValue: `${input.quantity}`,
+            });
+          }}
+        />
+      )}
+
+      {adjustProduct && (
+        <AdjustStockModal
+          product={adjustProduct}
+          warehouses={warehouses}
+          onClose={() => setAdjustProduct(null)}
+          onConfirm={async (input) => {
+            await adjustStock({
+              productId: adjustProduct.id,
+              ...input,
+              operatorId: currentUser.id,
+              operatorName: currentUser.username,
+            });
+            addAudit({
+              user: currentUser.username || 'Admin',
+              action: 'Ajuste',
+              element: adjustProduct.name,
+              newValue: `${input.quantity > 0 ? '+' : ''}${input.quantity} · ${ADJUSTMENT_REASON_LABELS[input.reason]}`,
             });
           }}
         />
@@ -550,6 +600,110 @@ function TransferStockModal({ product, warehouses, onClose, onConfirm }: {
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
           <button type="button" disabled={saving} onClick={() => void submit()} className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm disabled:opacity-50">
             {saving ? 'Pasando…' : 'Pasar'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AdjustStockModal({ product, warehouses, onClose, onConfirm }: {
+  product: Product;
+  warehouses: { id: string; name: string }[];
+  onClose: () => void;
+  onConfirm: (input: {
+    warehouseId: string;
+    quantity: number;
+    reason: StockAdjustmentReason;
+    reference?: string;
+  }) => Promise<void>;
+}) {
+  const levels = product.stockByWarehouse;
+  const [warehouseId, setWarehouseId] = useState(levels[0]?.warehouseId ?? '');
+  const [quantity, setQuantity] = useState('');
+  const [reason, setReason] = useState<StockAdjustmentReason | ''>('');
+  const [reference, setReference] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const available = levels.find(level => level.warehouseId === warehouseId)?.quantity ?? 0;
+  const warehouseName = (id: string) => warehouses.find(warehouse => warehouse.id === id)?.name ?? id;
+
+  const submit = async () => {
+    const message = stockAdjustmentError({
+      warehouseId,
+      quantity: Number(quantity),
+      reason,
+      available,
+    });
+    if (message) {
+      setError(message);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onConfirm({
+        warehouseId,
+        quantity: Number(quantity),
+        reason: reason as StockAdjustmentReason,
+        reference: reference.trim() || undefined,
+      });
+      onClose();
+    } catch (e) {
+      setError(getApiErrorMessage(e, 'No se pudo registrar el ajuste'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title={`Ajuste · ${product.name}`}>
+      <div className="space-y-3">
+        <label className="block text-sm">
+          Almacén
+          <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm">
+            {levels.map(level => (
+              <option key={level.warehouseId} value={level.warehouseId}>
+                {warehouseName(level.warehouseId)} ({level.quantity})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Cantidad
+          <input
+            type="number"
+            step={isFractionalUnit(product.unit) ? 0.001 : 1}
+            value={quantity}
+            onChange={e => setQuantity(e.target.value)}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm"
+          />
+          <span className="block text-xs text-muted-foreground mt-1">Negativo si salió stock, positivo si entró</span>
+        </label>
+        <label className="block text-sm">
+          Motivo
+          <select value={reason} onChange={e => setReason(e.target.value as StockAdjustmentReason | '')} className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm">
+            <option value="">Elegir motivo</option>
+            {ADJUSTMENT_REASONS.map(value => (
+              <option key={value} value={value}>{ADJUSTMENT_REASON_LABELS[value]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Detalle (opcional)
+          <input
+            type="text"
+            maxLength={200}
+            value={reference}
+            onChange={e => setReference(e.target.value)}
+            placeholder="Ej: se cayó un cajón de porrones"
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm"
+          />
+        </label>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-3 justify-end pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
+          <button type="button" disabled={saving} onClick={() => void submit()} className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm disabled:opacity-50">
+            {saving ? 'Registrando…' : 'Registrar ajuste'}
           </button>
         </div>
       </div>

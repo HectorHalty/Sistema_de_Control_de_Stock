@@ -376,6 +376,7 @@ describe('Fase 2.1 — ajuste de stock con trazabilidad', () => {
       .reduce((sum, level) => sum + level.quantity, 0);
     expect(total).toBe(10);
     expect(state.stockMovements.map(movement => movement.quantity).sort((a, b) => a - b)).toEqual([-4, 4]);
+    expect(state.stockMovements.map(movement => movement.type)).toEqual(['pasaje', 'pasaje']);
     expect(state.stockMovements.map(movement => movement.reference).sort()).toEqual([
       'Pasaje a TEST-B',
       'Pasaje desde Depósito',

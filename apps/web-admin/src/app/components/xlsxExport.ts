@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
+import { stockCountTypeLabel, type StockCountType } from '@/features/inventory/types';
 
-export type ReportDateType = 'regular' | 'after';
+export type ReportDateType = StockCountType;
 
 export type ConsumptionReportRow = {
   product: string;
@@ -9,9 +10,7 @@ export type ConsumptionReportRow = {
   consumed: number;
 };
 
-function labelForDateType(dateType: ReportDateType): string {
-  return dateType === 'after' ? 'After' : 'Regular';
-}
+const labelForDateType = stockCountTypeLabel;
 
 export function buildConsumptionReportXlsx(options: {
   day: string; // YYYY-MM-DD
@@ -85,15 +84,19 @@ export function buildMultiSheetConsumptionReportXlsx(options: {
   });
 }
 
+/** Un ciclo no siempre cierra: lo que no se puede calcular va vacío, no en cero. */
 export type ReconciliationReportRow = {
   product: string;
-  initial: number;
+  initial: number | null;
   entradas: number;
   ventas: number;
   consumos: number;
-  expected: number;
-  counted: number;
-  difference: number;
+  roturas: number;
+  consumoReal: number | null;
+  expected: number | null;
+  counted: number | null;
+  difference: number | null;
+  porcentajeDiferencia: number | null;
 };
 
 export function buildReconciliationXlsx(options: {
@@ -101,33 +104,40 @@ export function buildReconciliationXlsx(options: {
   rows: ReconciliationReportRow[];
 }): Blob {
   const { title, rows } = options;
+  const cell = (value: number | null): number | string => (value === null ? '' : value);
 
   const aoa: (string | number)[][] = [
-    [title, '', '', '', '', '', '', ''],
+    [title, '', '', '', '', '', '', '', '', '', ''],
     [
       'Producto',
       'Inicial',
       'Entradas',
       'Ventas',
-      'Consumos',
+      'Consumo',
+      'Rotura',
+      'Consumo real',
       'Esperado',
       'Contado',
       'Diferencia',
+      'Dif. %',
     ],
     ...rows.map(r => [
       r.product,
-      r.initial,
+      cell(r.initial),
       r.entradas,
       r.ventas,
       r.consumos,
-      r.expected,
-      r.counted,
-      r.difference,
+      r.roturas,
+      cell(r.consumoReal),
+      cell(r.expected),
+      cell(r.counted),
+      cell(r.difference),
+      cell(r.porcentajeDiferencia),
     ]),
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }];
   ws['!cols'] = [
     { wch: 36 },
     { wch: 10 },
@@ -135,8 +145,11 @@ export function buildReconciliationXlsx(options: {
     { wch: 10 },
     { wch: 10 },
     { wch: 10 },
+    { wch: 13 },
+    { wch: 10 },
     { wch: 10 },
     { wch: 12 },
+    { wch: 10 },
   ];
 
   const wb = XLSX.utils.book_new();

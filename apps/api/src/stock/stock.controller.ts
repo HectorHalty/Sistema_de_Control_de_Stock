@@ -129,6 +129,7 @@ export class StockController {
   findAllMovements(
     @Query('productId') productId?: string,
     @Query('type') type?: string,
+    @Query('reason') reason?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
@@ -136,6 +137,7 @@ export class StockController {
     return this.stockService.findAllMovements({
       productId,
       type,
+      reason,
       from,
       to,
       limit: limit ? parseInt(limit, 10) : undefined,
@@ -154,6 +156,18 @@ export class StockController {
   @Roles(...STOCK_COUNT_ROLES)
   createCountSession(@Body() dto: CreateStockCountSessionDto) {
     return this.stockService.createStockCountSession(dto);
+  }
+
+  @Get('cycles')
+  @Roles(...STOCK_READ_ROLES)
+  findStockCycles(@Query('limit') limit?: string) {
+    return this.stockService.findStockCycles(limit ? Number(limit) : undefined);
+  }
+
+  @Get('cycles/:sessionId')
+  @Roles(...STOCK_READ_ROLES)
+  findStockCycle(@Param('sessionId') sessionId: string) {
+    return this.stockService.findStockCycle(sessionId);
   }
 
   @Post('count-apply')

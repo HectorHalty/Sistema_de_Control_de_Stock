@@ -15,14 +15,17 @@ export type {
   AuditModule,
   StockMovement,
   StockMovementType,
+  StockAdjustmentReason,
   StockCountEntry,
   StockCountSession,
+  StockCountType,
 } from '@/features/inventory/types';
 
 export {
   getUnitLabel,
   isFractionalUnit,
   roundUpToOrderUnit,
+  stockCountTypeLabel,
 } from '@/features/inventory/types';
 
 export {
