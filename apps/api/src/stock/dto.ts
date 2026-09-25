@@ -108,6 +108,27 @@ export class AdjustStockDto {
   operatorName?: string;
 }
 
+export class TransferStockDto {
+  @IsUUID()
+  fromWarehouseId: string;
+
+  @IsUUID()
+  toWarehouseId: string;
+
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
+
+  @IsOptional()
+  @IsUUID()
+  operatorId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  operatorName?: string;
+}
+
 /** Una fila del conteo físico: la cantidad contada, no un delta. */
 export class StockCountLevelDto {
   @IsUUID()

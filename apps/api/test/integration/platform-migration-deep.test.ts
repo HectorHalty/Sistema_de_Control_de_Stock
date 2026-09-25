@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -352,6 +353,46 @@ describe('Fase 2.1 — ajuste de stock con trazabilidad', () => {
       quantity: 5,
       reference: 'inventario-inicial',
     });
+  });
+
+  it('transferStock mueve cantidad sin cambiar el total y rechaza el faltante', async () => {
+    const state = createEmptyStockState();
+    const { p1, whId } = seedBasicCatalog(state);
+    const otherId = randomUUID();
+    state.warehouses.push({ id: otherId, name: 'TEST-B', location: 'Test' });
+    const { service } = createStockService(state);
+
+    const moved = await service.transferStock(p1, {
+      fromWarehouseId: whId,
+      toWarehouseId: otherId,
+      quantity: 4,
+      operatorName: 'Admin',
+    });
+    expect(moved.from.quantity).toBe(6);
+    expect(moved.to.quantity).toBe(4);
+
+    const total = state.stockLevels
+      .filter(level => level.productId === p1)
+      .reduce((sum, level) => sum + level.quantity, 0);
+    expect(total).toBe(10);
+    expect(state.stockMovements.map(movement => movement.quantity).sort((a, b) => a - b)).toEqual([-4, 4]);
+    expect(state.stockMovements.map(movement => movement.reference).sort()).toEqual([
+      'Pasaje a TEST-B',
+      'Pasaje desde Depósito',
+    ]);
+
+    await expect(service.transferStock(p1, {
+      fromWarehouseId: whId,
+      toWarehouseId: whId,
+      quantity: 1,
+    })).rejects.toThrow(/distintos/);
+
+    await expect(service.transferStock(p1, {
+      fromWarehouseId: whId,
+      toWarehouseId: otherId,
+      quantity: 100,
+    })).rejects.toThrow(/suficiente/);
+    expect(state.stockLevels.find(level => level.warehouseId === whId && level.productId === p1)?.quantity).toBe(6);
   });
 });
 

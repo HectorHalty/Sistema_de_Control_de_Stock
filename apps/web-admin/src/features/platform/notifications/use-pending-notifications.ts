@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { canAccessModule } from '@/features/platform/config/modules';
 import { sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
-import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
+import { selectStockAlerts } from '@/features/inventory/stock-alerts';
 import { getUnitLabel } from '@/app/components/store';
 import type { AppNotification } from './types';
 
@@ -17,6 +17,9 @@ export function usePendingNotifications(): AppNotification[] {
     stockMovements,
     notificationsEnabled,
     stockLowNotifications,
+    stockAutoAlerts,
+    stockAutoAlertMinimum,
+    stockAlertDay,
   } = useAppContext();
 
   return useMemo(() => {
@@ -26,8 +29,16 @@ export function usePendingNotifications(): AppNotification[] {
     const canSeeStock = canAccessModule(currentUser.role, 'stock');
     const canSeeVentas = canAccessModule(currentUser.role, 'ventas');
 
-    if (canSeeStock && stockLowNotifications) {
-      const lowStock = getStockAlertProducts(products, orders, stockMovements).slice(0, MAX_LOW_STOCK_ITEMS);
+    if (canSeeStock && (stockLowNotifications || stockAutoAlerts)) {
+      const lowStock = selectStockAlerts({
+        products,
+        orders,
+        movements: stockMovements,
+        lowStockNotifications: stockLowNotifications,
+        autoAlerts: stockAutoAlerts,
+        autoAlertMinimum: stockAutoAlertMinimum,
+        alertDay: stockAlertDay,
+      }).slice(0, MAX_LOW_STOCK_ITEMS);
 
       for (const { product, current } of lowStock) {
         items.push({
@@ -89,5 +100,8 @@ export function usePendingNotifications(): AppNotification[] {
     stockMovements,
     notificationsEnabled,
     stockLowNotifications,
+    stockAutoAlerts,
+    stockAutoAlertMinimum,
+    stockAlertDay,
   ]);
 }

@@ -175,9 +175,8 @@ function movementDemand(m: StockMovement): number {
 }
 
 /**
- * Calcula la demanda diaria promedio de un producto a partir del libro de movimientos
- * (ventas + consumos reales), que refleja la salida efectiva mejor que el "consumido"
- * derivado de los controles de stock.
+ * Demanda diaria de ventas y consumos. La usan las alertas semanales de stock.
+ * El pedido sugerido no sale de acá: sale de los controles, en order-suggestions.ts.
  */
 export function calculateAvgDailyDemandFromMovements(
   movements: StockMovement[],
@@ -210,75 +209,6 @@ export function calculateAvgDailyDemandFromMovements(
   const avgDaily = totalConsumed / totalDaysInPeriod;
 
   return { avgDaily, totalConsumed, daysWithConsumption: daysWithConsumption.size };
-}
-
-/**
- * Genera sugerencias de pedido usando la demanda real del libro de movimientos
- * (ventas + consumos), en lugar del consumido derivado de los controles de stock.
- */
-export function generateMovementBasedSuggestions(
-  products: Product[],
-  movements: StockMovement[],
-  params: SuggestionParams,
-  supplierProductIds?: string[],
-): ConsumptionBasedSuggestion[] {
-  const multiplier = params.dateType === 'after' ? 1.5 : 1;
-  const daysToCover = params.dateType === 'after' ? 14 : 7;
-
-  const filteredProducts = supplierProductIds
-    ? products.filter(p => supplierProductIds.includes(p.id))
-    : products;
-
-  // Repetir el patrón de demanda de un día específico.
-  if (params.specificDate) {
-    return filteredProducts.map(product => {
-      const currentStock = product.stockByWarehouse.reduce((sum, s) => sum + s.quantity, 0);
-      const demandThatDay = movements
-        .filter(m => m.productId === product.id && m.createdAtISO.slice(0, 10) === params.specificDate)
-        .reduce((sum, m) => sum + movementDemand(m), 0);
-      const consumed = Math.max(0, demandThatDay);
-
-      const suggested = Math.max(0, Math.ceil(consumed * multiplier) - currentStock);
-      const rounded = roundUpToOrderUnit(suggested, product.orderUnit);
-
-      return {
-        productId: product.id,
-        productName: product.name,
-        currentStock,
-        avgDailyConsumption: consumed,
-        totalConsumedInPeriod: consumed,
-        daysInPeriod: 1,
-        suggestedQuantity: rounded,
-        unit: product.unit,
-        orderUnit: product.orderUnit,
-      };
-    });
-  }
-
-  return filteredProducts.map(product => {
-    const currentStock = product.stockByWarehouse.reduce((sum, s) => sum + s.quantity, 0);
-    const { avgDaily, totalConsumed, daysWithConsumption } = calculateAvgDailyDemandFromMovements(
-      movements,
-      product.id,
-      params.periodMonths,
-    );
-
-    const avgWithMultiplier = avgDaily > 0 ? avgDaily * multiplier : 0;
-    const rawSuggested = Math.max(0, Math.ceil(avgWithMultiplier * daysToCover) - currentStock);
-    const suggested = roundUpToOrderUnit(rawSuggested, product.orderUnit);
-
-    return {
-      productId: product.id,
-      productName: product.name,
-      currentStock,
-      avgDailyConsumption: Math.round(avgDaily * 100) / 100,
-      totalConsumedInPeriod: totalConsumed,
-      daysInPeriod: daysWithConsumption,
-      suggestedQuantity: suggested,
-      unit: product.unit,
-      orderUnit: product.orderUnit,
-    };
-  });
 }
 
 /**

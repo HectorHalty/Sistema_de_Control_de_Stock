@@ -32,6 +32,7 @@ export const storageKeys = {
     users: 'stock-users',
     lowStockNotifications: 'stock-low-notifications', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
     autoAlerts: 'stock-auto-alerts', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
+    autoAlertMinimum: 'stock-auto-alert-minimum',
     packRounding: 'stock-pack-rounding', // se escribe local y se pisa con React Query (Task 4, 2026-09-10)
   },
   platform: {

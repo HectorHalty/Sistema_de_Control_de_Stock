@@ -12,7 +12,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import jsPDF from 'jspdf';
 import logoLchUrl from '@/assets/logo-LCH.png';
-import { generateMovementBasedSuggestions, type SuggestionParams } from '@/features/kitchen/domain';
+import { calendarDayInArgentina, suggestFromStockCounts, type SuggestionSpan } from '@/features/inventory/order-suggestions';
 import { isOrderReceived, sortOrdersByDateDesc } from '@/features/inventory/sort-orders';
 
 function orderLogoUrl(): string {
@@ -28,13 +28,19 @@ function loadOrderLogo(): Promise<HTMLImageElement> {
   });
 }
 
+function readOrderQuantity(raw: string): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
+}
+
 type OrderView = 'list' | 'create-step1' | 'create-step2' | 'create-step3' | 'confirm-arrival' | 'edit-order';
 type StatusFilter = 'all' | 'Pendiente' | 'Recibido';
 
 export function OrdersPage() {
   const ctx = useAppContext();
   const {
-    orders, products, addAudit, getTotalStock, warehouses, suppliers, stockMovements,
+    orders, products, addAudit, getTotalStock, warehouses, suppliers, stockCountSessions, stockPackRounding,
     createPurchaseOrder, updatePurchaseOrder, receivePurchaseOrder, currentUser,
   } = ctx;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,7 +49,7 @@ export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const [dateType, setDateType] = useState<'regular' | 'after'>('regular');
-  const [calcDate, setCalcDate] = useState<string>(''); // specific date for repeat order
+  const [calcDate, setCalcDate] = useState<string>('');
   const [orderItems, setOrderItems] = useState<{ productId: string; avgUsage: number; currentStock: number; suggested: number; quantity: number; included: boolean }[]>([]);
   const [provider, setProvider] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -70,11 +76,6 @@ export function OrdersPage() {
 
   const pendienteCount = orders.filter(o => o.status === 'Pendiente').length;
   const recibidoCount = orders.filter(o => o.status === 'Recibido').length;
-  const demandMovementsCount = useMemo(
-    () => stockMovements.filter(m => m.type === 'venta' || m.type === 'consumo').length,
-    [stockMovements],
-  );
-
   const startCreateOrder = () => {
     setDateType('regular');
     setProvider('');
@@ -103,31 +104,37 @@ export function OrdersPage() {
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId);
 
-  const [periodMonths, setPeriodMonths] = useState<number>(3); // period for historical calculation
+  const [span, setSpan] = useState<SuggestionSpan>('month');
 
   const calculateSuggestions = () => {
-    const suggestionParams: SuggestionParams = {
-      dateType,
-      periodMonths,
-      specificDate: calcDate || undefined,
-    };
-
     const supplierProductIds = selectedSupplier?.productIds;
-    const suggestions = generateMovementBasedSuggestions(
-      products,
-      stockMovements,
-      suggestionParams,
-      supplierProductIds,
-    );
+    const catalog = supplierProductIds
+      ? products.filter(product => supplierProductIds.includes(product.id))
+      : products;
+    const today = calendarDayInArgentina(new Date());
 
-    const items = suggestions.map(s => ({
-      productId: s.productId,
-      avgUsage: Math.round(s.avgDailyConsumption * 100) / 100,
-      currentStock: s.currentStock,
-      suggested: s.suggestedQuantity,
-      quantity: s.suggestedQuantity,
-      included: s.suggestedQuantity > 0,
-    }));
+    const items = catalog.map(product => {
+      const currentStock = getTotalStock(product);
+      const result = suggestFromStockCounts({
+        sessions: stockCountSessions,
+        productId: product.id,
+        currentStock,
+        orderUnit: product.orderUnit,
+        dateType,
+        span,
+        specificDate: calcDate || undefined,
+        packRounding: stockPackRounding,
+        today,
+      });
+      return {
+        productId: product.id,
+        avgUsage: Math.round((result.raw + currentStock) * 1000) / 1000,
+        currentStock,
+        suggested: result.suggested,
+        quantity: result.suggested,
+        included: result.suggested > 0,
+      };
+    });
 
     setOrderItems(items);
     setView('create-step2');
@@ -601,35 +608,29 @@ export function OrdersPage() {
                   className={`p-4 rounded-lg border-2 text-left transition-all ${dateType === 'after' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-border'}`}
                 >
                   <p className="text-sm" style={{ fontWeight: 500 }}>After / Especial</p>
-                  <p className="text-xs text-muted-foreground mt-1">Evento especial (mayor demanda)</p>
+                  <p className="text-xs text-muted-foreground mt-1">Solo controles marcados como after</p>
                 </button>
               </div>
             </div>
             <div>
               <label className="block text-sm mb-2">Periodo de calculo</label>
               <select
-                value={periodMonths}
-                onChange={e => setPeriodMonths(parseInt(e.target.value))}
+                value={span}
+                onChange={e => setSpan(e.target.value as SuggestionSpan)}
                 className="w-full px-3 py-2.5 rounded-lg bg-input-background border border-border outline-none text-sm"
               >
-                <option value={1}>Ultimo mes</option>
-                <option value={3}>Ultimos 3 meses</option>
-                <option value={6}>Ultimos 6 meses</option>
+                <option value="week">Semana</option>
+                <option value="month">Ultimo mes</option>
+                <option value="quarter">Ultimos 3 meses</option>
+                <option value="halfYear">Ultimos 6 meses</option>
               </select>
-              {demandMovementsCount === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Sin historial de ventas/consumos todavía. Las sugerencias serán mínimas hasta que se registren ventas.
-                </p>
-              )}
-              {demandMovementsCount > 0 && (
-                <p className="text-xs text-[#3d7a3d] mt-1">
-                  Basado en {demandMovementsCount} movimiento(s) de ventas y consumos.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                El calculo usa los controles de stock del tipo elegido. Ultimos 6 meses aplica la misma cuenta a 180 dias.
+              </p>
             </div>
             <div>
               <label className="block text-sm mb-2">Fecha especifica (opcional)</label>
-              <p className="text-xs text-muted-foreground mb-2">Selecciona una fecha anterior para repetir ese pedido</p>
+              <p className="text-xs text-muted-foreground mb-2">Si elegis una fecha, manda sobre el periodo</p>
               <input
                 type="date"
                 value={calcDate}
@@ -638,7 +639,7 @@ export function OrdersPage() {
               />
               {calcDate && (
                 <p className="text-xs text-[#3d7a3d] mt-1">
-                  Repitiendo pedido del {new Date(calcDate + 'T12:00:00').toLocaleDateString('es-AR')}
+                  Usando los controles del {new Date(calcDate + 'T12:00:00').toLocaleDateString('es-AR')}
                 </p>
               )}
             </div>
@@ -710,7 +711,7 @@ export function OrdersPage() {
               <p className="text-sm text-muted-foreground mt-1">
                 Modo: {dateType === 'after' ? 'After / Especial' : 'Regular'} | Proveedor: {selectedSupplier?.name || provider || 'General'}
                 {calcDate ? ` | Fecha: ${new Date(calcDate + 'T12:00:00').toLocaleDateString('es-AR')}` : ''}
-                {demandMovementsCount > 0 && !calcDate ? ` | Demanda histórica: ${periodMonths} mes(es)` : ''}
+                {calcDate ? '' : ` | Periodo: ${span === 'week' ? 'semana' : span === 'month' ? 'ultimo mes' : span === 'quarter' ? 'ultimos 3 meses' : 'ultimos 6 meses'}`}
               </p>
             </div>
             <span className="text-xs bg-[#3d7a3d]/10 text-[#3d7a3d] px-3 py-1 rounded-full" style={{ fontWeight: 500 }}>
@@ -747,7 +748,7 @@ export function OrdersPage() {
                     value={item.quantity}
                     onChange={e => {
                       const newItems = [...orderItems];
-                      newItems[idx] = { ...newItems[idx], quantity: parseInt(e.target.value) || 0 };
+                      newItems[idx] = { ...newItems[idx], quantity: readOrderQuantity(e.target.value) };
                       setOrderItems(newItems);
                     }}
                     className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"
@@ -802,7 +803,7 @@ export function OrdersPage() {
                             value={item.quantity}
                             onChange={e => {
                               const newItems = [...orderItems];
-                              newItems[idx] = { ...newItems[idx], quantity: parseInt(e.target.value) || 0 };
+                              newItems[idx] = { ...newItems[idx], quantity: readOrderQuantity(e.target.value) };
                               setOrderItems(newItems);
                             }}
                             className="w-20 px-2 py-1.5 rounded-lg bg-input-background border border-border outline-none text-sm text-right focus:border-[#3d7a3d]"

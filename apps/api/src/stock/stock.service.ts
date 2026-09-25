@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { EstadoOrdenCompra, Prisma, UnidadMedida } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
-import { CreateProductDto, UpdateProductDto, AdjustStockDto, ApplyStockCountDto,
+import { CreateProductDto, UpdateProductDto, AdjustStockDto, TransferStockDto, ApplyStockCountDto,
   CreateStockCountSessionDto,
   CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
@@ -188,6 +188,94 @@ export class StockService {
       }]);
 
       return updated;
+    });
+  }
+
+  /**
+   * Mueve cantidad de un almacén a otro en una sola transacción.
+   * Las dos filas se bloquean en orden de id para no cruzar locks.
+   * El total del producto no cambia: los movimientos son -cantidad y +cantidad.
+   */
+  async transferStock(productId: string, dto: TransferStockDto) {
+    if (dto.fromWarehouseId === dto.toWarehouseId) {
+      throw new BadRequestException('El origen y el destino tienen que ser distintos');
+    }
+    const quantity = Math.round((dto.quantity + Number.EPSILON) * 1000) / 1000;
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new BadRequestException('La cantidad del pasaje tiene que ser mayor a 0');
+    }
+
+    await this.findProductById(productId);
+    const [fromWarehouse, toWarehouse] = await Promise.all([
+      this.prisma.deposito.findUnique({ where: { id: dto.fromWarehouseId } }),
+      this.prisma.deposito.findUnique({ where: { id: dto.toWarehouseId } }),
+    ]);
+    if (!fromWarehouse || !toWarehouse) throw new NotFoundException('Almacén no encontrado');
+
+    const destinationName = toWarehouse.name.slice(0, 80);
+    const originName = fromWarehouse.name.slice(0, 80);
+
+    return this.prisma.$transaction(async (tx) => {
+      const ensure = async (warehouseId: string) => {
+        const existing = await tx.nivelStock.findUnique({
+          where: { productId_warehouseId: { productId, warehouseId } },
+        });
+        if (existing) return existing;
+        return tx.nivelStock.create({
+          data: { productId, warehouseId, quantity: 0 },
+        });
+      };
+
+      const fromLevel = await ensure(dto.fromWarehouseId);
+      const toLevel = await ensure(dto.toWarehouseId);
+      const [firstId, secondId] = [fromLevel.id, toLevel.id].sort();
+      await tx.$queryRaw`SELECT id FROM "niveles_stock" WHERE id::text = ${firstId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "niveles_stock" WHERE id::text = ${secondId} FOR UPDATE`;
+
+      const lockedFrom = await tx.nivelStock.findUnique({ where: { id: fromLevel.id } });
+      const lockedTo = await tx.nivelStock.findUnique({ where: { id: toLevel.id } });
+      if (!lockedFrom || !lockedTo) throw new NotFoundException('Nivel de stock no encontrado');
+
+      const fromQty = Number(lockedFrom.quantity);
+      const nextFrom = Math.round((fromQty - quantity) * 1000) / 1000;
+      if (nextFrom < 0) {
+        throw new ConflictException('No hay stock suficiente en el almacén de origen');
+      }
+      const nextTo = Math.round((Number(lockedTo.quantity) + quantity) * 1000) / 1000;
+
+      const updatedFrom = await tx.nivelStock.update({
+        where: { id: lockedFrom.id },
+        data: { quantity: nextFrom },
+        include: { warehouse: true },
+      });
+      const updatedTo = await tx.nivelStock.update({
+        where: { id: lockedTo.id },
+        data: { quantity: nextTo },
+        include: { warehouse: true },
+      });
+
+      await this.movements.recordMany(tx, [
+        {
+          type: 'ajuste_manual',
+          productId,
+          warehouseId: dto.fromWarehouseId,
+          quantity: -quantity,
+          reference: `Pasaje a ${destinationName}`,
+          operatorId: dto.operatorId,
+          operatorName: dto.operatorName,
+        },
+        {
+          type: 'ajuste_manual',
+          productId,
+          warehouseId: dto.toWarehouseId,
+          quantity,
+          reference: `Pasaje desde ${originName}`,
+          operatorId: dto.operatorId,
+          operatorName: dto.operatorName,
+        },
+      ]);
+
+      return { from: updatedFrom, to: updatedTo };
     });
   }
 
