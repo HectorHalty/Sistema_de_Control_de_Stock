@@ -183,6 +183,7 @@ export class StockService {
         warehouseId: dto.warehouseId,
         quantity: dto.quantity,
         reference: dto.reference,
+        reason: dto.reason,
         operatorId: dto.operatorId,
         operatorName: dto.operatorName,
       }]);
@@ -341,6 +342,7 @@ export class StockService {
   findAllMovements(filters?: {
     productId?: string;
     type?: string;
+    reason?: string;
     from?: string;
     to?: string;
     limit?: number;

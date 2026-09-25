@@ -254,7 +254,7 @@ export const stockApi = {
       warehouseId: string,
       quantity: number,
       token: string,
-      meta?: { reference?: string; operatorId?: string; operatorName?: string },
+      meta?: { reference?: string; reason?: string; operatorId?: string; operatorName?: string },
     ) =>
       apiFetch<StockLevel>(`/stock/products/${id}/stock/adjust`, {
         method: 'POST',
@@ -279,10 +279,11 @@ export const stockApi = {
       }),
   },
   movements: {
-    list: (params?: { productId?: string; type?: string; from?: string; to?: string; limit?: number }) => {
+    list: (params?: { productId?: string; type?: string; reason?: string; from?: string; to?: string; limit?: number }) => {
       const q = new URLSearchParams();
       if (params?.productId) q.set('productId', params.productId);
       if (params?.type) q.set('type', params.type);
+      if (params?.reason) q.set('reason', params.reason);
       if (params?.from) q.set('from', params.from);
       if (params?.to) q.set('to', params.to);
       if (params?.limit) q.set('limit', String(params.limit));
@@ -982,6 +983,7 @@ export interface ApiStockMovement {
   warehouseId?: string | null;
   quantity: number | string;
   reference?: string | null;
+  reason?: string | null;
   operatorId?: string | null;
   operatorName?: string | null;
 }

@@ -31,7 +31,7 @@ import {
   resolveCategoryForProduct,
   uuidProductIds,
 } from './catalog-persistence';
-import type { AuditEntry, AuditModule, Category, ConsumptionLog, Order, Product, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
+import type { AuditEntry, AuditModule, Category, ConsumptionLog, Order, Product, StockAdjustmentReason, StockCountSession, StockMovement, Supplier, Warehouse } from './types';
 import { getSessionUserRole } from '@/shared/auth/session';
 import { canQueryStockAdmin, canQueryStockCatalog } from './stock-query-access';
 
@@ -426,7 +426,10 @@ export function useInventoryState() {
           const after = input.stockByWarehouse.find(s => s.warehouseId === wid)?.quantity ?? 0;
           const before = previous.stockByWarehouse.find(s => s.warehouseId === wid)?.quantity ?? 0;
           const delta = after - before;
-          if (delta !== 0) await stockApi.products.adjustStock(input.id, wid, delta, '');
+          // Cambiar el número en el formulario ES una corrección de carga.
+          if (delta !== 0) {
+            await stockApi.products.adjustStock(input.id, wid, delta, '', { reason: 'correccion' });
+          }
         }
         markApiSynced();
         setProducts(prev => reassignProductCodes(prev.map(p => (p.id === updated.id ? mapApiProductToLocal(updated) : p))));
@@ -650,6 +653,24 @@ export function useInventoryState() {
     scheduleBackgroundHydrate(() => Promise.all([hydrateProducts(), hydrateMovements()]));
   }, [hydrateProducts, hydrateMovements, markApiSynced]);
 
+  const adjustStock = useCallback(async (input: {
+    productId: string;
+    warehouseId: string;
+    quantity: number;
+    reason: StockAdjustmentReason;
+    reference?: string;
+    operatorId?: string;
+    operatorName?: string;
+  }) => {
+    await stockApi.products.adjustStock(input.productId, input.warehouseId, input.quantity, '', {
+      reason: input.reason,
+      reference: input.reference,
+      ...operatorFields({ operatorId: input.operatorId, operatorName: input.operatorName }),
+    });
+    markApiSynced();
+    scheduleBackgroundHydrate(() => Promise.all([hydrateProducts(), hydrateMovements()]));
+  }, [hydrateProducts, hydrateMovements, markApiSynced]);
+
   const saveStockCountSession = useCallback(
     async (session: StockCountSession): Promise<void> => {
       await stockApi.countSessions.create(
@@ -856,6 +877,7 @@ export function useInventoryState() {
     refreshOperations,
     saveStockCountSession,
     transferStock,
+    adjustStock,
     createSupplier,
     updateSupplier,
     deleteSupplier,

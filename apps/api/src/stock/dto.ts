@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsInt, IsNumber, IsEnum, Min, IsUUID, MaxLength, IsArray, ArrayMaxSize, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { UnidadMedida } from '@prisma/client';
+import { MotivoAjusteStock, UnidadMedida } from '@prisma/client';
 
 export class CreateProductDto {
   @IsString()
@@ -97,6 +97,14 @@ export class AdjustStockDto {
   @IsString()
   @MaxLength(200)
   reference?: string;
+
+  /**
+   * Opcional para no romper a los que ya ajustaban sin motivo (alta y edición
+   * de producto). Sin motivo, el ajuste queda como hasta ahora: sin explicar.
+   */
+  @IsOptional()
+  @IsEnum(MotivoAjusteStock)
+  reason?: MotivoAjusteStock;
 
   @IsOptional()
   @IsUUID()

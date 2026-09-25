@@ -4,6 +4,7 @@ import {
   mapApiProductToLocal,
   mapApiWarehouseToLocal,
   mapApiCategoryToLocal,
+  mapApiMovementToLocal,
   mapApiSupplierToLocal,
   mapApiPurchaseOrderToLocal,
   mapApiCountSessionToLocal,
@@ -94,6 +95,26 @@ describe('unidades en conteos', () => {
       expect(mapApiCountSessionToLocal(countSession(unit)).entries[0].unit).toBe(unit);
     },
   );
+});
+
+describe('mapApiMovementToLocal', () => {
+  const base = {
+    id: 'm1',
+    createdAt: '2026-09-25T18:00:00Z',
+    type: 'ajuste_manual',
+    productId: 'p1',
+    warehouseId: 'w1',
+    quantity: '-6',
+  };
+
+  it('trae el motivo del ajuste al cliente', () => {
+    expect(mapApiMovementToLocal({ ...base, reason: 'rotura' }).reason).toBe('rotura');
+  });
+
+  it('deja sin motivo al movimiento que no lo tiene', () => {
+    expect(mapApiMovementToLocal(base).reason).toBeUndefined();
+    expect(mapApiMovementToLocal({ ...base, reason: null }).reason).toBeUndefined();
+  });
 });
 
 describe('mapApiWarehouseToLocal / mapApiCategoryToLocal', () => {

@@ -64,6 +64,7 @@ export function mapApiMovementToLocal(api: ApiStockMovement): StockMovement {
     warehouseId: api.warehouseId ?? undefined,
     quantity: Number(api.quantity),
     reference: api.reference ?? undefined,
+    reason: (api.reason as StockMovement['reason']) ?? undefined,
     operatorId: api.operatorId ?? undefined,
     operatorName: api.operatorName ?? undefined,
   };

@@ -66,6 +66,33 @@ describe('restricciones de stock', () => {
     }
   });
 
+  it('rechaza un motivo de ajuste inventado', async () => {
+    const { producto, deposito } = await seedCatalog();
+    await expect(
+      prisma.$executeRawUnsafe(
+        `INSERT INTO "movimientos_stock" ("id", "type", "productId", "warehouseId", "quantity", "reason")
+         VALUES (gen_random_uuid()::text, 'ajuste_manual', $1, $2, -1, 'motivo_inventado')`,
+        producto.id,
+        deposito.id,
+      ),
+    ).rejects.toThrow(/invalid input value for enum/i);
+  });
+
+  it('acepta los cuatro motivos de ajuste y deja el motivo nulo si no se manda', async () => {
+    const { producto, deposito } = await seedCatalog();
+    const motivos = ['rotura', 'vencido', 'correccion', 'entrada_directa'] as const;
+    for (const reason of motivos) {
+      const mov = await prisma.movimientoStock.create({
+        data: { type: 'ajuste_manual', productId: producto.id, warehouseId: deposito.id, quantity: -1, reason },
+      });
+      expect(mov.reason).toBe(reason);
+    }
+    const sinMotivo = await prisma.movimientoStock.create({
+      data: { type: 'venta', productId: producto.id, warehouseId: deposito.id, quantity: -1 },
+    });
+    expect(sinMotivo.reason).toBeNull();
+  });
+
   it('rechaza una unidad de medida inventada', async () => {
     const { categoria } = await seedCatalog();
     await expect(

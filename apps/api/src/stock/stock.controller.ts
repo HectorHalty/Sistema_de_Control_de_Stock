@@ -129,6 +129,7 @@ export class StockController {
   findAllMovements(
     @Query('productId') productId?: string,
     @Query('type') type?: string,
+    @Query('reason') reason?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
@@ -136,6 +137,7 @@ export class StockController {
     return this.stockService.findAllMovements({
       productId,
       type,
+      reason,
       from,
       to,
       limit: limit ? parseInt(limit, 10) : undefined,

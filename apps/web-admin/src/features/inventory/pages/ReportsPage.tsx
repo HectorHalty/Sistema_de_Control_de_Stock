@@ -8,6 +8,7 @@ import {
 import { ClipboardCheck, AlertTriangle, Clock, Download, TrendingDown, TrendingUp, ArrowLeftRight, Search } from 'lucide-react';
 import { getUnitLabel } from '@/app/components/store';
 import type { StockMovementType, StockCountSession } from '@/app/components/store';
+import { ADJUSTMENT_REASON_LABELS } from '@/features/inventory/stock-adjustment';
 import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildReconciliationXlsx } from '@/app/components/xlsxExport';
@@ -477,7 +478,7 @@ export function ReportsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs ${movementBadgeClass(m.type)}`} style={{ fontWeight: 600 }}>
-                          {MOVEMENT_LABELS[m.type]}
+                          {MOVEMENT_LABELS[m.type]}{m.reason ? ` · ${ADJUSTMENT_REASON_LABELS[m.reason]}` : ''}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">{productNameMap.get(m.productId) ?? m.productId}</td>

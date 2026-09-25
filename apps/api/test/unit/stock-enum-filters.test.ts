@@ -104,6 +104,29 @@ describe('filtros por enum en stock', () => {
         expect(findMany).not.toHaveBeenCalled();
       },
     );
+
+    // El motivo del ajuste manual entra por el mismo query string que el tipo.
+    it('acepta un motivo válido y consulta la base', async () => {
+      const { service, findMany } = movementsService();
+      await service.findAll({ reason: 'rotura' });
+      expect(findMany).toHaveBeenCalledOnce();
+      expect(findMany.mock.calls[0][0].where.reason).toBe('rotura');
+    });
+
+    it('descarta un motivo inventado sin consultar la base', async () => {
+      const { service, findMany } = movementsService();
+      await expect(service.findAll({ reason: 'motivo_falso' })).resolves.toEqual([]);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it.each(PROTOTYPE_KEYS)(
+      'descarta el motivo %s, heredado de Object.prototype, sin consultar la base',
+      async key => {
+        const { service, findMany } = movementsService();
+        await expect(service.findAll({ reason: key })).resolves.toEqual([]);
+        expect(findMany).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('StockService.findAllPurchaseOrders', () => {

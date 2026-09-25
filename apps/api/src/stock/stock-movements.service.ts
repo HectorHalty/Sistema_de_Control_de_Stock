@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, TipoMovimientoStock } from '@prisma/client';
+import { MotivoAjusteStock, Prisma, TipoMovimientoStock } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { pickEnumValue } from '../common/enum-filter';
 
@@ -19,6 +19,8 @@ export interface RecordMovementInput {
   warehouseId?: string;
   quantity: number;
   reference?: string;
+  /** Sólo tiene sentido en ajuste_manual: qué pasó con esas unidades. */
+  reason?: MotivoAjusteStock;
   operatorId?: string;
   operatorName?: string;
 }
@@ -43,6 +45,7 @@ export class StockMovementsService {
         warehouseId: e.warehouseId ?? null,
         quantity: round3(e.quantity),
         reference: e.reference ?? null,
+        reason: e.reason ?? null,
         operatorId: e.operatorId ?? null,
         operatorName: e.operatorName ?? null,
       }));
@@ -53,6 +56,7 @@ export class StockMovementsService {
   async findAll(filters?: {
     productId?: string;
     type?: string;
+    reason?: string;
     from?: string;
     to?: string;
     limit?: number;
@@ -65,6 +69,11 @@ export class StockMovementsService {
       // de dejar que Prisma rechace el valor.
       if (!type) return [];
       where.type = type;
+    }
+    if (filters?.reason) {
+      const reason = pickEnumValue(filters.reason, MotivoAjusteStock);
+      if (!reason) return [];
+      where.reason = reason;
     }
     if (filters?.from || filters?.to) {
       where.createdAt = {};

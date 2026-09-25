@@ -53,6 +53,13 @@ export type StockMovementType =
   | 'diferencia_conteo'
   | 'pasaje';
 
+/**
+ * Motivo de un ajuste manual. Refleja el enum `MotivoAjusteStock` de la API:
+ * la merma conocida (rotura, vencido) no es el faltante sin explicar que
+ * expone el control de stock.
+ */
+export type StockAdjustmentReason = 'rotura' | 'vencido' | 'correccion' | 'entrada_directa';
+
 /** Asiento del libro de movimientos de stock (fuente para la conciliación). */
 export interface StockMovement {
   id: string;
@@ -64,6 +71,8 @@ export interface StockMovement {
   quantity: number;
   /** Referencia al documento de origen (ticket, pedido, consumo, etc.). */
   reference?: string;
+  /** Sólo en ajuste_manual; los movimientos previos al motivo no lo tienen. */
+  reason?: StockAdjustmentReason;
   operatorId?: string;
   operatorName?: string;
 }

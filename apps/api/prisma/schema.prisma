@@ -31,6 +31,16 @@ enum TipoMovimientoStock {
   pasaje
 }
 
+/// Por qué un humano movió el número a mano. Rotura y vencido son mermas
+/// conocidas: sin separarlas, se mezclan con la diferencia de conteo, que es
+/// justamente lo que se fue sin registrar.
+enum MotivoAjusteStock {
+  rotura
+  vencido
+  correccion
+  entrada_directa
+}
+
 enum EstadoOrdenCompra {
   Pendiente
   Recibido
@@ -1118,6 +1128,7 @@ model MovimientoStock {
   reference    String?
   operatorId   String? // puede ser id de usuario o valor legacy; sin FK rígida
   operatorName String?
+  reason       MotivoAjusteStock? // sólo para ajuste_manual; el histórico queda en null
 
   product   Producto  @relation(fields: [productId], references: [id], onDelete: Restrict)
   warehouse Deposito? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)

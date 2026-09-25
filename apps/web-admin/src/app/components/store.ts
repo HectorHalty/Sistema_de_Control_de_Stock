@@ -15,6 +15,7 @@ export type {
   AuditModule,
   StockMovement,
   StockMovementType,
+  StockAdjustmentReason,
   StockCountEntry,
   StockCountSession,
 } from '@/features/inventory/types';
