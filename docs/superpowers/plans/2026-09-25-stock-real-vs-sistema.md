@@ -25,6 +25,7 @@
 - Agregar un valor a un enum de Postgres y usarlo no puede pasar en la misma transacción: van dos migraciones.
 - La suma de los movimientos del ciclo la hace el servidor. `GET /stock/movements` devuelve como máximo 500 filas y el admin pide exactamente 500: alcanza para unas tres semanas de ventas, no para el histórico.
 - Commits al estilo del repo, uno por tarea.
+- El ciclo deja su propio test de regresión: un spec en la suite de Playwright que ya corre en CI, con la cantidad exacta del oráculo. Un arreglo sin guardia vuelve a romperse.
 
 ## Oráculo
 
@@ -326,6 +327,12 @@ Los controles anteriores a la migración también tienen que aparecer con su dif
 - [ ] **Step 5: Un ciclo con muchos movimientos**
 
 Cargar un ciclo con más de 500 movimientos y comprobar en la pantalla que las sumas siguen completas. Con la cuenta en el navegador, este caso daba mal en silencio.
+
+- [ ] **Step 6: Dejar el oráculo clavado en el e2e**
+
+Un spec nuevo en la suite de Playwright que ya corre en CI (`e2e/tests/admin/`): cargar un control, leer la diferencia del ciclo y comprobar que el pedido sugerido de ese producto es el número exacto que manda el oráculo, no solo que sea mayor a cero. Los specs de hoy afirman dirección (`toBeLessThan`); este afirma cantidad.
+
+Sin este paso, el ciclo deja la cuenta corregida y sin guardia: el próximo cambio la puede volver a romper y nadie se enteraría hasta el sábado.
 
 - [ ] **Step 6: Informe**
 
