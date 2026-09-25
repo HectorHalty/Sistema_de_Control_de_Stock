@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-25
 **Proyecto:** monorepo Sistema de Gestión LCH (`apps/web-admin`, `apps/api`, Postgres)
-**Estado:** decisiones tomadas con el dueño. Falta una sola definición, marcada abajo como **Decisión pendiente**.
+**Estado:** decisiones tomadas con el dueño, incluida la del pedido sugerido. Listo para planificar.
 **Ciclo:** 3. El ciclo 1 es el recorrido del módulo de ventas y el 2 son sus arreglos.
 
 ## Problema
@@ -27,6 +27,18 @@ Un ciclo va **de un control al siguiente**. No se define por día de la semana. 
 
 Todos los productos se cuentan en cada control, así que cada ciclo cierra completo. No hace falta llevar un último control distinto por producto.
 
+El punto de partida de un ciclo es **el último stock contado antes de vender**. A veces, después de recibir un pedido, se vuelve a contar para asegurarse de que la recepción esté bien. Ese control pasa a ser el nuevo punto de partida, y las entradas que entraron antes ya están dentro de lo contado. La fórmula de abajo lo resuelve sola, porque solo suma las entradas que caen **entre** los dos controles.
+
+### Ciclos con venta y ciclos sin venta
+
+De ahí sale una propiedad útil: un ciclo que no tuvo ninguna venta no mide fuga de mostrador, mide la recepción. Si el proveedor entregó diez menos de lo que dice el remito, ese control lo muestra, y no se confunde con lo que se fue el sábado.
+
+Pero trae un riesgo: si un ciclo sin ventas entrara al promedio del pedido sugerido, lo diluiría. Contar el lunes y volver a contar el jueves después de recibir daría dos ciclos, uno con todo el consumo y otro en cero, y el promedio quedaría a la mitad.
+
+**Regla:** un ciclo entra al promedio del pedido solo si tuvo al menos una venta. Los ciclos sin ventas se ven igual en la pantalla de diferencias, marcados como control de recepción.
+
+Como efecto secundario, un sábado que no se juega y no se vende tampoco baja el promedio, que es lo que corresponde: el promedio contesta cuánto se vende en un día de venta.
+
 ## Decisiones tomadas
 
 | Tema | Decisión |
@@ -45,7 +57,7 @@ Por producto y por ciclo:
 
 ```
 esperado   = contado del control anterior
-             + entradas de pedidos
+             + entradas de pedidos del ciclo
              + devoluciones y anulaciones
              − ventas tickeadas
              − consumos internos
@@ -53,13 +65,15 @@ esperado   = contado del control anterior
 
 diferencia = esperado − contado
 
-consumo real = contado anterior + entradas − contado
+consumo real = contado anterior + entradas del ciclo − contado
              = ventas + consumos + roturas + diferencia
 ```
 
 Las dos formas de escribir el consumo real dan lo mismo, y eso es lo que hace que la tabla se pueda auditar sola: si las columnas no cierran, falta un movimiento.
 
-## Decisión pendiente: qué consumo usa el pedido sugerido
+`contado anterior` es lo contado en el control que abre el ciclo, que puede ser el cierre del sábado pasado o un control de verificación hecho después de recibir un pedido. `entradas del ciclo` son solo las que quedaron entre los dos controles.
+
+## El pedido sugerido pasa al consumo real
 
 Hoy el pedido sugerido usa `esperado − contado`, es decir **la diferencia**, como si fuera el consumo del período. Eso viene del oráculo del ciclo del stock, que se definió con ejemplos sin ventas de por medio. Con las ventas enchufadas al stock, ese número dejó de significar lo que el nombre dice.
 
@@ -79,11 +93,13 @@ Hoy el sugerido calcula `4 − 46`, que es negativo, y sugiere **0**. Con el con
 
 El efecto es al revés de lo que conviene: cuanto mejor se tickea, más cerca de cero queda la diferencia y menos repone el sistema. Con el tickeo perfecto, nunca sugiere nada.
 
-**Opción A (recomendada):** el pedido sugerido pasa a usar el consumo real del ciclo. La diferencia queda para la pantalla de diferencias, que es donde significa algo. El combo de ventana (semana, mes, 3 meses, 6 meses) pasa a leerse como promedio de los últimos ciclos, que con un control por semana es lo mismo en la práctica.
+**Decidido:** el pedido sugerido pasa a usar el consumo real del ciclo, definido como `contado anterior + entradas de pedidos − último contado`. La diferencia queda para la pantalla de diferencias, que es donde significa algo.
 
-**Opción B:** el sugerido queda como está y la diferencia se muestra aparte. Se documenta que el sugerido repone solo lo no registrado.
+El combo de ventana (semana, mes, 3 meses, 6 meses) no cambia de forma: sigue filtrando por la fecha del control que cierra cada ciclo. Lo que cambia es el número que se promedia, y que los ciclos sin ventas no entran. Con un control por semana, la ventana de un mes promedia cuatro ciclos.
 
-La opción A reescribe el oráculo del ciclo del stock y sus tests (`order-suggestions.test.ts`). Es una decisión del dueño, no técnica.
+El `dateType` del control (`regular` o `after`) se conserva: un ciclo hereda el tipo de su control de cierre, y el sugerido sigue separando los dos, como hoy.
+
+Esto reescribe el oráculo del ciclo del stock y sus tests (`order-suggestions.test.ts`), que van en el mismo commit que el cambio.
 
 ## Modelo de datos
 
@@ -97,9 +113,18 @@ Lo que falta:
 1. **Un tipo propio para la diferencia del control.** Hoy el control escribe `ajuste_manual` con la referencia `control-stock`, la misma bolsa que una corrección a mano y que las dos patas de un pasaje entre almacenes. Se agrega `diferencia_conteo` al enum `TipoMovimientoStock`. Sin eso, ninguna columna de la tabla se puede calcular sin depender de un texto libre.
 2. **Un tipo propio para el pasaje.** Las dos patas suman cero, así que hoy no rompen ningún total, pero ensucian el libro y obligan a filtrar por el texto de la referencia. Se agrega `pasaje`.
 3. **Un motivo en el ajuste a mano**, con `rotura` en la lista. Los regalos no lo necesitan: van por consumo.
-4. **La migración re-tipea el histórico.** Los movimientos con referencia `control-stock` pasan a `diferencia_conteo` y los que empiezan con `Pasaje a` o `Pasaje desde` pasan a `pasaje`. Así los ciclos ya cargados también se pueden leer.
+4. **Un tipo de control de verificación.** `sesiones_conteo.dateType` es un `String`, no un enum de la base, así que alcanza con un valor nuevo y no hace falta migración para esto. Sirve para marcar el control que se hace después de recibir un pedido.
+5. **La migración re-tipea el histórico.** Los movimientos con referencia `control-stock` pasan a `diferencia_conteo` y los que empiezan con `Pasaje a` o `Pasaje desde` pasan a `pasaje`. Así los ciclos ya cargados también se pueden leer.
+
+Detalle de Postgres que hay que respetar: agregar un valor a un enum y **usarlo** no puede pasar en la misma transacción. Son dos migraciones, una que agrega los dos valores y otra que re-tipea. Si van juntas, la migración falla.
 
 No hace falta una tabla de ciclos: el ciclo se deriva de dos controles consecutivos y los movimientos que caen entre sus fechas.
+
+### Un módulo puro, dos consumidores
+
+La cuenta vive en un módulo nuevo, `apps/web-admin/src/features/inventory/stock-cycles.ts`, con una función que recibe los controles y los movimientos y devuelve, por producto y por ciclo: contado anterior, entradas, ventas, consumos, roturas, esperado, contado, diferencia, consumo real, el tipo del control de cierre y si el ciclo tuvo ventas.
+
+De ahí comen los dos lugares: la pantalla de diferencias la muestra tal cual, y el pedido sugerido promedia el consumo real de los ciclos de la ventana. Una sola cuenta, testeada una sola vez, sin dos fórmulas que puedan separarse con el tiempo.
 
 ## La pantalla
 
@@ -111,6 +136,7 @@ Una pantalla de **Diferencias** en el módulo de stock, dentro de Reportes. Se e
 Reglas de la pantalla:
 
 - Están todos los productos contados, sin filtro y sin umbral.
+- Arriba dice qué ciclo se está viendo: de qué control a qué control, cuántos días, y si tuvo ventas. Un ciclo sin ventas se muestra como control de recepción, para no leer una diferencia de remito como una fuga de mostrador.
 - Se puede ordenar por diferencia para ver primero lo que más se fue.
 - La diferencia se muestra en unidades y como porcentaje del consumo real, porque 3 unidades de algo que mueve 5 no es lo mismo que 3 de algo que mueve 200. El porcentaje es un agregado de lectura, no un umbral.
 - Abajo, el total del ciclo: cuántas unidades salieron, cuántas explican las ventas y los consumos, y cuántas no.
@@ -126,7 +152,8 @@ Reglas de la pantalla:
 
 ## Riesgos
 
-- **La opción A reescribe el oráculo del pedido.** Los tests del ciclo anterior codifican la fórmula actual y hay que rehacerlos junto con el cambio, no después.
+- **El cambio del sugerido reescribe el oráculo del pedido.** Los tests del ciclo anterior codifican la fórmula actual y hay que rehacerlos junto con el cambio, no después.
+- **Un control de verificación mal marcado diluye el promedio.** Si se cuenta dos veces en una semana y el segundo control no queda marcado como verificación, la regla de "solo ciclos con venta" igual lo salva, porque entre los dos controles no hubo ventas. La marca es para que la pantalla lo explique, no para que la cuenta funcione.
 - **Los ciclos viejos quedan a medias si la migración no re-tipea.** Un control anterior a la migración sin `diferencia_conteo` obliga a leer la referencia; por eso el re-tipeo va en la misma migración.
 - **Un ajuste a mano sin motivo arruina una fila.** Si alguien suma stock a mano sin decir por qué, esa cantidad aparece como consumo o como diferencia según el signo. El motivo obligatorio es la defensa.
 - **Un control parcial rompe el supuesto del ciclo.** Hoy se cuenta todo, pero si algún lunes se cuenta la mitad, los productos no contados arrastran su diferencia al ciclo siguiente. La pantalla tiene que decir cuáles no se contaron en vez de mostrarlos en cero.
