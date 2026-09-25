@@ -7,6 +7,8 @@ import { Plus, Search, Edit, Trash2, X, Package, ChevronDown } from 'lucide-reac
 import { ExpandChevron } from '@/shared/components/ExpandChevron';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
+import { transferStockError } from '@/features/inventory/transfer-stock';
+import { getApiErrorMessage } from '@/app/api/client';
 
 const AVAILABLE_ICON_NAMES = AVAILABLE_CATEGORY_ICON_NAMES;
 
@@ -27,6 +29,7 @@ export function ProductsPage() {
     addStockMovements,
     createProduct,
     updateProduct,
+    transferStock,
     deleteProduct,
     createCategory,
     updateCategory,
@@ -38,6 +41,7 @@ export function ProductsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const filtered = products.filter(p => {
@@ -59,6 +63,10 @@ export function ProductsPage() {
   };
 
   const handleSave = async (product: Product) => {
+    if (product.stockByWarehouse.some(level => level.quantity < 0)) {
+      window.alert('No se puede dejar el stock en negativo');
+      return;
+    }
     if (editingProduct) {
       // Registrar ajustes manuales de stock por almacén para el libro de movimientos.
       const movements = warehouses
@@ -241,6 +249,12 @@ export function ProductsPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => setTransferProduct(product)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#3d7a3d]/10 text-[#3d7a3d] text-xs"
+                    >
+                      Pasaje
+                    </button>
+                    <button
                       onClick={() => { setEditingProduct(product); setShowModal(true); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary/10 text-primary text-xs"
                     >
@@ -303,6 +317,13 @@ export function ProductsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setTransferProduct(product); }}
+                          className="px-2 py-1 rounded-lg hover:bg-muted text-xs text-muted-foreground hover:text-[#3d7a3d] transition-colors"
+                          title="Pasaje"
+                        >
+                          Pasaje
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingProduct(product); setShowModal(true); }}
                           className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-blue-600 transition-colors"
@@ -408,6 +429,28 @@ export function ProductsPage() {
       )}
 
       {/* Delete Confirm */}
+      {transferProduct && (
+        <TransferStockModal
+          product={transferProduct}
+          warehouses={warehouses}
+          onClose={() => setTransferProduct(null)}
+          onConfirm={async (input) => {
+            await transferStock({
+              productId: transferProduct.id,
+              ...input,
+              operatorId: currentUser.id,
+              operatorName: currentUser.username,
+            });
+            addAudit({
+              user: currentUser.username || 'Admin',
+              action: 'Pasaje',
+              element: transferProduct.name,
+              newValue: `${input.quantity}`,
+            });
+          }}
+        />
+      )}
+
       {deleteConfirm && (
         <Modal onClose={() => setDeleteConfirm(null)} title="Confirmar Eliminación">
           <p className="text-sm text-muted-foreground mb-4">¿Estás seguro de que querés eliminar este producto? Esta acción no se puede deshacer.</p>
@@ -422,6 +465,88 @@ export function ProductsPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function TransferStockModal({ product, warehouses, onClose, onConfirm }: {
+  product: Product;
+  warehouses: { id: string; name: string }[];
+  onClose: () => void;
+  onConfirm: (input: { fromWarehouseId: string; toWarehouseId: string; quantity: number }) => Promise<void>;
+}) {
+  const levels = product.stockByWarehouse;
+  const [fromId, setFromId] = useState(levels[0]?.warehouseId ?? '');
+  const [toId, setToId] = useState(levels.find(level => level.warehouseId !== levels[0]?.warehouseId)?.warehouseId ?? '');
+  const [quantity, setQuantity] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const available = levels.find(level => level.warehouseId === fromId)?.quantity ?? 0;
+  const warehouseName = (id: string) => warehouses.find(warehouse => warehouse.id === id)?.name ?? id;
+
+  const submit = async () => {
+    const message = transferStockError({
+      fromWarehouseId: fromId,
+      toWarehouseId: toId,
+      quantity: Number(quantity),
+      available,
+    });
+    if (message) {
+      setError(message);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onConfirm({ fromWarehouseId: fromId, toWarehouseId: toId, quantity: Number(quantity) });
+      onClose();
+    } catch (e) {
+      setError(getApiErrorMessage(e, 'No se pudo pasar el stock'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title={`Pasaje · ${product.name}`}>
+      <div className="space-y-3">
+        <label className="block text-sm">
+          Origen
+          <select value={fromId} onChange={e => setFromId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm">
+            {levels.map(level => (
+              <option key={level.warehouseId} value={level.warehouseId}>
+                {warehouseName(level.warehouseId)} ({level.quantity})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Destino
+          <select value={toId} onChange={e => setToId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm">
+            <option value="">Elegir almacén</option>
+            {warehouses.filter(warehouse => warehouse.id !== fromId).map(warehouse => (
+              <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Cantidad
+          <input
+            type="number"
+            min={0}
+            step={isFractionalUnit(product.unit) ? 0.001 : 1}
+            value={quantity}
+            onChange={e => setQuantity(e.target.value)}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-input-background border border-border text-sm"
+          />
+        </label>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-3 justify-end pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-border text-sm">Cancelar</button>
+          <button type="button" disabled={saving} onClick={() => void submit()} className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm disabled:opacity-50">
+            {saving ? 'Pasando…' : 'Pasar'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -461,6 +586,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
   const [newCategoryIcon, setNewCategoryIcon] = useState('Package');
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconEditCategoryId, setIconEditCategoryId] = useState<string | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
 
   const addWarehouseStock = () => {
     const available = warehouses.filter(w => !form.stockByWarehouse.find(s => s.warehouseId === w.id));
@@ -779,6 +905,11 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
                   onChange={e => {
                     const raw = e.target.value;
                     const parsed = isFractionalUnit(form.unit) ? parseFloat(raw) : parseInt(raw, 10);
+                    if (raw.trim().startsWith('-') || (!Number.isNaN(parsed) && parsed < 0)) {
+                      setStockError('No se puede dejar el stock en negativo');
+                      return;
+                    }
+                    setStockError(null);
                     const newStock = [...form.stockByWarehouse];
                     newStock[idx] = { ...newStock[idx], quantity: Number.isNaN(parsed) ? 0 : parsed };
                     setForm(p => ({ ...p, stockByWarehouse: newStock }));
@@ -793,6 +924,7 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
               </div>
             ))}
           </div>
+          {stockError && <p className="text-xs text-red-600 mt-2">{stockError}</p>}
         </div>
 
         <div className="flex gap-3 justify-end pt-2">
@@ -801,7 +933,13 @@ function ProductFormModal({ product, allProducts, warehouses, categories, onAddC
           </button>
           <button
             type="button"
-            onClick={() => form.name && form.category && onSave(form)}
+            onClick={() => {
+              if (form.stockByWarehouse.some(level => level.quantity < 0) || stockError) {
+                setStockError('No se puede dejar el stock en negativo');
+                return;
+              }
+              if (form.name && form.category) onSave(form);
+            }}
             className="px-4 py-2 rounded-lg bg-[#3d7a3d] text-white text-sm hover:bg-[#2f5f2f] transition-colors"
           >
             {product ? 'Guardar Cambios' : 'Crear Producto'}

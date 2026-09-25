@@ -7,7 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { StockService } from './stock.service';
 import {
-  CreateProductDto, UpdateProductDto, AdjustStockDto, ApplyStockCountDto,
+  CreateProductDto, UpdateProductDto, AdjustStockDto, TransferStockDto, ApplyStockCountDto,
   CreateStockCountSessionDto, CreateSupplierDto, UpdateSupplierDto,
   CreatePurchaseOrderDto, UpdatePurchaseOrderDto, ReceivePurchaseOrderDto,
   CreateCategoryDto, UpdateCategoryDto, CreateWarehouseDto, UpdateWarehouseDto,
@@ -68,6 +68,12 @@ export class StockController {
   @Roles(...STOCK_MUTATION_ROLES)
   adjustStock(@Param('id') id: string, @Body() dto: AdjustStockDto) {
     return this.stockService.adjustStock(id, dto);
+  }
+
+  @Post('products/:id/transfer')
+  @Roles(...STOCK_MUTATION_ROLES)
+  transferStock(@Param('id') id: string, @Body() dto: TransferStockDto) {
+    return this.stockService.transferStock(id, dto);
   }
 
   @Get('warehouses')

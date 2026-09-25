@@ -261,6 +261,22 @@ export const stockApi = {
         token,
         body: { warehouseId, quantity, ...meta },
       }),
+    transfer: (
+      id: string,
+      data: {
+        fromWarehouseId: string;
+        toWarehouseId: string;
+        quantity: number;
+        operatorId?: string;
+        operatorName?: string;
+      },
+      token: string,
+    ) =>
+      apiFetch<{ from: StockLevel; to: StockLevel }>(`/stock/products/${id}/transfer`, {
+        method: 'POST',
+        token,
+        body: data,
+      }),
   },
   movements: {
     list: (params?: { productId?: string; type?: string; from?: string; to?: string; limit?: number }) => {
@@ -854,6 +870,17 @@ export const onlineApi = {
 /**
  * Admin settings endpoints (config, printers, sales categories, tables).
  */
+export interface ApiAuditEntry {
+  id: string;
+  userName: string | null;
+  module: string | null;
+  action: string;
+  element: string;
+  previousValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+}
+
 export const settingsApi = {
   config: {
     list: (scope?: string) => {
@@ -903,7 +930,7 @@ export const settingsApi = {
       apiFetch<void>(`/settings/team-accounts/${id}`, { method: 'DELETE', token }),
   },
   audit: {
-    list: (limit?: number) => apiFetch<unknown[]>(`/settings/audit${limit ? `?limit=${limit}` : ''}`),
+    list: (limit?: number) => apiFetch<ApiAuditEntry[]>(`/settings/audit${limit ? `?limit=${limit}` : ''}`),
     create: (data: Record<string, unknown>, token: string) =>
       apiFetch<unknown>('/settings/audit', { method: 'POST', token, body: data }),
   },

@@ -35,6 +35,34 @@ import type { AuditEntry, AuditModule, Category, ConsumptionLog, Order, Product,
 import { getSessionUserRole } from '@/shared/auth/session';
 import { canQueryStockAdmin, canQueryStockCatalog } from './stock-query-access';
 
+function mapApiAuditToLocal(row: {
+  id: string;
+  userName: string | null;
+  module: string | null;
+  action: string;
+  element: string;
+  previousValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+}): AuditEntry {
+  const created = new Date(row.createdAt);
+  return {
+    id: row.id,
+    date: Number.isNaN(created.getTime()) ? row.createdAt : created.toLocaleString('es-AR'),
+    user: row.userName ?? '',
+    action: row.action,
+    element: row.element,
+    previousValue: row.previousValue ?? undefined,
+    newValue: row.newValue ?? undefined,
+    module: row.module === 'ventas' ? 'ventas' : 'stock',
+  };
+}
+
+/** La fila local usa id `a{timestamp}` y la del servidor un uuid. La misma alta se reconoce por módulo, acción y elemento. */
+function auditMergeKey(entry: Pick<AuditEntry, 'module' | 'action' | 'element'>): string {
+  return `${entry.module ?? 'stock'}|${entry.action}|${entry.element}`;
+}
+
 function appendAudit(
   setter: Dispatch<SetStateAction<AuditEntry[]>>,
   module: AuditModule,
@@ -57,10 +85,10 @@ export function useInventoryState() {
   // queda como caché de revalidación (Task 0, PersistQueryClientProvider),
   // no como estado inicial leído a mano.
   //
-  // auditLog y consumptionLogs SÍ siguen en localStorage puro: no vienen de
-  // ningún endpoint de lectura (auditLog se manda al servidor al crear vía
-  // addStockAudit, pero nunca se hidrata de vuelta) — no son parte del
-  // problema que resuelve este proyecto.
+  // consumptionLogs sigue en localStorage puro.
+  // auditLog arranca de localStorage y, para Admin y SuperAdmin, se mezcla
+  // con GET /settings/audit. Esa query no está en hydrationQueries: un 403
+  // no marca el inventario como offline. Operador_Stock no la pide.
   //
   // El consumo de empleado (registerEmployeeConsumption, employeeConsumptionLogs)
   // se retiró de acá: ahora vive en Ventas como un ticket real (precio $0,
@@ -156,6 +184,14 @@ export function useInventoryState() {
     queryFn: () => stockApi.purchaseOrders.list().then(rows => rows.map(mapApiPurchaseOrderToLocal)),
     enabled: adminEnabled,
   });
+  // GET /settings/audit es de Admin y SuperAdmin. Operador_Stock sigue con el
+  // log local: no pedimos la lista para no recibir un 403 en cada pantalla.
+  const canReadServerAudit = role === 'Admin' || role === 'SuperAdmin';
+  const auditQuery = useQuery({
+    queryKey: ['settings', 'audit'],
+    queryFn: () => settingsApi.audit.list(50),
+    enabled: canReadServerAudit,
+  });
 
   // Cada `hydrateX` sigue existiendo con la misma firma que usan las 15+
   // mutaciones de más abajo (`scheduleBackgroundHydrate(() => hydrateX())`),
@@ -243,6 +279,16 @@ export function useInventoryState() {
     const server = ordersQuery.data;
     setOrders(prev => mergeServerWithPendingLocal(server, prev, { keepPendingLocal: false }));
   }, [ordersQuery.data]);
+
+  useEffect(() => {
+    if (!auditQuery.data) return;
+    const server = auditQuery.data.map(mapApiAuditToLocal);
+    const serverKeys = new Set(server.map(auditMergeKey));
+    setAuditLog(prev => {
+      const localOnly = prev.filter(entry => !serverKeys.has(auditMergeKey(entry)));
+      return [...localOnly, ...server];
+    });
+  }, [auditQuery.data, setAuditLog]);
 
   const hydrationQueries = [
     categoriesQuery, warehousesQuery, productsQuery, movementsQuery,
@@ -574,8 +620,10 @@ export function useInventoryState() {
       previousValue: entry.previousValue,
       newValue: entry.newValue,
       userName: entry.user,
-    }, '').catch(() => undefined);
-  }, [setAuditLog]);
+    }, '').then(() => {
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'audit'] });
+    }).catch(() => undefined);
+  }, [setAuditLog, queryClient]);
 
   const addStockMovements = useCallback(
     (_entries: Omit<StockMovement, 'id' | 'createdAtISO'>[], _createdAtISO?: string) => {
@@ -583,6 +631,24 @@ export function useInventoryState() {
     },
     [],
   );
+
+  const transferStock = useCallback(async (input: {
+    productId: string;
+    fromWarehouseId: string;
+    toWarehouseId: string;
+    quantity: number;
+    operatorId?: string;
+    operatorName?: string;
+  }) => {
+    await stockApi.products.transfer(input.productId, {
+      fromWarehouseId: input.fromWarehouseId,
+      toWarehouseId: input.toWarehouseId,
+      quantity: input.quantity,
+      ...operatorFields({ operatorId: input.operatorId, operatorName: input.operatorName }),
+    }, '');
+    markApiSynced();
+    scheduleBackgroundHydrate(() => Promise.all([hydrateProducts(), hydrateMovements()]));
+  }, [hydrateProducts, hydrateMovements, markApiSynced]);
 
   const saveStockCountSession = useCallback(
     async (session: StockCountSession): Promise<void> => {
@@ -789,6 +855,7 @@ export function useInventoryState() {
     refreshStockProducts: hydrateProducts,
     refreshOperations,
     saveStockCountSession,
+    transferStock,
     createSupplier,
     updateSupplier,
     deleteSupplier,
