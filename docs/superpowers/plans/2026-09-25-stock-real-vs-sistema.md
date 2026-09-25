@@ -257,31 +257,41 @@ git commit -am "fix(stock): pedir segun el consumo real del ciclo, no segun la d
 
 ---
 
-### Task 6: Pantalla de Diferencias
+### Task 6: Extender la pantalla que ya existe
+
+**Hallazgo durante la ejecución:** la pantalla de diferencias ya está construida. Reportes tiene la pestaña **Control de Stock**, que usa `buildReconciliation` (`apps/web-admin/src/features/inventory/reconciliation.ts`) y muestra stock esperado, contado, faltante, sobrante, cuántos productos tienen diferencia, la tabla "Esperado vs. Contado" con inicial, entradas, ventas, consumos y ajustes, un filtro de solo diferencias y export a Excel. No hay que crear nada nuevo: hay que corregirla y completarla.
+
+**Lo que está mal hoy:** esa pantalla lee `stockMovements` del estado del admin, que se hidrata con `stockApi.movements.list({ limit: 500 })`. La diferencia que muestra es correcta, porque sale de `expected` y `counted` de la sesión. Pero **el desglose de qué la explica se corta a las últimas 500 filas del libro**: en un período viejo las columnas de ventas, consumos y entradas quedan incompletas o en cero sin ningún aviso, y el `inicial` derivado de la identidad queda mal cuando no hay control anterior.
 
 **Files:**
 - Modify: `apps/web-admin/src/features/inventory/pages/ReportsPage.tsx`
+- Modify: `apps/web-admin/src/features/inventory/reconciliation.ts`
+- Modify: `apps/web-admin/src/app/components/xlsxExport.ts`
 
 **Interfaces:**
-- Consumes: `buildStockCycles`.
-- Produces: una pestaña con el ciclo elegido y una fila por producto contado.
+- Consumes: el endpoint del ciclo de la Task 4, en lugar de los movimientos truncados del estado local.
+- Produces: la misma pestaña, con el desglose completo, el consumo real y la rotura.
 
-- [ ] **Step 1: Selector de ciclo**
+- [ ] **Step 1: Que no lea un libro truncado**
 
-Por defecto el último. Arriba: de qué control a qué control, cuántos días, el tipo del control de cierre y si tuvo ventas. Un ciclo sin ventas se titula como control de recepción.
+La pestaña pasa a pedir el ciclo al endpoint de la Task 4. `buildReconciliation` deja de recorrer los movimientos del estado y pasa a recibir las sumas ya agregadas. Si el ciclo elegido no se puede resolver, la pantalla lo dice en vez de mostrar ceros.
 
-- [ ] **Step 2: La tabla**
+- [ ] **Step 2: Las columnas que faltan**
 
-Columnas: producto, contado anterior, entradas, ventas, consumo, rotura, esperado, contado, diferencia, y la diferencia como porcentaje del consumo real. Todos los productos contados, sin filtro. Ordenable por diferencia.
+Agregar rotura como columna propia, el consumo real, y la diferencia como porcentaje del consumo real. Actualizar el export a Excel con las mismas columnas.
 
-- [ ] **Step 3: El total del ciclo**
+- [ ] **Step 3: Qué ciclo se está viendo**
 
-Abajo: unidades que salieron, cuántas explican las ventas y los consumos, y cuántas no. Y los productos que no se contaron en ese control, listados aparte en vez de mostrados en cero.
+Arriba: de qué control a qué control, cuántos días y si tuvo ventas. Un ciclo sin ventas se titula como control de recepción, para no leer una diferencia de remito como una fuga de mostrador.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Todos los productos**
+
+El filtro de solo diferencias se queda, apagado por defecto: el dueño quiere ver todos los productos. Los que no se contaron en uno de los dos controles se listan aparte en vez de mostrarse en cero.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git commit -am "feat(stock): pantalla de diferencias entre lo tickeado y lo contado"
+git commit -am "fix(stock): que la conciliacion no lea un libro de movimientos truncado"
 ```
 
 ---
