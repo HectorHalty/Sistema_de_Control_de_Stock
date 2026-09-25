@@ -75,7 +75,7 @@ export function mapApiCountSessionToLocal(api: ApiStockCountSession): StockCount
     id: api.id,
     createdAtISO: api.createdAt,
     date: api.date,
-    dateType: api.dateType === 'after' ? 'after' : 'regular',
+    dateType: api.dateType === 'after' || api.dateType === 'verificacion' ? api.dateType : 'regular',
     operatorId: api.operatorId ?? undefined,
     operatorName: api.operatorName ?? undefined,
     entries: api.entries.map(e => ({

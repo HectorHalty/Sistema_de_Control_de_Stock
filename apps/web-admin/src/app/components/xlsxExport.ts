@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
+import { stockCountTypeLabel, type StockCountType } from '@/features/inventory/types';
 
-export type ReportDateType = 'regular' | 'after';
+export type ReportDateType = StockCountType;
 
 export type ConsumptionReportRow = {
   product: string;
@@ -9,9 +10,7 @@ export type ConsumptionReportRow = {
   consumed: number;
 };
 
-function labelForDateType(dateType: ReportDateType): string {
-  return dateType === 'after' ? 'After' : 'Regular';
-}
+const labelForDateType = stockCountTypeLabel;
 
 export function buildConsumptionReportXlsx(options: {
   day: string; // YYYY-MM-DD

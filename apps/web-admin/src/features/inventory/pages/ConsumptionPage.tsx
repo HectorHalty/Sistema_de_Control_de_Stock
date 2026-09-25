@@ -5,14 +5,14 @@ import { useAppContext } from '@/app/providers/AppContext';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { getWarehouseIcon } from '@/features/inventory/lib/warehouse-icons';
 import { ChevronDown, ChevronUp, Check, Download, Calendar, ClipboardList, Search } from 'lucide-react';
-import type { ConsumptionLog, StockCountSession } from '@/app/components/store';
-import { getUnitLabel } from '@/app/components/store';
+import type { ConsumptionLog, StockCountSession, StockCountType } from '@/app/components/store';
+import { getUnitLabel, stockCountTypeLabel } from '@/app/components/store';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildConsumptionReportXlsx } from '@/app/components/xlsxExport';
 import { mapApiProductToLocal } from '@/features/inventory/api/inventory-mappers';
 import { buildStockCountAdjustments, syncStockEdits, type StockEdit } from '@/features/inventory/stock-count';
 
-type DateType = 'regular' | 'after';
+type DateType = StockCountType;
 
 export function ConsumptionPage() {
   const {
@@ -149,7 +149,7 @@ export function ConsumptionPage() {
     // Audit
     addAudit({
       user: 'Admin',
-      action: `Registro de Consumo (${dateType === 'after' ? 'After' : 'Regular'})`,
+      action: `Registro de Consumo (${stockCountTypeLabel(dateType)})`,
       element: `${entries.length} productos actualizados`,
       previousValue: '-',
       newValue: today,
@@ -197,7 +197,7 @@ export function ConsumptionPage() {
             </div>
             <div>
               <p className="text-sm" style={{ fontWeight: 600 }}>Consumo guardado</p>
-              <p className="text-xs text-muted-foreground">{lastLog.date} · {lastLog.dateType === 'after' ? 'After / Especial' : 'Regular'} · {lastLog.entries.length} productos</p>
+              <p className="text-xs text-muted-foreground">{lastLog.date} · {stockCountTypeLabel(lastLog.dateType)} · {lastLog.entries.length} productos</p>
             </div>
           </div>
 
@@ -288,7 +288,7 @@ export function ConsumptionPage() {
                 <div key={log.id} className="flex items-center justify-between py-2.5 px-3 bg-muted rounded-lg">
                   <div>
                     <p className="text-sm" style={{ fontWeight: 500 }}>{log.date}</p>
-                    <p className="text-xs text-muted-foreground">{log.dateType === 'after' ? 'After' : 'Regular'} · {log.entries.length} productos</p>
+                    <p className="text-xs text-muted-foreground">{stockCountTypeLabel(log.dateType)} · {log.entries.length} productos</p>
                   </div>
                   <button onClick={() => downloadXlsx(log)} className="p-2 rounded-lg text-[#3d7a3d] hover:bg-[#3d7a3d]/10">
                     <Download size={16} />
@@ -333,6 +333,15 @@ export function ConsumptionPage() {
           >
             <p className="text-sm" style={{ fontWeight: 600 }}>After / Especial</p>
             <p className="text-xs text-muted-foreground mt-0.5">Evento especial (mayor demanda)</p>
+          </button>
+          <button
+            onClick={() => setDateType('verificacion')}
+            className={`p-3 rounded-lg border text-left transition-all ${
+              dateType === 'verificacion' ? 'border-[#3d7a3d] bg-[#3d7a3d]/5' : 'border-border/60 hover:bg-muted/40'
+            }`}
+          >
+            <p className="text-sm" style={{ fontWeight: 600 }}>Verificación</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Para comprobar un pedido recibido. No cierra un día de venta.</p>
           </button>
         </div>
       </div>

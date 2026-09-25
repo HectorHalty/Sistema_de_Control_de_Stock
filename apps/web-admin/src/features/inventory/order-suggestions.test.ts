@@ -7,7 +7,7 @@ const TODAY = '2026-09-23';
 
 function session(
   date: string,
-  dateType: 'regular' | 'after',
+  dateType: StockCountSession['dateType'],
   consumed: number,
 ): StockCountSession {
   return {
@@ -116,5 +116,17 @@ describe('suggestFromStockCounts', () => {
   it('un control after no entra en una cuenta regular', () => {
     const onlyAfter = [session('2026-09-22', 'after', 40)];
     expect(suggest({ packRounding: false, span: 'week', sessions: onlyAfter, dateType: 'regular' }).suggested).toBe(0);
+  });
+
+  it('un control de verificación no mueve el sugerido de regular ni de after', () => {
+    const conVerificacion = [...history, session('2026-09-22', 'verificacion', 999)];
+    for (const dateType of ['regular', 'after'] as const) {
+      expect(suggest({ packRounding: false, span: 'week', sessions: conVerificacion, dateType })).toEqual(
+        suggest({ packRounding: false, span: 'week', dateType }),
+      );
+      expect(suggest({ packRounding: true, specificDate: '2026-09-22', sessions: conVerificacion, dateType })).toEqual(
+        suggest({ packRounding: true, specificDate: '2026-09-22', dateType }),
+      );
+    }
   });
 });

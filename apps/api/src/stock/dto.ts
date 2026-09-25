@@ -198,7 +198,7 @@ export class CreateStockCountSessionDto {
 
   @IsOptional()
   @IsString()
-  dateType?: 'regular' | 'after';
+  dateType?: 'regular' | 'after' | 'verificacion';
 
   @IsOptional()
   @IsUUID()

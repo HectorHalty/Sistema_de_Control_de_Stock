@@ -6,7 +6,7 @@ import {
   type StockReportTab,
 } from '@/features/platform/config/modules';
 import { ClipboardCheck, AlertTriangle, Clock, Download, TrendingDown, TrendingUp, ArrowLeftRight, Search } from 'lucide-react';
-import { getUnitLabel } from '@/app/components/store';
+import { getUnitLabel, stockCountTypeLabel } from '@/app/components/store';
 import type { StockMovementType, StockCountSession } from '@/app/components/store';
 import { ADJUSTMENT_REASON_LABELS } from '@/features/inventory/stock-adjustment';
 import { useSearchParams } from 'react-router';
@@ -21,8 +21,8 @@ type ReportTab = StockReportTab;
 
 const LIVE_SESSION_ID = 'current';
 
-function formatSessionLabel(dateStr: string, dateType: 'regular' | 'after'): string {
-  return `${dateStr} · ${dateType === 'after' ? 'After' : 'Regular'}`;
+function formatSessionLabel(dateStr: string, dateType: StockCountSession['dateType']): string {
+  return `${dateStr} · ${stockCountTypeLabel(dateType)}`;
 }
 
 const MOVEMENT_LABELS: Record<StockMovementType, string> = {

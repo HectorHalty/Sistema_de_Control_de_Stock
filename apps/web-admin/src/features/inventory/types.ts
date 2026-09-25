@@ -88,12 +88,16 @@ export interface StockCountEntry {
   counted: number;
 }
 
+/** Tipo de un control de stock. `verificacion` no cierra un día de venta. */
+export type StockCountType = 'regular' | 'after' | 'verificacion';
+
 /** Sesión de control de stock: foto completa de lo contado vs lo esperado. */
 export interface StockCountSession {
   id: string;
   createdAtISO: string;
   date: string;
-  dateType: 'regular' | 'after';
+  /** `verificacion` es el control que comprueba un pedido recibido, no un día de venta. */
+  dateType: StockCountType;
   operatorId?: string;
   operatorName?: string;
   entries: StockCountEntry[];
@@ -110,7 +114,7 @@ export interface ConsumptionLog {
   date: string;
   day?: string;
   createdAtISO?: string;
-  dateType: 'regular' | 'after';
+  dateType: StockCountType;
   entries: {
     productId: string;
     productName: string;
@@ -142,6 +146,16 @@ const UNIT_LABELS: Record<UnidadMedida, { long: string; short: string }> = {
   litros: { long: 'litros', short: 'L' },
   cajas: { long: 'cajas', short: 'cajas' },
 };
+
+export const STOCK_COUNT_TYPE_LABELS: Record<StockCountType, string> = {
+  regular: 'Regular',
+  after: 'After',
+  verificacion: 'Verificación',
+};
+
+export function stockCountTypeLabel(dateType: StockCountType): string {
+  return STOCK_COUNT_TYPE_LABELS[dateType] ?? STOCK_COUNT_TYPE_LABELS.regular;
+}
 
 export function getUnitLabel(unit: UnidadMedida, short = false): string {
   const label = UNIT_LABELS[unit] ?? UNIT_LABELS.unidades;

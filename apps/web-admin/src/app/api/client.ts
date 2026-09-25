@@ -313,7 +313,7 @@ export const stockApi = {
     create: (
       data: {
         date: string;
-        dateType?: 'regular' | 'after';
+        dateType?: 'regular' | 'after' | 'verificacion';
         operatorId?: string;
         operatorName?: string;
         entries: {
