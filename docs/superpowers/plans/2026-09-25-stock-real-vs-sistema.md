@@ -4,7 +4,7 @@
 
 **Goal:** que el dueño vea, en cada control de stock, cuánto se fue sin registrar en cada producto, y que el pedido sugerido se calcule con el consumo real del ciclo en lugar de con esa diferencia.
 
-**Architecture:** un ciclo va de un control al siguiente. La cuenta vive en un módulo puro nuevo, `stock-cycles.ts`, que recibe los controles y los movimientos y devuelve una fila por producto y por ciclo. De ahí comen la pantalla de diferencias y el pedido sugerido, así no hay dos fórmulas que puedan separarse. La diferencia del control y el pasaje dejan de ser `ajuste_manual` y pasan a tener tipo propio, que es lo que permite calcular cada columna sin depender de un texto libre.
+**Architecture:** un ciclo va de un control al siguiente. El servidor suma los movimientos del ciclo por producto y por tipo en una consulta, porque el cliente solo tiene las últimas 500 filas del libro y eso son unas tres semanas. La aritmética vive en un módulo puro nuevo, `stock-cycles.ts`, que toma esas sumas y devuelve una fila por producto. De ahí comen la pantalla de diferencias y el pedido sugerido, así no hay dos fórmulas que puedan separarse. La diferencia del control y el pasaje dejan de ser `ajuste_manual` y pasan a tener tipo propio, que es lo que permite sumar cada columna sin depender de un texto libre.
 
 **Tech Stack:** React 18 + Vite + Vitest en `apps/web-admin`. NestJS 11 + Prisma en `apps/api`. Postgres 16.
 
@@ -23,6 +23,7 @@
 - Sin tolerancias, sin umbrales y sin alertas por diferencia. Se ven todos los productos contados.
 - Por producto. No se agrega el desglose por almacén, aunque el dato exista en los movimientos.
 - Agregar un valor a un enum de Postgres y usarlo no puede pasar en la misma transacción: van dos migraciones.
+- La suma de los movimientos del ciclo la hace el servidor. `GET /stock/movements` devuelve como máximo 500 filas y el admin pide exactamente 500: alcanza para unas tres semanas de ventas, no para el histórico.
 - Commits al estilo del repo, uno por tarea.
 
 ## Oráculo
@@ -54,7 +55,9 @@ El ciclo B no entra al promedio aunque tenga consumo real 2: no tuvo ventas, as�
 | Create: `apps/api/prisma/migrations/*_retipear_movimientos/migration.sql` | Re-tipea el histórico por referencia |
 | Modify: `apps/api/src/stock/stock.service.ts` | El control escribe `diferencia_conteo`, el pasaje escribe `pasaje`, el ajuste guarda el motivo |
 | Modify: `apps/api/src/stock/dto.ts` | Motivo del ajuste y tipo del control |
-| Create: `apps/web-admin/src/features/inventory/stock-cycles.ts` | La cuenta del ciclo, pura |
+| Modify: `apps/api/src/stock/stock.controller.ts` | `GET /stock/cycles/:sessionId` |
+| Modify: `apps/api/src/stock/stock-movements.service.ts` | Suma por producto y tipo entre dos fechas |
+| Create: `apps/web-admin/src/features/inventory/stock-cycles.ts` | La aritmética del ciclo, pura |
 | Create: `apps/web-admin/src/features/inventory/stock-cycles.test.ts` | El oráculo de arriba |
 | Modify: `apps/web-admin/src/features/inventory/order-suggestions.ts` | Promedia el consumo real de los ciclos con venta |
 | Modify: `apps/web-admin/src/features/inventory/order-suggestions.test.ts` | Reescribe el oráculo viejo |
@@ -167,36 +170,49 @@ git commit -am "feat(stock): marcar el control que verifica una recepcion"
 
 ---
 
-### Task 4: El módulo de ciclos
+### Task 4: La cuenta del ciclo
+
+El servidor suma, el navegador calcula. El cliente no puede hacer las dos cosas: pide 500 movimientos y eso son unas tres semanas de ventas, así que los ciclos viejos saldrían mal y sin avisar.
 
 **Files:**
+- Modify: `apps/api/src/stock/stock-movements.service.ts`
+- Modify: `apps/api/src/stock/stock.controller.ts`
 - Create: `apps/web-admin/src/features/inventory/stock-cycles.ts`
 - Create: `apps/web-admin/src/features/inventory/stock-cycles.test.ts`
+- Modify: `apps/web-admin/src/app/api/client.ts`
 
 **Interfaces:**
-- Consumes: los controles (`StockCountSession`) y los movimientos de stock ya tipados.
-- Produces: `buildStockCycles(...)` devuelve, por ciclo y por producto: `contadoAnterior`, `entradas`, `ventas`, `consumos`, `roturas`, `devoluciones`, `esperado`, `contado`, `diferencia`, `consumoReal`, `dateType`, `tuvoVentas` y `cierra` (si las dos formas del consumo real coinciden).
+- Consumes: los controles (`sesiones_conteo` con sus entradas) y los movimientos ya tipados por la Task 1.
+- Produces: `GET /stock/cycles/:sessionId` devuelve el ciclo que cierra ese control: las dos fechas, el `dateType`, si tuvo ventas, y una fila por producto con lo contado en los dos extremos y las sumas por tipo de movimiento. `buildStockCycleRows(...)`, puro, agrega `esperado`, `diferencia`, `consumoReal` y `cierra`.
 
-- [ ] **Step 1: Armar los ciclos**
+- [ ] **Step 1: La suma en el servidor**
 
-Ordenar los controles por día calendario. Cada par consecutivo es un ciclo. Los movimientos entran por su fecha, después del control que abre y hasta el que cierra. El primer control de la historia no abre ciclo: no hay contado anterior.
+Para el control elegido, buscar el control inmediatamente anterior por día calendario. Sumar los movimientos que caen entre los dos con un `groupBy` de producto y tipo, no trayendo fila por fila. `diferencia_conteo` queda afuera de las sumas: es lo que ese control corrigió y ya está dentro de lo contado. El `ajuste_manual` se separa entre rotura y el resto según el motivo.
 
-- [ ] **Step 2: Las columnas**
+El primer control de la historia no cierra ningún ciclo: no hay contado anterior. Se responde vacío con ese motivo.
 
-Sumar los movimientos del ciclo por tipo. `entrada` y `devolucion` suman; `venta`, `consumo` y `venta_anulada` van con su signo; `ajuste_manual` se separa entre rotura y el resto según el motivo; `diferencia_conteo` **no entra**, porque es justamente lo que el control corrigió y ya está dentro de `contado`.
+- [ ] **Step 2: Si tuvo ventas**
 
-- [ ] **Step 3: La comprobación propia**
+El endpoint informa si en la ventana del ciclo hubo al menos un movimiento de tipo `venta`. Esa bandera es la que decide si el ciclo entra al promedio del pedido.
 
-`cierra` es verdadero cuando `contadoAnterior + entradas − contado` es igual a `ventas + consumos + roturas + diferencia`, con tres decimales. La pantalla muestra la fila marcada cuando no cierra, en vez de esconder el descuadre.
+- [ ] **Step 3: La aritmética, pura**
+
+`esperado = contadoAnterior + entradas + devoluciones − ventas − consumos − roturas`, `diferencia = esperado − contado`, `consumoReal = contadoAnterior + entradas − contado`.
+
+`cierra` es verdadero cuando `consumoReal` es igual a `ventas + consumos + roturas + diferencia`, con tres decimales. Cuando no cierra, la fila se marca: falta un movimiento y eso se muestra, no se esconde.
 
 - [ ] **Step 4: Tests**
 
-El oráculo de los tres ciclos de este plan. Más: un producto que no se contó en un control queda fuera del ciclo y se informa; un ciclo sin ventas tiene `tuvoVentas` falso; un pasaje entre almacenes no cambia ninguna columna, porque sus dos patas suman cero en el total del producto.
+El oráculo de los tres ciclos de este plan, sobre las sumas que devuelve el endpoint. Más: un producto que no se contó en uno de los dos controles queda informado aparte y no en cero; un ciclo sin ventas tiene la bandera en falso; un pasaje entre almacenes no mueve ninguna columna, porque sus dos patas suman cero en el total del producto.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Test de base**
+
+Un test de integración contra Postgres que cargue más de 500 movimientos en un ciclo y compruebe que el endpoint devuelve las sumas completas. Ese es el caso que ningún recorrido a mano encuentra.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git commit -am "test(admin): ciclo de stock entre dos controles"
+git commit -am "feat(stock): sumar el ciclo entre dos controles en el servidor"
 ```
 
 ---
@@ -307,11 +323,15 @@ Con stock 38 y pack 24, el sugerido tiene que ser 24, y el consumo promedio most
 
 Los controles anteriores a la migración también tienen que aparecer con su diferencia, porque el re-tipeo alcanzó a sus movimientos.
 
-- [ ] **Step 5: Informe**
+- [ ] **Step 5: Un ciclo con muchos movimientos**
+
+Cargar un ciclo con más de 500 movimientos y comprobar en la pantalla que las sumas siguen completas. Con la cuenta en el navegador, este caso daba mal en silencio.
+
+- [ ] **Step 6: Informe**
 
 `docs/superpowers/reports/2026-09-25-stock-real-vs-sistema-informe.md` con lo implementado, los números vistos y lo que quedó afuera.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git commit -am "docs(stock): informe del stock real contra el stock del sistema"

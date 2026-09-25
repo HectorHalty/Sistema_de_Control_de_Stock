@@ -120,11 +120,16 @@ Detalle de Postgres que hay que respetar: agregar un valor a un enum y **usarlo*
 
 No hace falta una tabla de ciclos: el ciclo se deriva de dos controles consecutivos y los movimientos que caen entre sus fechas.
 
-### Un módulo puro, dos consumidores
+### La suma va en el servidor, la cuenta en un módulo puro
 
-La cuenta vive en un módulo nuevo, `apps/web-admin/src/features/inventory/stock-cycles.ts`, con una función que recibe los controles y los movimientos y devuelve, por producto y por ciclo: contado anterior, entradas, ventas, consumos, roturas, esperado, contado, diferencia, consumo real, el tipo del control de cierre y si el ciclo tuvo ventas.
+Esto no puede calcularse en el navegador con los movimientos que el admin ya tiene cargados. El cliente pide `GET /stock/movements` con `limit: 500` y el servidor devuelve como máximo 500 filas ordenadas de la más nueva a la más vieja. Un sábado de ochenta tickets con dos insumos por producto deja más de ciento sesenta movimientos, así que 500 son unas tres semanas de historia. La pantalla de diferencias mostraría bien los ciclos recientes y mal los viejos, sin avisar.
 
-De ahí comen los dos lugares: la pantalla de diferencias la muestra tal cual, y el pedido sugerido promedia el consumo real de los ciclos de la ventana. Una sola cuenta, testeada una sola vez, sin dos fórmulas que puedan separarse con el tiempo.
+Entonces:
+
+- **El servidor agrega.** Un endpoint nuevo devuelve, para el ciclo que cierra un control, una fila por producto con las sumas por tipo de movimiento entre los dos controles. Es un `SUM` agrupado por producto y tipo, con `WHERE` por fechas: una consulta, sin traer movimiento por movimiento.
+- **El navegador hace la aritmética.** Un módulo puro, `apps/web-admin/src/features/inventory/stock-cycles.ts`, toma esas sumas y calcula esperado, diferencia, consumo real y si la fila cierra. Ahí viven los tests.
+
+De ese módulo comen los dos lugares: la pantalla de diferencias lo muestra tal cual, y el pedido sugerido promedia el consumo real de los ciclos de la ventana. Una sola cuenta, testeada una sola vez, sin dos fórmulas que puedan separarse con el tiempo.
 
 ## La pantalla
 
@@ -156,4 +161,5 @@ Reglas de la pantalla:
 - **Un control de verificación mal marcado diluye el promedio.** Si se cuenta dos veces en una semana y el segundo control no queda marcado como verificación, la regla de "solo ciclos con venta" igual lo salva, porque entre los dos controles no hubo ventas. La marca es para que la pantalla lo explique, no para que la cuenta funcione.
 - **Los ciclos viejos quedan a medias si la migración no re-tipea.** Un control anterior a la migración sin `diferencia_conteo` obliga a leer la referencia; por eso el re-tipeo va en la misma migración.
 - **Un ajuste a mano sin motivo arruina una fila.** Si alguien suma stock a mano sin decir por qué, esa cantidad aparece como consumo o como diferencia según el signo. El motivo obligatorio es la defensa.
+- **El límite de 500 movimientos.** Es la razón por la que la suma va en el servidor. Ningún recorrido manual lo habría mostrado: un recorrido genera diez movimientos, nunca quinientos.
 - **Un control parcial rompe el supuesto del ciclo.** Hoy se cuenta todo, pero si algún lunes se cuenta la mitad, los productos no contados arrastran su diferencia al ciclo siguiente. La pantalla tiene que decir cuáles no se contaron en vez de mostrarlos en cero.
