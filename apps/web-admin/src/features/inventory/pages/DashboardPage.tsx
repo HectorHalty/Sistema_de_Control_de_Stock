@@ -7,10 +7,13 @@ import { useNavigate } from 'react-router';
 import logoIcon from '@/assets/logo-LCH.png';
 import { getUnitLabel } from '@/app/components/store';
 import type { AuditEntry } from '@/app/components/store';
-import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
+import { selectStockAlerts } from '@/features/inventory/stock-alerts';
 
 export function DashboardPage() {
-  const { products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, currentUser, stockMovements } = useAppContext();
+  const {
+    products, warehouses, orders, auditLog, salesAuditLog, getTotalStock, currentUser, stockMovements,
+    stockLowNotifications, stockAutoAlerts, stockAutoAlertMinimum, stockAlertDay,
+  } = useAppContext();
 
   const stockAuditEntries = useMemo(
     () => getStockAuditEntries(auditLog, salesAuditLog),
@@ -22,8 +25,16 @@ export function DashboardPage() {
   const totalStock = products.reduce((sum, p) => sum + getTotalStock(p), 0);
   const pendingOrders = orders.filter(o => o.status === 'Pendiente').length;
   const lowStockProducts = useMemo(
-    () => getStockAlertProducts(products, orders, stockMovements),
-    [products, orders, stockMovements],
+    () => selectStockAlerts({
+      products,
+      orders,
+      movements: stockMovements,
+      lowStockNotifications: stockLowNotifications,
+      autoAlerts: stockAutoAlerts,
+      autoAlertMinimum: stockAutoAlertMinimum,
+      alertDay: stockAlertDay,
+    }),
+    [products, orders, stockMovements, stockLowNotifications, stockAutoAlerts, stockAutoAlertMinimum, stockAlertDay],
   );
 
   const stats = [

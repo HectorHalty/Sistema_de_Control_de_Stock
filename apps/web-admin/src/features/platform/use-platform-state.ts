@@ -5,6 +5,7 @@ import { storageKeys } from '@/shared/storage/keys';
 import { settingsApi } from '@/app/api/client';
 import { persistRemoteConfig } from '@/shared/utils/remote-config';
 import { rememberConfigRows } from '@/shared/utils/config-versions';
+import { normalizeAutoAlertMinimum } from '@/features/inventory/stock-alerts';
 import type { AppUser, CurrentUser } from './types';
 
 export function usePlatformState() {
@@ -15,6 +16,10 @@ export function usePlatformState() {
     true,
   );
   const [stockAutoAlerts, setStockAutoAlertsState] = useLocalStorage<boolean>(storageKeys.inventory.autoAlerts, true);
+  const [stockAutoAlertMinimum, setStockAutoAlertMinimumState] = useLocalStorage<number>(
+    storageKeys.inventory.autoAlertMinimum,
+    20,
+  );
   const [stockPackRounding, setStockPackRoundingState] = useLocalStorage<boolean>(storageKeys.inventory.packRounding, true);
   const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage<boolean>(
     storageKeys.platform.notificationsEnabled,
@@ -50,6 +55,11 @@ export function usePlatformState() {
     setStockAutoAlertsState(value);
     persistRemoteConfig('stock.autoAlerts', 'stock', value);
   }, [setStockAutoAlertsState]);
+  const setStockAutoAlertMinimum = useCallback((value: number) => {
+    const minimum = normalizeAutoAlertMinimum(value);
+    setStockAutoAlertMinimumState(minimum);
+    persistRemoteConfig('stock.autoAlertMinimum', 'stock', minimum);
+  }, [setStockAutoAlertMinimumState]);
   const setStockPackRounding = useCallback((value: boolean) => {
     setStockPackRoundingState(value);
     persistRemoteConfig('stock.packRounding', 'stock', value);
@@ -76,6 +86,7 @@ export function usePlatformState() {
         setStockLowNotificationsState(row.value);
       }
       if (row.key === 'stock.autoAlerts' && typeof row.value === 'boolean') setStockAutoAlertsState(row.value);
+      if (row.key === 'stock.autoAlertMinimum') setStockAutoAlertMinimumState(normalizeAutoAlertMinimum(row.value));
       if (row.key === 'stock.packRounding' && typeof row.value === 'boolean') setStockPackRoundingState(row.value);
     }
   }, [
@@ -83,6 +94,7 @@ export function usePlatformState() {
     setStockAlertDayState,
     setStockLowNotificationsState,
     setStockAutoAlertsState,
+    setStockAutoAlertMinimumState,
     setStockPackRoundingState,
   ]);
 
@@ -95,6 +107,8 @@ export function usePlatformState() {
     setStockLowNotifications,
     stockAutoAlerts,
     setStockAutoAlerts,
+    stockAutoAlertMinimum,
+    setStockAutoAlertMinimum,
     stockPackRounding,
     setStockPackRounding,
     notificationsEnabled,

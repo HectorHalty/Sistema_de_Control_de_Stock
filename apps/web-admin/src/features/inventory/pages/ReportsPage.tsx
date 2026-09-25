@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router';
 import { downloadBlobFile } from '@/app/components/download';
 import { buildReconciliationXlsx } from '@/app/components/xlsxExport';
 import { getStockAuditEntries } from '@/shared/utils/audit-log';
-import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
+import { selectStockAlerts } from '@/features/inventory/stock-alerts';
 import { AuditHistoryTable } from '@/shared/components/AuditHistoryTable';
 import { buildReconciliation, findPreviousSession, sortCountSessionsDesc } from '@/features/inventory/reconciliation';
 
@@ -59,6 +59,10 @@ export function ReportsPage() {
     stockMovements,
     stockCountSessions,
     currentUser,
+    stockLowNotifications,
+    stockAutoAlerts,
+    stockAutoAlertMinimum,
+    stockAlertDay,
   } = useAppContext();
 
   const stockAuditEntries = useMemo(
@@ -172,8 +176,16 @@ export function ReportsPage() {
   };
 
   const alertProducts = useMemo(
-    () => getStockAlertProducts(products, orders, stockMovements),
-    [products, orders, stockMovements],
+    () => selectStockAlerts({
+      products,
+      orders,
+      movements: stockMovements,
+      lowStockNotifications: stockLowNotifications,
+      autoAlerts: stockAutoAlerts,
+      autoAlertMinimum: stockAutoAlertMinimum,
+      alertDay: stockAlertDay,
+    }),
+    [products, orders, stockMovements, stockLowNotifications, stockAutoAlerts, stockAutoAlertMinimum, stockAlertDay],
   );
 
   const productNameMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);

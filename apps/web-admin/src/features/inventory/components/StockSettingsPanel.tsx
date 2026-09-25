@@ -11,6 +11,8 @@ export function StockSettingsPanel() {
     setStockAlertDay,
     stockAutoAlerts,
     setStockAutoAlerts,
+    stockAutoAlertMinimum,
+    setStockAutoAlertMinimum,
     stockPackRounding,
     setStockPackRounding,
   } = useAppContext();
@@ -19,7 +21,7 @@ export function StockSettingsPanel() {
     <SettingsPanel title="Configuracion de Stock" description="Alertas, notificaciones y reglas del modulo de inventario.">
       <SettingsRow
         title="Notificaciones de Stock Bajo"
-        description="Recibir alertas cuando el stock baje del minimo configurado"
+        description="Avisa el dia elegido cuando el stock mas los pedidos pendientes no cubren el promedio semanal de ventas"
       >
         <SettingsToggle checked={stockLowNotifications} onChange={setStockLowNotifications} />
       </SettingsRow>
@@ -41,9 +43,22 @@ export function StockSettingsPanel() {
 
       <SettingsRow
         title="Alertas Automaticas"
-        description="Notificar cuando un producto baja de 20 unidades"
+        description="Avisa cuando el stock baja de este minimo, aunque no haya ventas"
       >
-        <SettingsToggle checked={stockAutoAlerts} onChange={setStockAutoAlerts} />
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            aria-label="Minimo de alerta automatica"
+            value={stockAutoAlertMinimum}
+            onChange={e => {
+              const next = Number(e.target.value);
+              if (Number.isInteger(next) && next >= 1) setStockAutoAlertMinimum(next);
+            }}
+            className="w-16 px-2 py-1.5 rounded-lg bg-input-background border border-border focus:border-[#3d7a3d] outline-none text-sm text-right"
+          />
+          <SettingsToggle checked={stockAutoAlerts} onChange={setStockAutoAlerts} />
+        </div>
       </SettingsRow>
 
       <SettingsRow

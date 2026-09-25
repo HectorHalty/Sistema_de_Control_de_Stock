@@ -4,10 +4,13 @@ import { useMemo } from 'react';
 import { useAppContext } from '@/app/providers/AppContext';
 import { canAccessModule } from '@/features/platform/config/modules';
 import { getUnitLabel } from '@/app/components/store';
-import { getStockAlertProducts } from '@/features/inventory/stock-alerts';
+import { selectStockAlerts } from '@/features/inventory/stock-alerts';
 
 export function PlatformDashboardPage() {
-  const { currentUser, products, orders, stockMovements } = useAppContext();
+  const {
+    currentUser, products, orders, stockMovements, getTotalStock,
+    stockLowNotifications, stockAutoAlerts, stockAutoAlertMinimum, stockAlertDay,
+  } = useAppContext();
 
   const canSeeStock = canAccessModule(currentUser.role, 'stock');
   const canSeeVentas = canAccessModule(currentUser.role, 'ventas');
@@ -15,9 +18,18 @@ export function PlatformDashboardPage() {
   const canSeeFutbol = canAccessModule(currentUser.role, 'futbol');
 
   const stockAlerts = useMemo(
-    () => getStockAlertProducts(products, orders, stockMovements),
-    [products, orders, stockMovements],
+    () => selectStockAlerts({
+      products,
+      orders,
+      movements: stockMovements,
+      lowStockNotifications: stockLowNotifications,
+      autoAlerts: stockAutoAlerts,
+      autoAlertMinimum: stockAutoAlertMinimum,
+      alertDay: stockAlertDay,
+    }),
+    [products, orders, stockMovements, stockLowNotifications, stockAutoAlerts, stockAutoAlertMinimum, stockAlertDay],
   );
+  const totalStock = products.reduce((sum, product) => sum + getTotalStock(product), 0);
   const lowStockProducts = stockAlerts.slice(0, 4);
   const pendingOrders = orders.filter((order) => order.status === 'Pendiente').length;
 
@@ -103,11 +115,16 @@ export function PlatformDashboardPage() {
             <ShoppingCart size={18} className="text-[#3d7a3d]" />
             <h3 className="text-foreground">Stock y Compras</h3>
           </header>
-          <p className="rounded-xl bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#2f5f2f] dark:text-[#8bc48b]">
-            {pendingOrders > 0
-              ? `Hay ${pendingOrders} pedido(s) pendiente(s) en el módulo de stock.`
-              : 'No hay pedidos pendientes en stock.'}
-          </p>
+          <div className="space-y-2">
+            <p className="rounded-xl bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#2f5f2f] dark:text-[#8bc48b]">
+              Stock Total: {totalStock} uds
+            </p>
+            <p className="rounded-xl bg-[#3d7a3d]/10 px-4 py-3 text-sm text-[#2f5f2f] dark:text-[#8bc48b]">
+              {pendingOrders > 0
+                ? `Hay ${pendingOrders} pedido(s) pendiente(s) en el módulo de stock.`
+                : 'No hay pedidos pendientes en stock.'}
+            </p>
+          </div>
         </section>
       )}
 
