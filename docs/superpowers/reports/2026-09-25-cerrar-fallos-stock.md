@@ -64,7 +64,7 @@ Después de generarlo:
 
 - `npm --prefix apps/api test`: 24 archivos, 240 tests, en verde. Incluye `transferStock mueve cantidad sin cambiar el total y rechaza el faltante` (mueve 4, el total sigue en 10, referencias `Pasaje a TEST-B` y `Pasaje desde Depósito`, mismo almacén y faltante no escriben).
 - `npm --prefix apps/api run build`: en verde.
-- `npm --prefix apps/web-admin test` y `npm --prefix apps/web-admin run build`: en verde. El admin con coverage no se puede correr por un solo archivo: el umbral global de líneas es 7 % y un subconjunto lo rompe.
+- `npm --prefix apps/web-admin test` y `npm --prefix apps/web-admin run build`: en verde. Después de F1, la suite del admin quedó en 35 archivos y 224 tests. El admin con coverage no se puede correr por un solo archivo: el umbral global de líneas es 7 % y un subconjunto lo rompe.
 
 Los tests del sugerido fijan `today = 2026-09-23`, stock 10 y unidad 24. Con pack: 24, 24, 24, 24, 48, 48. Sin pack: 20, 10, 17.5, 14, 30, 30. Con el control regular del 2026-09-20 consumido −10, la semana sin pack da 2.5 y la fecha 2026-09-21 sigue en 20. `orderUnit` 1 no redondea. El semestre coincide con el trimestre en ese dataset.
 
@@ -114,6 +114,6 @@ Sobre `cursor/plan-cerrar-fallos-stock-5ff4`, después del plan `23b6d33`:
 | `b200095` fix(stock): calcular el pedido con los controles, no con las ventas | Tarea 2 |
 | `9d31ff4` fix(stock): alertar por minimo automatico y por el dia elegido | Tareas 3 y 4. El inicio general vive en el mismo archivo que las alertas de `/`. |
 | `78fe739` fix(stock): auditar actividad, rechazar negativo y pasar entre almacenes | Tareas 5, 6 y 7. La ficha, el cliente y el estado de inventario comparten los tres cambios. |
-| `fix(stock): el menos en la ficha no se convierte en 0999` | Corrección de F1 del recorrido, más el informe de la tarea 8. |
+| `d2d6836` fix(stock): el menos en la ficha no se convierte en 0999 | Corrección de F1 del recorrido, más el informe de la tarea 8. |
 
 `package-lock.json` no entra: `npm install` solo le sacó campos `libc` de paquetes opcionales. No se commiteó `node_modules`.
