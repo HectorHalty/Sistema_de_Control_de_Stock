@@ -8,6 +8,8 @@ import { ExpandChevron } from '@/shared/components/ExpandChevron';
 import { CategoryIconBadge } from '@/features/inventory/lib/category-icon-badge';
 import { AVAILABLE_CATEGORY_ICON_NAMES, getCategoryIcon } from '@/features/inventory/lib/category-icons';
 import { transferStockError } from '@/features/inventory/transfer-stock';
+import { calendarDayInArgentina } from '@/features/inventory/order-suggestions';
+import { lastCountAgeLabel } from '@/features/inventory/last-count';
 import { ADJUSTMENT_REASONS, ADJUSTMENT_REASON_LABELS, stockAdjustmentError } from '@/features/inventory/stock-adjustment';
 import type { StockAdjustmentReason } from '@/features/inventory/types';
 import {
@@ -44,6 +46,7 @@ export function ProductsPage() {
     createCategory,
     updateCategory,
     currentUser,
+    stockCountSessions,
   } = useAppContext();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -54,6 +57,12 @@ export function ProductsPage() {
   const [transferProduct, setTransferProduct] = useState<Product | null>(null);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // El stock del sistema sólo fue cierto en el último conteo: sin esa fecha, un
+  // número de ayer y uno de julio se leen igual.
+  const today = calendarDayInArgentina(new Date());
+  const lastCountLabel = (productId: string) =>
+    lastCountAgeLabel({ sessions: stockCountSessions, productId, today });
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
@@ -244,6 +253,7 @@ export function ProductsPage() {
                       <p className="text-sm" style={{ fontWeight: 500 }}>{UNIT_LABELS[product.unit]}</p>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mb-3">último control: {lastCountLabel(product.id)}</p>
                   <div className="mb-3">
                     <p className="text-xs text-muted-foreground mb-1.5">Stock por Almacén</p>
                     <div className="space-y-1">
@@ -386,6 +396,7 @@ export function ProductsPage() {
                             <div>
                               <p className="text-xs text-muted-foreground">Stock Total</p>
                               <p className="text-sm" style={{ fontWeight: 600 }}>{total} {getUnitLabel(product.unit, true)}</p>
+                              <p className="text-xs text-muted-foreground">último control: {lastCountLabel(product.id)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Unidad de Medida</p>

@@ -11,6 +11,8 @@ import { downloadBlobFile } from '@/app/components/download';
 import { buildConsumptionReportXlsx } from '@/app/components/xlsxExport';
 import { mapApiProductToLocal } from '@/features/inventory/api/inventory-mappers';
 import { buildStockCountAdjustments, syncStockEdits, type StockEdit } from '@/features/inventory/stock-count';
+import { calendarDayInArgentina } from '@/features/inventory/order-suggestions';
+import { lastCountAgeLabel } from '@/features/inventory/last-count';
 
 type DateType = StockCountType;
 
@@ -18,8 +20,13 @@ export function ConsumptionPage() {
   const {
     products, warehouses, categories, setProducts, consumptionLogs, setConsumptionLogs,
     saveStockCountSession, inventoryApiAvailable, refreshStockProducts, refreshOperations,
-    currentUser, addAudit,
+    currentUser, addAudit, stockCountSessions,
   } = useAppContext();
+  // Antes de re-contar conviene saber desde cuándo el stock del sistema es una
+  // estimación: es lo que separa un número de ayer de uno de julio.
+  const today = calendarDayInArgentina(new Date());
+  const lastCountLabel = (productId: string) =>
+    lastCountAgeLabel({ sessions: stockCountSessions, productId, today });
   const [dateType, setDateType] = useState<DateType>('regular');
   const [expandedWarehouse, setExpandedWarehouse] = useState<string | null>(null);
   const [warehouseSearch, setWarehouseSearch] = useState('');
@@ -435,6 +442,7 @@ export function ConsumptionPage() {
                                   <p className="text-sm truncate" style={{ fontWeight: 500 }}>{product.name}</p>
                                   <p className="text-xs text-muted-foreground">
                                     {product.code} · Stock previo: {edit.previousStock} {getUnitLabel(product.unit, true)}
+                                    {' · último control: '}{lastCountLabel(product.id)}
                                     {consumed !== 0 && (
                                       <span className={`ml-2 ${consumed > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-blue-600 dark:text-blue-400'}`} style={{ fontWeight: 600 }}>
                                         {consumed > 0 ? `–${consumed}` : `+${Math.abs(consumed)}`} {getUnitLabel(product.unit, true)}
